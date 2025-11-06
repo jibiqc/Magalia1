@@ -1,0 +1,6 @@
+# Map raw supplier name -> canonical supplier name (strict)
+# Example:
+# "On Spot" : "Onspot"
+# "ONSPOT"  : "Onspot"
+aliases: {}
+
