@@ -839,21 +839,16 @@ export default function QuoteEditor(){
 
             <div className="left-group">
 
-              {q.days.map((d,i)=>(
-
-                <button key={d.id}
-
-                  className={`day-pill ${activeDayId===d.id ? "active":""}`}
-
-                  onClick={()=>{ setActiveDayId(d.id); const el=document.getElementById(`day-${d.id}`); el?.scrollIntoView({behavior:"smooth", block:"start"}); }}>
-
-                  <span>Day {i+1} — {d.destination||"—"}</span>
-
-                  <span className="small">{fmtDate(d.date)}</span>
-
-                </button>
-
-              ))}
+              {q.days.map((d,i)=>{
+                const label = `${fmtDateShortISO(d.date)}${d.destination ? " — " + d.destination : ""}`;
+                return (
+                  <button key={d.id}
+                    className={`day-pill ${activeDayId===d.id ? "active":""}`}
+                    onClick={()=>{ setActiveDayId(d.id); const el=document.getElementById(`day-${d.id}`); el?.scrollIntoView({behavior:"smooth", block:"start"}); }}>
+                    <span>{label}</span>
+                  </button>
+                );
+              })}
 
               {/* Total row */}
 
