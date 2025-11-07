@@ -216,11 +216,11 @@ export default function DestinationRangeModal({
         </div>
 
         <div className="modal-footer">
-          <button className="btn secondary" onClick={onClose}>
+          <button className="btn secondary" onClick={onClose} disabled={applying}>
             Cancel
           </button>
-          <button className="btn primary" onClick={handleApply} disabled={loading}>
-            Apply
+          <button className="btn primary" onClick={handleApply} disabled={loading || !query.trim() || applying}>
+            {applying ? "Applying..." : "Apply"}
           </button>
         </div>
       </div>
