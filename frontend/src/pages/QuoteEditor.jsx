@@ -557,11 +557,9 @@ export default function QuoteEditor(){
 
 
 
-    // Onspot/Hassle actuels (les tiennes dans le state)
-
-    const onspotTotal = Number(calc?.onspot ?? 0);   // dans Achats $
-
-    const hassleTotal = Number(calc?.hassle ?? 0);   // dans Ventes $
+    // Onspot/Hassle actuels (utiliser les valeurs calculées)
+    const onspotTotal = Number(onspotValue);   // dans Achats $
+    const hassleTotal = Number(hassleValue);   // dans Ventes $
 
 
 
