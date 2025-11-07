@@ -467,12 +467,16 @@ export default function QuoteEditor(){
 
       // Règles
       if (eur > 0 && (line._lastEdited === "eur" || line._lastEdited === "fx")) {
-        // si € renseigné → calcule $ à partir de FX
-        line.achat_usd = round2(eur * fx);
+        // si € renseigné → calcule $ à partir de FX: $ = € / FX
+        if (fx > 0) {
+          line.achat_usd = round2(eur / fx);
+        }
       }
       if (eur > 0 && line._lastEdited === "usd") {
-        // si € et $ renseignés → recalcule FX
-        if (eur > 0) line.fx_rate = round2(usd / eur);
+        // si € et $ renseignés → recalcule FX: FX = € / $
+        if (usd > 0 && eur > 0) {
+          line.fx_rate = round2(eur / usd);
+        }
       }
 
       delete line._lastEdited; // reset flag
@@ -659,8 +663,6 @@ export default function QuoteEditor(){
 
     // Agrège toutes les lignes "payantes"
 
-    const paidCats = new Set(["Activity","Hotel","Transport","Flight","Train","Ferry","Cost","New Hotel","New Service"]);
-
     const rows = [];
 
     let sumEur = 0, sumUsd = 0, sumSell = 0;
@@ -725,7 +727,7 @@ export default function QuoteEditor(){
 
       (day.lines || []).forEach((line) => {
 
-        if (!paidCats.has((line.category || "").trim())) return;
+        if (!isPaidCategory(line.category)) return;
 
 
 
