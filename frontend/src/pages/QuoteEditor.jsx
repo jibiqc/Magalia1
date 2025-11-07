@@ -478,11 +478,16 @@ export default function QuoteEditor(){
 
 
 
-    const achatsTotal = achatsService + onspot; // commissionnable = achats + onspot
+    // Utiliser onspotValue et hassleValue
+    // achats commissionnables = somme USD services + Onspot
+    const achatsTotal = achatsService + onspotValue;
 
-    const commission = (parseNum(q.margin_pct) || 0) * achatsTotal;
+    // commission (utiliser toujours le fallback)
+    const margin = q.margin_pct ?? DEFAULT_MARGIN;
+    const commission = achatsTotal * margin;
 
-    const ventes = q.days.flatMap(d=>d.lines).reduce((sum,l)=> sum + parseNum(l.vente_usd), 0) + hassle;
+    // ventes = somme vente services + Hassle
+    const ventes = q.days.flatMap(d=>d.lines).reduce((sum,l)=> sum + parseNum(l.vente_usd), 0) + hassleValue;
 
 
 
