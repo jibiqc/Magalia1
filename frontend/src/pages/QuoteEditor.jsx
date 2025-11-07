@@ -465,10 +465,7 @@ export default function QuoteEditor(){
 
 
 
-    // si l'utilisateur a saisi un override, on le garde
-    const onspot = (q.onspot_manual ?? null) !== null
-      ? Number(q.onspot_manual || 0)
-      : onspotAuto;
+    // Utiliser onspotValue directement (déjà calculé avec override)
 
 
 
