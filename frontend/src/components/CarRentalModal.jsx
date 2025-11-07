@@ -7,10 +7,11 @@ export default function CarRentalModal({
   onClose,
   onSubmit,
   initialData = null,
+  startDate = null,
 }) {
   const [pickupLocation, setPickupLocation] = useState(initialData?.pickup_loc || "");
   const [dropoffLocation, setDropoffLocation] = useState(initialData?.dropoff_loc || "");
-  const [pickupDate, setPickupDate] = useState(initialData?.pickup_date || "");
+  const [pickupDate, setPickupDate] = useState(initialData?.pickup_date || startDate || "");
   const [pickupTime, setPickupTime] = useState(initialData?.pickup_time || "");
   const [dropoffDate, setDropoffDate] = useState(initialData?.dropoff_date || "");
   const [dropoffTime, setDropoffTime] = useState(initialData?.dropoff_time || "");
@@ -20,7 +21,7 @@ export default function CarRentalModal({
   const [oneWayFee, setOneWayFee] = useState(initialData?.one_way_fee || "");
   const [mileage, setMileage] = useState(initialData?.mileage || "");
   const [insurance, setInsurance] = useState(initialData?.insurance || "");
-  const [notes, setNotes] = useState(initialData?.notes || "");
+  const [description, setDescription] = useState(initialData?.notes || initialData?.description || "");
   const [intl_driver_license, setIntlDriverLicense] = useState(initialData?.intl_driver_license !== undefined ? initialData.intl_driver_license : true);
   const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
 
@@ -40,7 +41,8 @@ export default function CarRentalModal({
       one_way_fee: oneWayFee,
       mileage: mileage,
       insurance: insurance,
-      notes: notes,
+      notes: description,
+      description: description,
       intl_driver_license: intl_driver_license,
       internal_note: internal_note,
     });
@@ -75,6 +77,17 @@ export default function CarRentalModal({
         <div className="modal-title">Car Rental Details</div>
 
         <div className="dest-modal-body" style={{ padding: 0 }}>
+          <div className="field">
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={intl_driver_license}
+                onChange={(e) => setIntlDriverLicense(e.target.checked)}
+              />
+              <span>International Driver License</span>
+            </label>
+          </div>
+
           <div className="field">
             <label>Pick-up Location</label>
             <input
@@ -220,25 +233,14 @@ export default function CarRentalModal({
           </div>
 
           <div className="field">
-            <label>Notes</label>
+            <label>Description</label>
             <textarea
               className="textarea"
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               placeholder=""
               rows={3}
             />
-          </div>
-
-          <div className="field">
-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={intl_driver_license}
-                onChange={(e) => setIntlDriverLicense(e.target.checked)}
-              />
-              <span>International Driver License</span>
-            </label>
           </div>
 
           <div className="field">

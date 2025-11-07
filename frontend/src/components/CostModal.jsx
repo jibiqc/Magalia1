@@ -10,13 +10,11 @@ export default function CostModal({
 }) {
   const [title, setTitle] = useState(initialData?.title || "");
   const [body, setBody] = useState(initialData?.body || "");
-  const [amount, setAmount] = useState(initialData?.amount || "");
-  const [currency, setCurrency] = useState(initialData?.currency || "");
 
   if (!open) return null;
 
   const handleSubmit = () => {
-    onSubmit({ title, body, amount, currency });
+    onSubmit({ title, body });
   };
 
   const backdrop = (
@@ -53,32 +51,6 @@ export default function CostModal({
               onChange={(e) => setTitle(e.target.value)}
               placeholder=""
             />
-          </div>
-
-          <div className="field">
-            <label>Amount</label>
-            <input
-              type="number"
-              step="0.01"
-              className="input"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              placeholder=""
-            />
-          </div>
-
-          <div className="field">
-            <label>Currency</label>
-            <select
-              className="select"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-            >
-              <option value="">Select currency</option>
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-            </select>
           </div>
 
           <div className="field">

@@ -1,25 +1,31 @@
+import React, { useState } from "react";
 import { fmtAMPM } from "../utils/timeFmt";
 
-export default function ServiceCard({ line, onEdit, onDelete }) {
+export default function ServiceCard({ line, onEdit, onDelete, onDuplicate }) {
   const { category } = line;
   // For backend lines, data might be in line directly; for local lines, it's in line.data
   const data = line.data || line;
   // Build a compact, read-only summary per category
-  let title = category, subtitle = "", note = "";
+  let title = category, subtitle = "", note = "", showMore = false;
+  const [expanded, setExpanded] = useState(false);
 
   switch(category){
     case "Trip info":
       title = data?.title || "Trip info";
-      subtitle = (data?.body || "").slice(0,120);
+      const bodyText = data?.body || "";
+      subtitle = expanded ? bodyText : bodyText.slice(0, 80);
+      showMore = bodyText.length > 80;
       break;
     case "Internal info":
       title = "Internal only";
-      subtitle = (data?.body || "").slice(0,140);
+      const internalBody = data?.body || "";
+      subtitle = expanded ? internalBody : internalBody.slice(0, 80);
+      showMore = internalBody.length > 80;
       break;
     case "Cost":
       title = data?.title || "Cost";
-      subtitle = data?.amount ? `$${data.amount}` : "";
-      note = (data?.body || "");
+      subtitle = "";
+      note = data?.body || "";
       break;
     case "Flight":
       title = `${data?.airline||"Airline"} flight from ${data?.from||"?"} to ${data?.to||"?"}`;
@@ -55,16 +61,37 @@ export default function ServiceCard({ line, onEdit, onDelete }) {
 
   return (
     <div className={`service-card ${internal ? "internal" : ""}`}>
-      <div className="service-head">
-        <div className="service-title">{title}</div>
-        <div className="service-actions">
-          <button aria-label="Edit" className="icon-btn" onClick={onEdit}>✎</button>
-          <button aria-label="Delete" className="icon-btn" onClick={onDelete}>🗑</button>
-        </div>
+      <div className="svc-actions-col">
+        <button className="icon-vert" aria-label="Edit" onClick={onEdit}>✎</button>
+        <button className="icon-vert" aria-label="Duplicate" onClick={onDuplicate}>⧉</button>
+        <button className="icon-vert drag-handle" aria-label="Move" data-drag-handle="true">↕</button>
+        <button className="icon-vert" aria-label="Delete" onClick={onDelete}>🗑</button>
       </div>
-      {subtitle && <div className="service-sub">{subtitle}</div>}
-      {note && <div className="service-note">{note}</div>}
-      {internal && <div className="badge-internal">Internal only</div>}
+      <div className="svc-body">
+        <div className="service-head">
+          <div className="service-title">{title}</div>
+        </div>
+        {subtitle && <div className="service-sub">{subtitle}</div>}
+        {showMore && (
+          <button className="show-more-btn" onClick={() => setExpanded(!expanded)}>
+            {expanded ? "Show less" : "Show more"}
+          </button>
+        )}
+        {note && <div className="service-note">{note}</div>}
+        {category === "Cost" && (
+          <div className="price-grid">
+            <div className="price-row">
+              <span className="price-label">Amount:</span>
+              <span className="price-value">{data?.amount ? `$${data.amount}` : "$0.00"}</span>
+            </div>
+            <div className="price-row">
+              <span className="price-label">Currency:</span>
+              <span className="price-value">{data?.currency || "USD"}</span>
+            </div>
+          </div>
+        )}
+        {internal && <div className="badge-internal">Internal only</div>}
+      </div>
     </div>
   );
 }

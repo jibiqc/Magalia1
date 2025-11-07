@@ -14,13 +14,13 @@ export default function TrainModal({
   const [dep_time, setDepTime] = useState(initialData?.dep_time || "");
   const [arr_time, setArrTime] = useState(initialData?.arr_time || "");
   const [seat_res, setSeatRes] = useState(initialData?.seat_res || false);
-  const [note, setNote] = useState(initialData?.note || "");
+  const [description, setDescription] = useState(initialData?.note || initialData?.description || "");
   const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
 
   if (!open) return null;
 
   const handleSubmit = () => {
-    onSubmit({ from, to, class_type, dep_time, arr_time, seat_res, note, internal_note });
+    onSubmit({ from, to, class_type, dep_time, arr_time, seat_res, note: description, description, internal_note });
   };
 
   const backdrop = (
@@ -89,6 +89,7 @@ export default function TrainModal({
               value={dep_time}
               onChange={(e) => setDepTime(e.target.value)}
             />
+            {dep_time === "00:00" && <div className="time-warn">Warning: it means Midnight</div>}
           </div>
 
           <div className="field">
@@ -99,6 +100,7 @@ export default function TrainModal({
               value={arr_time}
               onChange={(e) => setArrTime(e.target.value)}
             />
+            {arr_time === "00:00" && <div className="time-warn">Warning: it means Midnight</div>}
           </div>
 
           <div className="field">
@@ -113,11 +115,11 @@ export default function TrainModal({
           </div>
 
           <div className="field">
-            <label>Note</label>
+            <label>Description</label>
             <textarea
               className="textarea"
-              value={note}
-              onChange={(e) => setNote(e.target.value)}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
               placeholder=""
               rows={3}
             />

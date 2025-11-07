@@ -1000,11 +1000,7 @@ export default function QuoteEditor(){
               {/* Total row */}
 
               <button className="total-pill" onClick={totalScroll}>
-
-                <span>Total</span>
-
-                <span className="small">{money(calc.grandRounded,{digits:0})}</span>
-
+                <span>Total: <span className="total-amt">{money(calc.grandRounded,{digits:0})}</span></span>
               </button>
 
             </div>
@@ -1088,6 +1084,11 @@ export default function QuoteEditor(){
                                 }
                               };
                               openEditModal(editData);
+                            }
+                          }}
+                          onDuplicate={() => {
+                            if (isLocal) {
+                              addLocalLine(l.dayId, l.category, JSON.parse(JSON.stringify(l.data || {})));
                             }
                           }}
                           onDelete={() => {
@@ -1214,6 +1215,7 @@ export default function QuoteEditor(){
             setEditingLine(null);
           }}
           initialData={editingLine?.data || null}
+          startDate={q.days.find(d => d.id === activeDayId)?.date || null}
         />
       )}
 

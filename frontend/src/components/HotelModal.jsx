@@ -9,9 +9,9 @@ export default function HotelModal({
   initialData = null,
 }) {
   const [hotel_name, setHotelName] = useState(initialData?.hotel_name || "");
-  const [stars, setStars] = useState(initialData?.stars || "");
+  const [stars, setStars] = useState(initialData?.stars || "NA");
   const [room_type, setRoomType] = useState(initialData?.room_type || "");
-  const [breakfast, setBreakfast] = useState(initialData?.breakfast || false);
+  const [breakfast, setBreakfast] = useState(initialData?.breakfast !== undefined ? initialData.breakfast : true);
   const [hotel_url, setHotelUrl] = useState(initialData?.hotel_url || "");
   const [description, setDescription] = useState(initialData?.description || "");
   const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
@@ -59,16 +59,21 @@ export default function HotelModal({
           </div>
 
           <div className="field">
-            <label>Stars (0-5)</label>
-            <input
-              type="number"
-              min="0"
-              max="5"
-              className="input"
-              value={stars}
-              onChange={(e) => setStars(e.target.value)}
-              placeholder=""
-            />
+            <label>Stars</label>
+            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
+              {["NA", "1", "2", "3", "4", "5"].map((val) => (
+                <label key={val} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                  <input
+                    type="radio"
+                    name="stars"
+                    value={val}
+                    checked={stars === val}
+                    onChange={(e) => setStars(e.target.value)}
+                  />
+                  <span>{val === "NA" ? "N/A" : val + "★"}</span>
+                </label>
+              ))}
+            </div>
           </div>
 
           <div className="field">

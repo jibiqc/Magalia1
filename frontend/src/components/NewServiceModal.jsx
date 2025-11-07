@@ -114,6 +114,7 @@ export default function NewServiceModal({
               className="input"
               value={start_time}
               onChange={(e) => setStartTime(e.target.value)}
+              placeholder="09:00"
             />
           </div>
 
