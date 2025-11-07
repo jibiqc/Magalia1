@@ -835,7 +835,10 @@ export default function QuoteEditor(){
                     className="btn-xxs icon-only"
                     aria-label="Set destination for N nights"
                     title="Set destination for N nights"
-                    onClick={() => setDestModal({ open: true, quoteId: q.id, startDate: d.date })}
+                    onClick={() => {
+                      console.log("[dest] opening modal", { quoteId: q.id, startDate: d.date });
+                      setDestModal({ open: true, quoteId: q.id, startDate: d.date });
+                    }}
                   >
                     📍
                   </button>
@@ -1124,20 +1127,18 @@ export default function QuoteEditor(){
       {/* Destination Range Modal */}
       {destModal.open && q.id && (
         <DestinationRangeModal
+          open={destModal.open}
           quoteId={q.id}
           startDate={destModal.startDate}
           onClose={() => setDestModal({ open: false, quoteId: null, startDate: null })}
           onApplied={async () => {
             setDestModal({ open: false, quoteId: null, startDate: null });
-            // 1) Refresh quote data
             await fetchQuote(q.id);
-            // 2) Trigger reprice
             try {
               await api.repriceQuote(q.id);
             } catch (err) {
               console.error("Reprice error:", err);
             }
-            // 3) Show success (simple console for now, can add toast later)
             console.log("Destinations updated and repriced");
           }}
         />

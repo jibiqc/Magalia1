@@ -463,6 +463,27 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 
 /* Modal styles */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999; /* make sure it's above everything */
+  background: rgba(0,0,0,0.35);
+}
+
+.modal-card {
+  width: 360px;
+  max-width: 92vw;
+  background: #0b1220;
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  padding: 16px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -491,6 +512,12 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   align-items: center;
   padding: 16px 20px;
   border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.modal-title {
+  font-weight: 700;
+  margin-bottom: 8px;
+  font-size: 18px;
 }
 
 .modal-header h3 {

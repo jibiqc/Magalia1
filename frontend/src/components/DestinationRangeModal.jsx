@@ -1,7 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import { api } from "../lib/api";
 
-export default function DestinationRangeModal({ quoteId, startDate, onClose, onApplied }) {
+export default function DestinationRangeModal({
+  open = true,
+  quoteId,
+  startDate,
+  onClose,
+  onApplied,
+}) {
+  if (!open) return null;
+
   const [query, setQuery] = useState("");
   const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -109,16 +117,14 @@ export default function DestinationRangeModal({ quoteId, startDate, onClose, onA
 
   return (
     <div
-      className="modal-overlay"
+      id="dest-range-modal-root"
+      className="modal-backdrop"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="modal-content" style={{ width: "360px" }}>
-        <div className="modal-header">
-          <h3>Set Destination for N Nights</h3>
-          <button className="modal-close" onClick={onClose}>×</button>
-        </div>
+      <div className="modal-card">
+        <div className="modal-title">Set destination</div>
 
         <div className="modal-body">
           <div className="form-field">
