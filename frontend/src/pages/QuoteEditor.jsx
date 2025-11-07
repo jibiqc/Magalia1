@@ -22,6 +22,22 @@ import { uid } from "../utils/localId";
 const DEFAULT_MARGIN = 0.1627; // 16.27 %
 const DEFAULT_FX = 0.75;
 
+const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+const round6 = (n) => Math.round((Number(n) + Number.EPSILON) * 1e6) / 1e6;
+
+// "123,45" -> 123.45, "" -> null
+function parseLocaleFloat(v) {
+  if (v === null || v === undefined) return null;
+  const s = String(v).trim().replace(/\s+/g, "").replace(",", ".");
+  if (s === "") return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+function effectiveFx(lineFx, globalFx) {
+  return lineFx ?? globalFx ?? DEFAULT_FX;
+}
+
 const isPaidCategory = (cat) => {
   const paid = new Set([
     "Activity","Hotel","Transport","Private Transfer","Private","Small Group",
@@ -60,8 +76,6 @@ const parsePct = (s) => {
 };
 
 // Helpers à placer en haut du fichier (hors composant)
-
-const round2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
 
 // --- Commission helpers (acceptent "16,27", "16.27%", "0,1627") ---
 const pctToDisplay = (p) =>
@@ -199,20 +213,11 @@ export default function QuoteEditor(){
   const currentQuoteId = (q && q.id) || null;
 
   // Commission edit state
-  const [commEdit, setCommEdit] = React.useState({
-    active: false,
-    text: ((q.margin_pct ?? DEFAULT_MARGIN) * 100).toFixed(2), // "16.27"
-  });
-
-  // Si la marge change ailleurs, resynchroniser l'affichage quand on N'édite pas
-  React.useEffect(() => {
-    if (!commEdit.active) {
-      setCommEdit(s => ({
-        ...s,
-        text: ((q.margin_pct ?? DEFAULT_MARGIN) * 100).toFixed(2),
-      }));
-    }
-  }, [q.margin_pct, commEdit.active]);
+  const [marginStr, setMarginStr] = useState(() => "16.27");
+  useEffect(() => {
+    // initialisation depuis q.margin_pct si dispo
+    if (q?.margin_pct != null) setMarginStr(String(round2(q.margin_pct*100)));
+  }, [q?.id]); // quand on ouvre une quote
 
   // --- Drag & drop state & helpers ---
 
@@ -455,31 +460,23 @@ export default function QuoteEditor(){
   };
 
   // recalcul au BLUR selon les règles
-  const rederiveLineOnBlur = (di, li) => {
+  const rederiveLine = (di, li, lastEdited) => {
     setQ(prev => {
       const next = structuredClone(prev);
       const line = next.days[di].lines[li];
 
-      const eur = Number(line.achat_eur || 0);
-      const usd = Number(line.achat_usd || 0);
-      const fxFallback = fxEuroToUsd ?? DEFAULT_FX;
-      let fx = (line.fx_rate == null ? fxFallback : Number(line.fx_rate||0) || fxFallback);
+      const eur = parseLocaleFloat(line.achat_eur);
+      const usd = parseLocaleFloat(line.achat_usd);
+      const fx  = effectiveFx(parseLocaleFloat(line.fx_rate), fxEuroToUsd);
 
-      // Règles
-      if (eur > 0 && (line._lastEdited === "eur" || line._lastEdited === "fx")) {
-        // si € renseigné → calcule $ à partir de FX: $ = € / FX
-        if (fx > 0) {
-          line.achat_usd = round2(eur / fx);
-        }
-      }
-      if (eur > 0 && line._lastEdited === "usd") {
-        // si € et $ renseignés → recalcule FX: FX = € / $
-        if (usd > 0 && eur > 0) {
-          line.fx_rate = round2(eur / usd);
-        }
+      if (lastEdited === "eur") {
+        if (eur != null && fx != null) line.achat_usd = round2(eur * fx);
+      } else if (lastEdited === "fx") {
+        if (eur != null && fx != null) line.achat_usd = round2(eur * fx);
+      } else if (lastEdited === "usd") {
+        if (eur != null && usd != null && eur !== 0) line.fx_rate = round6(usd / eur);
       }
 
-      delete line._lastEdited; // reset flag
       next.dirty = true;
       return next;
     });
@@ -531,14 +528,22 @@ export default function QuoteEditor(){
     // nombre de cartes Onspot: 1 carte / 6 pax (arrondi supérieur)
     const onspotCards = Math.ceil((q.pax || 0) / 6) || 0;
     const tripDays = Math.max(1, q.days?.length || 0);
-    return Math.max(27, 9 * onspotCards * tripDays); // min 27 $
+    return 9 * onspotCards * tripDays;
   }, [q.pax, q.days]);
 
   const hassleDefault = useMemo(()=> 150 * (q.pax || 0), [q.pax]);
 
   // Valeurs effectives avec override
-  const onspotValue = useMemo(()=> (q.onspot_manual ?? onspotDefault), [q.onspot_manual, onspotDefault]);
-  const hassleValue = useMemo(()=> (q.hassle_manual ?? hassleDefault), [q.hassle_manual, hassleDefault]);
+  const onspotAuto = round2(onspotDefault);
+  const onspotBase = Math.max(onspotAuto, 27);
+  const onspotValue = useMemo(()=> {
+    const manual = parseLocaleFloat(q.onspot_manual);
+    return manual != null ? manual : onspotBase;
+  }, [q.onspot_manual, onspotBase]);
+  const hassleValue = useMemo(()=> {
+    const manual = parseLocaleFloat(q.hassle_manual);
+    return manual != null ? manual : round2(hassleDefault);
+  }, [q.hassle_manual, hassleDefault]);
 
 
 
@@ -660,6 +665,7 @@ export default function QuoteEditor(){
   // Render Excel preview table
 
   function renderExcelPreview() {
+    console.debug('[excel] recompute', Date.now(), q?.days?.length);
 
     // Agrège toutes les lignes "payantes"
 
@@ -731,13 +737,10 @@ export default function QuoteEditor(){
 
 
 
-        const eur  = Number(line.achat_eur || 0);
-
-        const fx   = line.fx_rate ?? fxEuroToUsd ?? DEFAULT_FX;
-
-        const usd  = Number(line.achat_usd || 0);
-
-        const sell = Number(line.vente_usd || 0);
+        const eur  = parseLocaleFloat(line.achat_eur) || 0;
+        const fx   = effectiveFx(parseLocaleFloat(line.fx_rate), fxEuroToUsd);
+        const usd  = parseLocaleFloat(line.achat_usd) || (eur && fx ? round2(eur * fx) : 0);
+        const sell = parseLocaleFloat(line.vente_usd) || 0;
 
 
 
@@ -826,15 +829,18 @@ export default function QuoteEditor(){
                   {r.name === "Onspot" ? (
                     <input
                       className="money-cell"
-                      value={q.onspot_manual != null ? q.onspot_manual : onspotDefault}
+                      value={q.onspot_manual != null ? q.onspot_manual : onspotBase}
                       onChange={(e) => {
-                        const v = parseUsd(e.target.value);
-                        setQ(prev => ({ ...prev, onspot_manual: v }));
+                        setQ(prev => ({ ...prev, onspot_manual: e.target.value }));
                       }}
                       onBlur={(e) => {
-                        // clamp au minimum 27 $
-                        const v = Math.max(27, parseUsd(e.target.value));
-                        setQ(prev => ({ ...prev, onspot_manual: v }));
+                        const v = parseLocaleFloat(e.target.value);
+                        setQ(prev => {
+                          const next = structuredClone(prev);
+                          next.onspot_manual = v != null ? round2(v) : null;
+                          next.dirty = true;
+                          return next;
+                        });
                       }}
                       inputMode="decimal"
                     />
@@ -848,12 +854,16 @@ export default function QuoteEditor(){
                       className="money-cell"
                       value={q.hassle_manual != null ? q.hassle_manual : hassleDefault}
                       onChange={(e) => {
-                        const v = parseUsd(e.target.value);
-                        setQ(prev => ({ ...prev, hassle_manual: v }));
+                        setQ(prev => ({ ...prev, hassle_manual: e.target.value }));
                       }}
                       onBlur={(e) => {
-                        const v = Math.max(0, parseUsd(e.target.value)); // pas de min, juste >= 0
-                        setQ(prev => ({ ...prev, hassle_manual: v }));
+                        const v = parseLocaleFloat(e.target.value);
+                        setQ(prev => {
+                          const next = structuredClone(prev);
+                          next.hassle_manual = v != null ? round2(v) : null;
+                          next.dirty = true;
+                          return next;
+                        });
                       }}
                       inputMode="decimal"
                     />
@@ -897,31 +907,16 @@ export default function QuoteEditor(){
             <div className="label">Commission</div>
             <div className="middle" style={{display:'flex', alignItems:'center', gap:6}}>
               <input
-                type="text"
-                inputMode="decimal"
-                className="pct-cell"
-                value={commEdit.text}
-                placeholder="16.27"
-                onFocus={() => {
-                  setCommEdit({
-                    active: true,
-                    // afficher sans forcer 2 décimales pendant l'édition
-                    text: ((q.margin_pct ?? DEFAULT_MARGIN) * 100).toString().replace('.', ','),
+                className="price-inp" inputMode="decimal" value={marginStr}
+                onChange={(e)=> setMarginStr(e.target.value)}
+                onBlur={()=>{
+                  const v = parseLocaleFloat(marginStr);
+                  setQ(prev=>{
+                    const next = structuredClone(prev);
+                    next.margin_pct = v != null ? round6(v/100) : 0.1627; // défaut 16.27%
+                    next.dirty = true;
+                    return next;
                   });
-                }}
-                onChange={(e) => setCommEdit(s => ({ ...s, text: e.target.value }))}
-                onBlur={() => {
-                  const raw = (commEdit.text ?? '')
-                    .toString()
-                    .replace(',', '.')
-                    .replace(/[^\d.]/g, '');
-                  const num = raw === '' ? NaN : Number(raw);
-                  const pct = Number.isFinite(num) ? num / 100 : DEFAULT_MARGIN; // 16.27 -> 0.1627
-                  setQ(prev => ({ ...prev, margin_pct: pct }));
-                  setCommEdit({ active: false, text: (pct * 100).toFixed(2) });
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') e.currentTarget.blur(); // commit au Enter
                 }}
               />
               <span className="pct-suffix">%</span>
@@ -1153,46 +1148,31 @@ export default function QuoteEditor(){
                           {isPaidCategory(l.category) && !isLocal && lineIdx >= 0 && (
                             <div className="price-row-one">
                               <input
-                                className="price-inp"
-                                type="text" inputMode="decimal"
-                                placeholder="€ buy"
+                                className="price-inp" inputMode="decimal" placeholder="Prix d'achat €"
                                 value={l.achat_eur ?? ""}
-                                onChange={(e)=>{
-                                  updateLine(dayIdx, lineIdx, { achat_eur: e.target.value, _lastEdited: "eur" });
-                                }}
-                                onBlur={()=> rederiveLineOnBlur(dayIdx, lineIdx)}
+                                onChange={(e)=> updateLine(dayIdx, lineIdx, { achat_eur: e.target.value })}
+                                onBlur={()=> rederiveLine(dayIdx, lineIdx, "eur")}
                               />
 
                               <input
-                                className="price-inp"
-                                type="text" inputMode="decimal"
-                                placeholder="€→$"
+                                className="price-inp" inputMode="decimal" placeholder="€→$"
                                 value={l.fx_rate ?? fxEuroToUsd}
-                                onChange={(e)=>{
-                                  const fx = Number(String(e.target.value).replace(",", "."));
-                                  updateLine(dayIdx, lineIdx, { fx_rate: isFinite(fx) ? fx : undefined, _lastEdited: "fx" });
-                                }}
-                                onBlur={()=> rederiveLineOnBlur(dayIdx, lineIdx)}
+                                onChange={(e)=> updateLine(dayIdx, lineIdx, { fx_rate: e.target.value })}
+                                onBlur={()=> rederiveLine(dayIdx, lineIdx, "fx")}
                               />
 
                               <input
-                                className="price-inp"
-                                type="text" inputMode="decimal"
-                                placeholder="$ buy"
+                                className="price-inp" inputMode="decimal" placeholder="Prix d'achat $"
                                 value={l.achat_usd ?? ""}
-                                onChange={(e)=>{
-                                  updateLine(dayIdx, lineIdx, { achat_usd: e.target.value, _lastEdited: "usd" });
-                                }}
-                                onBlur={()=> rederiveLineOnBlur(dayIdx, lineIdx)}
+                                onChange={(e)=> updateLine(dayIdx, lineIdx, { achat_usd: e.target.value })}
+                                onBlur={()=> rederiveLine(dayIdx, lineIdx, "usd")}
                               />
 
                               <input
-                                className="price-inp"
-                                type="text" inputMode="decimal"
-                                placeholder="$ sell"
+                                className="price-inp" inputMode="decimal" placeholder="Prix de vente $"
                                 value={l.vente_usd ?? ""}
                                 onChange={(e)=> updateLine(dayIdx, lineIdx, { vente_usd: e.target.value })}
-                                onBlur={()=> updateLine(dayIdx, lineIdx, { vente_usd: round2(Number(l.vente_usd || 0)) })}
+                                onBlur={()=> setQ(p=>{const n=structuredClone(p); n.days[dayIdx].lines[lineIdx].vente_usd = round2(parseLocaleFloat(l.vente_usd)||0); n.dirty=true; return n;})}
                               />
                             </div>
                           )}

@@ -1198,20 +1198,17 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 /* single-line compact row inside a service card */
 .price-row-one {
   display: grid;
-  grid-template-columns: 110px 80px 110px 110px; /* € | FX | $buy | $sell */
+  grid-template-columns: 140px 90px 140px 140px;
   gap: 8px;
   align-items: center;
-  margin-top: 8px;
 }
 
 .price-inp {
   height: 32px;
-  padding: 6px 8px;
-  font-size: 14px;
-  text-align: right;
-  background: #ffffff;
-  color: #0f172a;
-  border: 1px solid #d0d5dd;
+  padding: 6px 10px;
+  background: #fff;
+  color: #0a0f1a;
+  border: 1px solid #d6d9e0;
   border-radius: 8px;
 }
 
@@ -1224,6 +1221,6 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 /* small screens: 2 columns */
 @media (max-width: 1280px) {
   .price-row-one {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 88px 1fr 1fr;
   }
 }
