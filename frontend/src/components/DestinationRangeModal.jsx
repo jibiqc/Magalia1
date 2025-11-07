@@ -22,6 +22,7 @@ export default function DestinationRangeModal({
   const debounceRef = useRef(null);
   const inputRef = useRef(null);
   const nightsRef = useRef(null);
+  const destWrapRef = useRef(null);
 
   if (!open) return null;
 
@@ -57,9 +58,12 @@ export default function DestinationRangeModal({
         const exactMatch = results.find(
           (d) => d.name.toLowerCase() === query.trim().toLowerCase()
         );
-        setSelectedDest(exactMatch || null);
-        setIsCreating(!exactMatch && query.trim().length > 0);
+      setSelectedDest(exactMatch || null);
+      setIsCreating(!exactMatch && query.trim().length > 0);
+      // Only show menu if there's text and results
+      if (query.trim().length > 0) {
         setShowMenu(true);
+      }
       } catch (err) {
         setError(`Failed to fetch destinations: ${err.message}`);
       } finally {
@@ -74,6 +78,18 @@ export default function DestinationRangeModal({
   // Focus input on mount
   useEffect(() => {
     inputRef.current?.focus();
+  }, []);
+
+  // Close menu on click-outside
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (!destWrapRef.current) return;
+      if (!destWrapRef.current.contains(e.target)) {
+        setShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
   }, []);
 
   const handleApply = async () => {
@@ -166,8 +182,8 @@ export default function DestinationRangeModal({
     setQuery(name);
     setSelectedDest({ name });
     setIsCreating(false);
-    setShowMenu(false); // CLOSE menu
-    setTimeout(() => nightsRef.current?.focus(), 0); // focus nights
+    setShowMenu(false);
+    setTimeout(() => nightsRef.current?.focus(), 0);
   };
 
   const handleSelectDestination = (dest) => {
@@ -213,20 +229,25 @@ export default function DestinationRangeModal({
             <input type="text" value={startDate} readOnly className="readonly" />
           </div>
 
-          <div className="form-field dest-typeahead" style={{ position: "relative", marginBottom: 10 }}>
+          <div ref={destWrapRef} className="form-field dest-typeahead" style={{ position: "relative", marginBottom: 10 }}>
             <label>Destination</label>
             <input
               ref={inputRef}
               type="text"
               value={query}
               onChange={(e) => {
-                setQuery(e.target.value);
+                const v = e.target.value;
+                setQuery(v);
                 setSelectedDest(null);
-                setShowMenu(true);
+                setShowMenu(!!v.trim());
               }}
               onFocus={() => {
-                if (query.trim().length > 0 && destinations.length > 0) {
-                  setShowMenu(true);
+                setShowMenu(!!query.trim());
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && destinations.length > 0) {
+                  e.preventDefault();
+                  selectDestination(destinations[0].name);
                 }
               }}
               placeholder="Type to search..."
@@ -234,7 +255,7 @@ export default function DestinationRangeModal({
             />
             {loading && <div className="typeahead-loading">Loading...</div>}
             {!loading && showMenu && query.trim().length > 0 && (
-              <div className="typeahead-dropdown" style={{ position: "absolute", left: 0, right: 0, top: "100%", maxHeight: 220, overflow: "auto", zIndex: 100000, background: "#222c42", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 6, marginTop: 4 }}>
+              <div className="typeahead-dropdown menu" style={{ position: "absolute", left: 0, right: 0, top: "100%", maxHeight: 220, overflow: "auto", zIndex: 100000, background: "#222c42", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 6, marginTop: 4 }}>
                 {destinations.length > 0 && (
                   <>
                     {destinations.map((dest) => (
