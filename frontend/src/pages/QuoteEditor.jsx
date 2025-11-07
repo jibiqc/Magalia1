@@ -22,6 +22,12 @@ const parseNum = v => {
 // Affichages
 const asMoney = (n) => `$${Number(n || 0).toFixed(2)}`;
 
+const parseUsd = (s) => {
+  const x = String(s ?? '').replace(',', '.').replace(/[^0-9.\-]/g,'').trim();
+  const n = Number(x);
+  return Number.isFinite(n) ? n : 0;
+};
+
 // Commission: afficher 16.27 quand margin_pct = 0.1627
 const fmtPct = (p) => (p == null ? '' : (Math.round((p * 100) * 100) / 100).toString());
 
@@ -431,34 +437,19 @@ export default function QuoteEditor(){
 
   const numDays = useMemo(()=> q.days.length || 0, [q.days]);
 
-  const onspotAuto = useMemo(()=>{
-    // ---- ONSPOT ----
-    // cartes: 1 carte / 6 pax (arrondi au supérieur)
-    const pax = Number(q.pax ?? 0);
-    const cards = Math.max(1, Math.ceil((pax || 1) / 6));
+  // Calculs par défaut
+  const onspotDefault = useMemo(()=>{
+    // nombre de cartes Onspot: 1 carte / 6 pax (arrondi supérieur)
+    const onspotCards = Math.ceil((q.pax || 0) / 6) || 0;
+    const tripDays = Math.max(1, q.days?.length || 0);
+    return Math.max(27, 9 * onspotCards * tripDays); // min 27 $
+  }, [q.pax, q.days]);
 
-    // nb de jours: prends d'abord le nombre de jours de q.days, sinon diff de dates
-    const dayCountFromList = Array.isArray(q.days) ? q.days.length : 0;
-    const dayCountFromDates = (() => {
-      if (!q.start_date || !q.end_date) return 0;
-      const d0 = new Date(q.start_date);
-      const d1 = new Date(q.end_date);
-      // +1 car inclusif
-      return Math.max(0, Math.round((d1 - d0) / 86400000) + 1);
-    })();
+  const hassleDefault = useMemo(()=> 150 * (q.pax || 0), [q.pax]);
 
-    const tripDays = Math.max(dayCountFromList, dayCountFromDates);
-
-    // **Minimum 3 jours par carte**
-    const effectiveDays = Math.max(tripDays, 3);
-
-    // auto-calc (9 $ / jour / carte)
-    return cards * 9 * effectiveDays;
-  }, [q.pax, q.days, q.start_date, q.end_date]);
-
-
-
-  const hassleAuto = useMemo(()=> 150 * (q.pax||0), [q.pax]);
+  // Valeurs effectives avec override
+  const onspotValue = useMemo(()=> (q.onspot_manual ?? onspotDefault), [q.onspot_manual, onspotDefault]);
+  const hassleValue = useMemo(()=> (q.hassle_manual ?? hassleDefault), [q.hassle_manual, hassleDefault]);
 
 
 
@@ -497,7 +488,7 @@ export default function QuoteEditor(){
 
     return {
 
-      onspot, hassle, achatsService, achatsTotal,
+      onspot: onspotValue, hassle: hassleValue, achatsService, achatsTotal,
 
       commission, ventes,
 
@@ -505,7 +496,7 @@ export default function QuoteEditor(){
 
     };
 
-  }, [q, onspotAuto, hassleAuto]);
+  }, [q, onspotValue, hassleValue]);
 
 
 
@@ -720,22 +711,43 @@ export default function QuoteEditor(){
 
 
 
-                {/* USD: vide pour Hassle */}
-
-                <td className="num">
-
-                  {r.name==="Hassle" ? "" : `$${r.usd.toFixed(2)}`}
-
+                {/* USD: vide pour Hassle, input pour Onspot */}
+                <td className={r.name === "Onspot" ? "cell-right" : "num"}>
+                  {r.name === "Onspot" ? (
+                    <input
+                      className="money-cell"
+                      value={q.onspot_manual != null ? q.onspot_manual : onspotDefault}
+                      onChange={(e) => {
+                        const v = parseUsd(e.target.value);
+                        setQ(prev => ({ ...prev, onspot_manual: v }));
+                      }}
+                      onBlur={(e) => {
+                        // clamp au minimum 27 $
+                        const v = Math.max(27, parseUsd(e.target.value));
+                        setQ(prev => ({ ...prev, onspot_manual: v }));
+                      }}
+                      inputMode="decimal"
+                    />
+                  ) : r.name === "Hassle" ? "" : `$${r.usd.toFixed(2)}`}
                 </td>
 
-
-
-                {/* Vente: vide pour Onspot */}
-
-                <td className="num">
-
-                  {r.name==="Onspot" ? "" : `$${r.sell.toFixed(2)}`}
-
+                {/* Vente: vide pour Onspot, input pour Hassle */}
+                <td className={r.name === "Hassle" ? "cell-right" : "num"}>
+                  {r.name === "Hassle" ? (
+                    <input
+                      className="money-cell"
+                      value={q.hassle_manual != null ? q.hassle_manual : hassleDefault}
+                      onChange={(e) => {
+                        const v = parseUsd(e.target.value);
+                        setQ(prev => ({ ...prev, hassle_manual: v }));
+                      }}
+                      onBlur={(e) => {
+                        const v = Math.max(0, parseUsd(e.target.value)); // pas de min, juste >= 0
+                        setQ(prev => ({ ...prev, hassle_manual: v }));
+                      }}
+                      inputMode="decimal"
+                    />
+                  ) : r.name === "Onspot" ? "" : `$${r.sell.toFixed(2)}`}
                 </td>
 
               </tr>

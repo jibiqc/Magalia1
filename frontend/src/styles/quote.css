@@ -381,6 +381,18 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .pct-suffix{ opacity:0.7; }
 .summary-grid .total{ font-weight:700; font-size:1.05rem; }
 
+.money-cell{
+  width: 110px;
+  height: 32px;
+  text-align: right;
+  border-radius: 8px;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: #fff;            /* en tableau blanc */
+  color: #1a1a1a;
+  padding: 4px 8px;
+}
+.cell-right{ text-align: right; }
+
 /* Tableaux – garder l'existant ; juste un peu de densité sur petits écrans */
 @media (max-width: 1200px) {
   .excel-like .table td, .excel-like .table th { padding:8px 10px; }
