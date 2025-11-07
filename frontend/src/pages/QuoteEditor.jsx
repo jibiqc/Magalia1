@@ -20,6 +20,7 @@ import { uid } from "../utils/localId";
 
 // Défaut global pour la marge
 const DEFAULT_MARGIN = 0.1627; // 16.27 %
+const DEFAULT_FX = 0.75;
 
 const money = (n=0, {digits=2}={}) => `$${(Number(n)||0).toFixed(digits)}`;
 
@@ -349,7 +350,7 @@ export default function QuoteEditor(){
             fx_rate: l.fx_rate,
             currency: l.currency,
             base_net_amount: l.base_net_amount,
-            raw_json: l.raw_json || {},
+            raw_json: { ...(l.raw_json || {}), fx: (l.fx_rate ?? fxEuroToUsd ?? DEFAULT_FX) },
           })),
         })),
       };
@@ -435,6 +436,8 @@ export default function QuoteEditor(){
       const next = structuredClone(prev);
 
       Object.assign(next.days[dayIdx].lines[lineIdx], patch);
+
+      next.dirty = true;
 
       return next;
 
@@ -1061,50 +1064,117 @@ export default function QuoteEditor(){
                   {(() => {
                     const dayLocal = localLines.filter(l => l.dayId === d.id && !l.deleted);
                     const allLines = [...(d.lines||[]), ...dayLocal];
+                    const paidCats = new Set(["Activity","Hotel","Private Transfer","Transport","Private","Small Group","Tickets","Train","Flight","Ferry","Apartment","Villa","Private Driver","New Hotel","New Service"]);
                     return allLines.map((l, idx) => {
                       const isLocal = l.isLocal || dayLocal.some(ll => ll.id === l.id);
+                      const isPaid = paidCats.has((l.category || "").trim());
                       // For local lines, use { category, data }; for backend lines, pass the line as-is (ServiceCard will handle it)
                       const lineData = isLocal ? { category: l.category, data: l.data || {}, isLocal: true } : { category: l.category || "", ...l };
+                      // Find line index in d.lines for backend lines
+                      const lineIdx = isLocal ? -1 : d.lines.findIndex(line => line.id === l.id);
                       return (
-                        <ServiceCard
-                          key={isLocal ? l.id : (l.id || `line-${idx}`)}
-                          line={lineData}
-                          onChangeLocalData={isLocal ? (newData)=>{
-                            setLocalLines(prev => prev.map(x => x.id===l.id ? { ...x, data:newData } : x));
-                          } : undefined}
-                          onEdit={() => {
-                            if (isLocal) {
-                              openEditModal(l);
-                            } else {
-                              // For backend lines, convert to local format for editing
-                              const editData = {
-                                id: l.id,
-                                category: l.category,
-                                data: {
-                                  title: l.title || "",
-                                  body: l.raw_json?.body || "",
-                                  ...(l.raw_json || {})
-                                }
-                              };
-                              openEditModal(editData);
-                            }
-                          }}
-                          onDuplicate={() => {
-                            if (isLocal) {
-                              addLocalLine(l.dayId, l.category, JSON.parse(JSON.stringify(l.data || {})));
-                            }
-                          }}
-                          onDelete={() => {
-                            if (isLocal) {
-                              setLocalLines(prev => prev.map(x => x.id===l.id ? {...x, deleted:true} : x));
-                              const victim = localLines.find(x => x.id === l.id);
-                              if (victim) setTrashLines(t => [victim, ...t]);
-                            } else {
-                              // For backend lines, we could mark for deletion or convert to local
-                              // For now, just remove from display (would need backend delete later)
-                            }
-                          }}
-                        />
+                        <React.Fragment key={isLocal ? l.id : (l.id || `line-${idx}`)}>
+                          <ServiceCard
+                            line={lineData}
+                            onChangeLocalData={isLocal ? (newData)=>{
+                              setLocalLines(prev => prev.map(x => x.id===l.id ? { ...x, data:newData } : x));
+                            } : undefined}
+                            onEdit={() => {
+                              if (isLocal) {
+                                openEditModal(l);
+                              } else {
+                                // For backend lines, convert to local format for editing
+                                const editData = {
+                                  id: l.id,
+                                  category: l.category,
+                                  data: {
+                                    title: l.title || "",
+                                    body: l.raw_json?.body || "",
+                                    ...(l.raw_json || {})
+                                  }
+                                };
+                                openEditModal(editData);
+                              }
+                            }}
+                            onDuplicate={() => {
+                              if (isLocal) {
+                                addLocalLine(l.dayId, l.category, JSON.parse(JSON.stringify(l.data || {})));
+                              }
+                            }}
+                            onDelete={() => {
+                              if (isLocal) {
+                                setLocalLines(prev => prev.map(x => x.id===l.id ? {...x, deleted:true} : x));
+                                const victim = localLines.find(x => x.id === l.id);
+                                if (victim) setTrashLines(t => [victim, ...t]);
+                              } else {
+                                // For backend lines, we could mark for deletion or convert to local
+                                // For now, just remove from display (would need backend delete later)
+                              }
+                            }}
+                          />
+                          {isPaid && !isLocal && lineIdx >= 0 && (
+                            <>
+                              <div className="service-price-row">
+                                <label className="sp-field">
+                                  <span className="sp-label">Prix d'achat €</span>
+                                  <input
+                                    className="sp-input"
+                                    type="number" step="0.01" min="0"
+                                    value={l.achat_eur ?? ''}
+                                    onChange={(e) => {
+                                      const eur = Number(e.target.value || 0);
+                                      const fx  = Number((l.fx_rate ?? fxEuroToUsd ?? DEFAULT_FX));
+                                      const usd = eur ? round2(eur * fx) : (l.achat_usd ?? 0);
+                                      updateLine(dayIdx, lineIdx, { achat_eur: eur, fx_rate: fx, achat_usd: usd });
+                                    }}
+                                    placeholder="0.00"
+                                  />
+                                </label>
+                                <label className="sp-field">
+                                  <span className="sp-label">€→$</span>
+                                  <input
+                                    className="sp-input"
+                                    type="number" step="0.01" min="0"
+                                    value={l.fx_rate ?? fxEuroToUsd ?? DEFAULT_FX}
+                                    onChange={(e) => {
+                                      const fx  = Number(e.target.value || 0);
+                                      const eur = Number(l.achat_eur || 0);
+                                      const usd = eur ? round2(eur * fx) : Number(l.achat_usd || 0);
+                                      updateLine(dayIdx, lineIdx, { fx_rate: fx, achat_usd: usd });
+                                    }}
+                                    placeholder="0.75"
+                                  />
+                                </label>
+                                <label className="sp-field">
+                                  <span className="sp-label">Prix d'achat $</span>
+                                  <input
+                                    className="sp-input"
+                                    type="number" step="0.01" min="0"
+                                    value={l.achat_usd ?? ''}
+                                    onChange={(e) => {
+                                      const usd = Number(e.target.value || 0);
+                                      const eur = Number(l.achat_eur || 0);
+                                      const fx  = eur ? round2(usd / eur) : (l.fx_rate ?? fxEuroToUsd ?? DEFAULT_FX);
+                                      updateLine(dayIdx, lineIdx, { achat_usd: usd, fx_rate: fx });
+                                    }}
+                                    placeholder="0.00"
+                                  />
+                                </label>
+                                <label className="sp-field">
+                                  <span className="sp-label">Prix de vente $</span>
+                                  <input
+                                    className="sp-input"
+                                    type="number" step="0.01" min="0"
+                                    value={l.vente_usd ?? ''}
+                                    onChange={(e) => updateLine(dayIdx, lineIdx, { vente_usd: Number(e.target.value || 0) })}
+                                    placeholder="0.00"
+                                  />
+                                </label>
+                              </div>
+                              {l.supplier_name ? <div className="line-supplier">{l.supplier_name}</div> : null}
+                            </>
+                          )}
+                        </React.Fragment>
                       );
                     });
                   })()}
