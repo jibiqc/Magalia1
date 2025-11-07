@@ -10,8 +10,8 @@ export default function DestinationRangeModal({
   onClose,
   onApplied,
 }) {
-  const [query, setQuery] = useState("");
-  const [destinations, setDestinations] = useState([]);
+  const [destInput, setDestInput] = useState("");
+  const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [nightsStr, setNightsStr] = useState("1");
@@ -20,7 +20,6 @@ export default function DestinationRangeModal({
   const [isCreating, setIsCreating] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const debounceRef = useRef(null);
-  const inputRef = useRef(null);
   const nightsRef = useRef(null);
   const destWrapRef = useRef(null);
 
@@ -44,26 +43,26 @@ export default function DestinationRangeModal({
       clearTimeout(debounceRef.current);
     }
     debounceRef.current = setTimeout(async () => {
-      if (query.trim().length === 0) {
-        setDestinations([]);
+      if (destInput.trim().length === 0) {
+        setSuggestions([]);
         setSelectedDest(null);
         setShowMenu(false);
         return;
       }
       setLoading(true);
       try {
-        const results = await api.getDestinations(query);
-        setDestinations(results || []);
+        const results = await api.getDestinations(destInput);
+        setSuggestions(results || []);
         // Check if query matches exactly (case-insensitive)
         const exactMatch = results.find(
-          (d) => d.name.toLowerCase() === query.trim().toLowerCase()
+          (d) => d.name.toLowerCase() === destInput.trim().toLowerCase()
         );
-      setSelectedDest(exactMatch || null);
-      setIsCreating(!exactMatch && query.trim().length > 0);
-      // Only show menu if there's text and results
-      if (query.trim().length > 0) {
-        setShowMenu(true);
-      }
+        setSelectedDest(exactMatch || null);
+        setIsCreating(!exactMatch && destInput.trim().length > 0);
+        // Only show menu if there's text and results
+        if (destInput.trim().length > 0) {
+          setShowMenu(true);
+        }
       } catch (err) {
         setError(`Failed to fetch destinations: ${err.message}`);
       } finally {
@@ -73,12 +72,12 @@ export default function DestinationRangeModal({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query]);
+  }, [destInput]);
 
-  // Focus input on mount
+  // Autofocus Nights when modal opens
   useEffect(() => {
-    inputRef.current?.focus();
-  }, []);
+    if (open) setTimeout(() => nightsRef.current?.focus(), 0);
+  }, [open]);
 
   // Close menu on click-outside
   useEffect(() => {
@@ -131,17 +130,17 @@ export default function DestinationRangeModal({
       }
 
       try {
-        let destinationName = finalName;
+        let destinationName = destInput.trim();
 
         // If creating new destination
         if (isCreating || !selectedDest) {
           try {
-            const created = await api.createDestination(finalName);
+            const created = await api.createDestination(destinationName);
             destinationName = created.name;
           } catch (err) {
             // If duplicate, fetch and use existing
             if (err.message.includes("already exists") || err.message.includes("duplicate")) {
-              const results = await api.getDestinations(finalName);
+              const results = await api.getDestinations(destinationName);
               if (results && results.length > 0) {
                 destinationName = results[0].name;
               } else {
@@ -156,13 +155,13 @@ export default function DestinationRangeModal({
         }
 
         // Patch days
-        const nightsNum = Math.max(1, parseInt(nightsStr || "1", 10));
-        await api.patchQuoteDays(qid, {
+        const payload = {
           start_date: startDate,
-          nights: nightsNum,
+          nights,
           destination: destinationName,
           overwrite: true,
-        });
+        };
+        await api.patchQuoteDays(qid, payload);
 
         // Success - call parent callback
         await onApplied?.();
@@ -179,15 +178,8 @@ export default function DestinationRangeModal({
   };
 
   const selectDestination = (name) => {
-    setQuery(name);
-    setSelectedDest({ name });
-    setIsCreating(false);
+    setDestInput(name);
     setShowMenu(false);
-    setTimeout(() => nightsRef.current?.focus(), 0);
-  };
-
-  const handleSelectDestination = (dest) => {
-    selectDestination(dest.name);
   };
 
   const backdrop = (
@@ -224,64 +216,14 @@ export default function DestinationRangeModal({
         </div>
 
         <div className="dest-modal-body" style={{ padding: 20 }}>
-          <div className="form-field">
+          {/* Start Date (read-only) */}
+          <div className="form-field field">
             <label>Start Date</label>
             <input type="text" value={startDate} readOnly className="readonly" />
           </div>
 
-          <div ref={destWrapRef} className="form-field dest-typeahead" style={{ position: "relative", marginBottom: 10 }}>
-            <label>Destination</label>
-            <input
-              ref={inputRef}
-              type="text"
-              value={query}
-              onChange={(e) => {
-                const v = e.target.value;
-                setQuery(v);
-                setSelectedDest(null);
-                setShowMenu(!!v.trim());
-              }}
-              onFocus={() => {
-                setShowMenu(!!query.trim());
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && destinations.length > 0) {
-                  e.preventDefault();
-                  selectDestination(destinations[0].name);
-                }
-              }}
-              placeholder="Type to search..."
-              className="typeahead-input"
-            />
-            {loading && <div className="typeahead-loading">Loading...</div>}
-            {!loading && showMenu && query.trim().length > 0 && (
-              <div className="typeahead-dropdown menu" style={{ position: "absolute", left: 0, right: 0, top: "100%", maxHeight: 220, overflow: "auto", zIndex: 100000, background: "#222c42", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 6, marginTop: 4 }}>
-                {destinations.length > 0 && (
-                  <>
-                    {destinations.map((dest) => (
-                      <div
-                        key={dest.id || dest.name}
-                        className="typeahead-option"
-                        onClick={() => handleSelectDestination(dest)}
-                      >
-                        {dest.name}
-                      </div>
-                    ))}
-                  </>
-                )}
-                {isCreating && (
-                  <div
-                    className="typeahead-option typeahead-create"
-                    onClick={() => selectDestination(query.trim())}
-                  >
-                    Add new: <strong>{query.trim()}</strong>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
-          <div className="form-field">
+          {/* Nights FIRST */}
+          <div className="form-field field">
             <label>Nights</label>
             <input
               ref={nightsRef}
@@ -290,12 +232,69 @@ export default function DestinationRangeModal({
               pattern="[0-9]*"
               value={nightsStr}
               onChange={(e) => {
-                // keep only digits; allow empty while typing
-                const v = e.target.value.replace(/\D/g, "");
+                const v = e.target.value.replace(/\D/g, ""); // digits only; allow empty
                 setNightsStr(v);
               }}
               placeholder="1"
             />
+          </div>
+
+          {/* Destination SECOND (typeahead) */}
+          <div ref={destWrapRef} className="form-field dest-typeahead field" style={{ position: "relative" }}>
+            <label>Destination</label>
+            <input
+              type="text"
+              value={destInput}
+              onChange={(e) => {
+                const v = e.target.value;
+                setDestInput(v);
+                setSelectedDest(null);
+                setShowMenu(!!v.trim());
+              }}
+              onFocus={() => setShowMenu(!!destInput?.trim())}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && suggestions.length > 0) {
+                  e.preventDefault();
+                  selectDestination(suggestions[0].name);
+                }
+              }}
+              placeholder="Type a city"
+              className="typeahead-input"
+            />
+            {loading && <div className="typeahead-loading">Loading...</div>}
+            {showMenu && suggestions.length > 0 && (
+              <div className="menu" style={{
+                position: "absolute",
+                left: 0,
+                right: 0,
+                top: "100%",
+                maxHeight: 220,
+                overflow: "auto",
+                zIndex: 100000,
+                background: "#222c42",
+                border: "1px solid rgba(255,255,255,0.16)",
+                borderRadius: 6,
+                marginTop: 4
+              }}>
+                {suggestions.map((opt) => (
+                  <div
+                    key={opt.id || opt.name}
+                    className="typeahead-option menu-item"
+                    onClick={() => selectDestination(opt.name)}
+                  >
+                    {opt.name}
+                  </div>
+                ))}
+                {isCreating && (
+                  <div
+                    className="typeahead-option typeahead-create menu-item"
+                    onClick={() => selectDestination(destInput.trim())}
+                  >
+                    Add new: <strong>{destInput.trim()}</strong>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {error && <div className="error-message">{error}</div>}

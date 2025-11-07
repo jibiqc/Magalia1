@@ -590,9 +590,12 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 
 
+.field {
+  margin-bottom: 10px;
+}
+
 .dest-typeahead {
   position: relative;
-  margin-bottom: 10px;
 }
 
 .dest-typeahead .menu {
@@ -603,6 +606,8 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   max-height: 220px;
   overflow: auto;
   z-index: 100000;
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 6px;
 }
 
 .typeahead-dropdown {
