@@ -452,6 +452,12 @@ export default function QuoteEditor(){
 
       const next = structuredClone(prev);
 
+      // Vérification de sécurité
+      if (!next.days?.[dayIdx]?.lines?.[lineIdx]) {
+        console.warn("[updateLine] Ligne introuvable", { dayIdx, lineIdx });
+        return next;
+      }
+
       Object.assign(next.days[dayIdx].lines[lineIdx], patch);
 
       next.dirty = true;
