@@ -116,7 +116,7 @@ export default function DestinationRangeModal({
         return;
       }
       
-      const finalName = query.trim();
+      const finalName = destInput.trim();
       if (!finalName) {
         setError("Destination name is required");
         setApplying(false);
@@ -304,7 +304,7 @@ export default function DestinationRangeModal({
           <button className="btn secondary" onClick={onClose} disabled={applying}>
             Cancel
           </button>
-          <button className="btn primary" onClick={handleApply} disabled={loading || !query.trim() || applying}>
+          <button className="btn primary" onClick={handleApply} disabled={loading || !destInput.trim() || applying}>
             {applying ? "Applying..." : "Apply"}
           </button>
         </div>
