@@ -1195,27 +1195,18 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   font-size: 14px;
 }
 
-.service-price-row {
+/* single-line compact row inside a service card */
+.price-row-one {
   display: grid;
-  grid-template-columns: repeat(4, minmax(120px, 1fr)); /* € | FX | $ | Vente */
-  gap: 10px;
+  grid-template-columns: 110px 80px 110px 110px; /* € | FX | $buy | $sell */
+  gap: 8px;
+  align-items: center;
   margin-top: 8px;
 }
 
-.sp-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.sp-label {
-  font-size: 12px;
-  color: #64748b;
-}
-
-.sp-input {
-  height: 34px;
-  padding: 6px 10px;
+.price-inp {
+  height: 32px;
+  padding: 6px 8px;
   font-size: 14px;
   text-align: right;
   background: #ffffff;
@@ -1230,9 +1221,9 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   color: #475569;
 }
 
-/* slightly tighter on small screens */
+/* small screens: 2 columns */
 @media (max-width: 1280px) {
-  .service-price-row {
-    grid-template-columns: repeat(2, minmax(140px, 1fr));
+  .price-row-one {
+    grid-template-columns: 1fr 1fr;
   }
 }

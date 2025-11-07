@@ -445,6 +445,8 @@ export default function QuoteEditor(){
 
   };
 
+  const getLineFx = (line) => Number(line.fx_rate ?? fxEuroToUsd ?? DEFAULT_FX);
+
 
 
 
@@ -693,7 +695,7 @@ export default function QuoteEditor(){
 
         const eur  = Number(line.achat_eur || 0);
 
-        const fx   = line.fx_rate ?? "";
+        const fx   = line.fx_rate ?? fxEuroToUsd ?? DEFAULT_FX;
 
         const usd  = Number(line.achat_usd || 0);
 
@@ -1114,63 +1116,53 @@ export default function QuoteEditor(){
                           />
                           {isPaid && !isLocal && lineIdx >= 0 && (
                             <>
-                              <div className="service-price-row">
-                                <label className="sp-field">
-                                  <span className="sp-label">Prix d'achat €</span>
-                                  <input
-                                    className="sp-input"
-                                    type="number" step="0.01" min="0"
-                                    value={l.achat_eur ?? ''}
-                                    onChange={(e) => {
-                                      const eur = Number(e.target.value || 0);
-                                      const fx  = Number((l.fx_rate ?? fxEuroToUsd ?? DEFAULT_FX));
-                                      const usd = eur ? round2(eur * fx) : (l.achat_usd ?? 0);
-                                      updateLine(dayIdx, lineIdx, { achat_eur: eur, fx_rate: fx, achat_usd: usd });
-                                    }}
-                                    placeholder="0.00"
-                                  />
-                                </label>
-                                <label className="sp-field">
-                                  <span className="sp-label">€→$</span>
-                                  <input
-                                    className="sp-input"
-                                    type="number" step="0.01" min="0"
-                                    value={l.fx_rate ?? fxEuroToUsd ?? DEFAULT_FX}
-                                    onChange={(e) => {
-                                      const fx  = Number(e.target.value || 0);
-                                      const eur = Number(l.achat_eur || 0);
-                                      const usd = eur ? round2(eur * fx) : Number(l.achat_usd || 0);
-                                      updateLine(dayIdx, lineIdx, { fx_rate: fx, achat_usd: usd });
-                                    }}
-                                    placeholder="0.75"
-                                  />
-                                </label>
-                                <label className="sp-field">
-                                  <span className="sp-label">Prix d'achat $</span>
-                                  <input
-                                    className="sp-input"
-                                    type="number" step="0.01" min="0"
-                                    value={l.achat_usd ?? ''}
-                                    onChange={(e) => {
-                                      const usd = Number(e.target.value || 0);
-                                      const eur = Number(l.achat_eur || 0);
-                                      const fx  = eur ? round2(usd / eur) : (l.fx_rate ?? fxEuroToUsd ?? DEFAULT_FX);
-                                      updateLine(dayIdx, lineIdx, { achat_usd: usd, fx_rate: fx });
-                                    }}
-                                    placeholder="0.00"
-                                  />
-                                </label>
-                                <label className="sp-field">
-                                  <span className="sp-label">Prix de vente $</span>
-                                  <input
-                                    className="sp-input"
-                                    type="number" step="0.01" min="0"
-                                    value={l.vente_usd ?? ''}
-                                    onChange={(e) => updateLine(dayIdx, lineIdx, { vente_usd: Number(e.target.value || 0) })}
-                                    placeholder="0.00"
-                                  />
-                                </label>
+                              {/* One-line pricing row */}
+                              <div className="price-row-one">
+                                <input
+                                  className="price-inp"
+                                  type="number" step="0.01" inputMode="decimal"
+                                  placeholder="€ buy"
+                                  value={l.achat_eur ?? ""}
+                                  onChange={(e)=>{
+                                    const eur = Number(e.target.value||0);
+                                    const fx  = getLineFx(l);
+                                    const usd = eur ? round2(eur*fx) : (l.achat_usd ?? 0);
+                                    updateLine(dayIdx, lineIdx, { achat_eur: eur, fx_rate: fx, achat_usd: usd });
+                                  }}
+                                />
+                                <input
+                                  className="price-inp"
+                                  type="number" step="0.01" inputMode="decimal"
+                                  placeholder="€→$"
+                                  value={l.fx_rate ?? fxEuroToUsd}
+                                  onChange={(e)=>{
+                                    const fx  = Number(e.target.value||0);
+                                    const eur = Number(l.achat_eur||0);
+                                    const usd = eur ? round2(eur*fx) : Number(l.achat_usd||0);
+                                    updateLine(dayIdx, lineIdx, { fx_rate: fx, achat_usd: usd });
+                                  }}
+                                />
+                                <input
+                                  className="price-inp"
+                                  type="number" step="0.01" inputMode="decimal"
+                                  placeholder="$ buy"
+                                  value={l.achat_usd ?? ""}
+                                  onChange={(e)=>{
+                                    const usd = Number(e.target.value||0);
+                                    const eur = Number(l.achat_eur||0);
+                                    const fx  = eur ? round2(usd/eur) : (l.fx_rate ?? fxEuroToUsd);
+                                    updateLine(dayIdx, lineIdx, { achat_usd: usd, fx_rate: fx });
+                                  }}
+                                />
+                                <input
+                                  className="price-inp"
+                                  type="number" step="0.01" inputMode="decimal"
+                                  placeholder="$ sell"
+                                  value={l.vente_usd ?? ""}
+                                  onChange={(e)=> updateLine(dayIdx, lineIdx, { vente_usd: Number(e.target.value||0) })}
+                                />
                               </div>
+                              {/* optional small supplier line */}
                               {l.supplier_name ? <div className="line-supplier">{l.supplier_name}</div> : null}
                             </>
                           )}
