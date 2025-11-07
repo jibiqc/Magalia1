@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import "../styles/quote.css";
+import TimeAmPmField from "./TimeAmPmField";
 
 export default function TrainModal({
   open = true,
@@ -81,27 +82,9 @@ export default function TrainModal({
             />
           </div>
 
-          <div className="field">
-            <label>Departure time (HH:mm)</label>
-            <input
-              type="time"
-              className="input"
-              value={dep_time}
-              onChange={(e) => setDepTime(e.target.value)}
-            />
-            {dep_time === "00:00" && <div className="time-warn">Warning: it means Midnight</div>}
-          </div>
+          <TimeAmPmField label="Departure time" value24={dep_time} onChange={setDepTime} />
 
-          <div className="field">
-            <label>Arrival time (HH:mm)</label>
-            <input
-              type="time"
-              className="input"
-              value={arr_time}
-              onChange={(e) => setArrTime(e.target.value)}
-            />
-            {arr_time === "00:00" && <div className="time-warn">Warning: it means Midnight</div>}
-          </div>
+          <TimeAmPmField label="Arrival time" value24={arr_time} onChange={setArrTime} />
 
           <div className="field">
             <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
@@ -128,7 +111,7 @@ export default function TrainModal({
           <div className="field">
             <label>Internal note</label>
             <textarea
-              className="textarea"
+              className="textarea input-internal-note"
               value={internal_note}
               onChange={(e) => setInternalNote(e.target.value)}
               placeholder=""

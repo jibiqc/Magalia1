@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import "../styles/quote.css";
 import { parseHHMM, fmtHm, addMins } from "../utils/duration";
+import TimeAmPmField from "./TimeAmPmField";
 
 export default function NewServiceModal({
   open = true,
@@ -107,26 +108,9 @@ export default function NewServiceModal({
             </select>
           </div>
 
-          <div className="field">
-            <label>Start time (HH:mm)</label>
-            <input
-              type="time"
-              className="input"
-              value={start_time}
-              onChange={(e) => setStartTime(e.target.value)}
-              placeholder="09:00"
-            />
-          </div>
+          <TimeAmPmField label="Start time" value24={start_time} onChange={setStartTime} />
 
-          <div className="field">
-            <label>End time (HH:mm)</label>
-            <input
-              type="time"
-              className="input"
-              value={end_time}
-              onChange={(e) => handleEndChange(e.target.value)}
-            />
-          </div>
+          <TimeAmPmField label="End time" value24={end_time} onChange={handleEndChange} />
 
           <div className="field">
             <label>Duration</label>
@@ -142,7 +126,7 @@ export default function NewServiceModal({
           <div className="field">
             <label>Internal note</label>
             <textarea
-              className="textarea"
+              className="textarea input-internal-note"
               value={internal_note}
               onChange={(e) => setInternalNote(e.target.value)}
               placeholder=""

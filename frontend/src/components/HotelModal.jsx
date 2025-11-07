@@ -123,7 +123,7 @@ export default function HotelModal({
           <div className="field">
             <label>Internal note</label>
             <textarea
-              className="textarea"
+              className="textarea input-internal-note"
               value={internal_note}
               onChange={(e) => setInternalNote(e.target.value)}
               placeholder=""

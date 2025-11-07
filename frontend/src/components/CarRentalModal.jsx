@@ -13,7 +13,17 @@ export default function CarRentalModal({
   const [dropoffLocation, setDropoffLocation] = useState(initialData?.dropoff_loc || "");
   const [pickupDate, setPickupDate] = useState(initialData?.pickup_date || startDate || "");
   const [pickupTime, setPickupTime] = useState(initialData?.pickup_time || "");
-  const [dropoffDate, setDropoffDate] = useState(initialData?.dropoff_date || "");
+  // Default dropoff date to startDate + 1 day if available
+  const getDefaultDropoffDate = () => {
+    if (initialData?.dropoff_date) return initialData.dropoff_date;
+    if (startDate) {
+      const d = new Date(startDate + "T00:00:00");
+      d.setDate(d.getDate() + 1);
+      return d.toISOString().split("T")[0];
+    }
+    return "";
+  };
+  const [dropoffDate, setDropoffDate] = useState(getDefaultDropoffDate());
   const [dropoffTime, setDropoffTime] = useState(initialData?.dropoff_time || "");
   const [expectedDropoffDate, setExpectedDropoffDate] = useState(initialData?.expected_dropoff_date || "");
   const [vehicleType, setVehicleType] = useState(initialData?.vehicle_type || "");
@@ -77,17 +87,6 @@ export default function CarRentalModal({
         <div className="modal-title">Car Rental Details</div>
 
         <div className="dest-modal-body" style={{ padding: 0 }}>
-          <div className="field">
-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={intl_driver_license}
-                onChange={(e) => setIntlDriverLicense(e.target.checked)}
-              />
-              <span>International Driver License</span>
-            </label>
-          </div>
-
           <div className="field">
             <label>Pick-up Location</label>
             <input
@@ -199,18 +198,6 @@ export default function CarRentalModal({
           </div>
 
           <div className="field">
-            <label>One-way fee</label>
-            <input
-              type="number"
-              step="0.01"
-              className="input"
-              value={oneWayFee}
-              onChange={(e) => setOneWayFee(e.target.value)}
-              placeholder=""
-            />
-          </div>
-
-          <div className="field">
             <label>Mileage</label>
             <input
               type="text"
@@ -233,6 +220,17 @@ export default function CarRentalModal({
           </div>
 
           <div className="field">
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={intl_driver_license}
+                onChange={(e) => setIntlDriverLicense(e.target.checked)}
+              />
+              <span>International Driver Licence</span>
+            </label>
+          </div>
+
+          <div className="field">
             <label>Description</label>
             <textarea
               className="textarea"
@@ -246,7 +244,7 @@ export default function CarRentalModal({
           <div className="field">
             <label>Internal note</label>
             <textarea
-              className="textarea"
+              className="textarea input-internal-note"
               value={internal_note}
               onChange={(e) => setInternalNote(e.target.value)}
               placeholder=""

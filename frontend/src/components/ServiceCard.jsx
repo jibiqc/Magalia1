@@ -1,6 +1,15 @@
 import React, { useState } from "react";
 import { fmtAMPM } from "../utils/timeFmt";
 
+// Helper to print duration as "3hrs 30mins"
+const humanDur = (d) => {
+  if (!d) return "";
+  const m = /(\d+)h(?:(\d{1,2}))?/.exec(d.trim());
+  if (!m) return d;
+  const H = parseInt(m[1]), M = parseInt(m[2]||"0");
+  return `Duration: ${H}hrs${M ? ` ${M}mins` : ""}`;
+};
+
 export default function ServiceCard({ line, onEdit, onDelete, onDuplicate }) {
   const { category } = line;
   // For backend lines, data might be in line directly; for local lines, it's in line.data
@@ -17,10 +26,11 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate }) {
       showMore = bodyText.length > 80;
       break;
     case "Internal info":
-      title = "Internal only";
-      const internalBody = data?.body || "";
-      subtitle = expanded ? internalBody : internalBody.slice(0, 80);
-      showMore = internalBody.length > 80;
+      title = ""; // no title
+      subtitle = ""; // none
+      // body in data.body
+      note = data?.body || "";
+      isInternalOnly = true;
       break;
     case "Cost":
       title = data?.title || "Cost";
@@ -42,22 +52,48 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate }) {
       subtitle = `Departure ${fmtAMPM(data?.dep_time)}; Arrival ${fmtAMPM(data?.arr_time)} – Schedule subject to change`;
       note = data?.note || "";
       break;
-    case "New Hotel":
-      title = `${data?.hotel_name||"Hotel"}${data?.stars ? " " + "★".repeat(Math.min(5, Number(data.stars))) : ""}`;
-      subtitle = data?.room_type ? (data?.breakfast ? `${data.room_type}, breakfast & VAT taxes included` : `${data.room_type}, VAT taxes included`) : "";
-      note = data?.description || "";
+    case "New Hotel": {
+      const h = data;
+      const stars = h?.stars && h.stars !== "NA" ? " " + "★".repeat(Math.min(5, Number(h.stars))) : " ****";
+      // Head line in bold color
+      title = `${h?.room_type || ""}${h?.breakfast ? ", breakfast & VAT taxes included" : ", VAT taxes included"} at ${h?.hotel_name || "Hotel"}${stars}`;
+      // Body long description + url
+      subtitle = "";
+      note = [h?.description || "", h?.hotel_url || ""].filter(Boolean).join("\n");
       break;
-    case "New Service":
-      title = data?.title || "Service";
-      subtitle = (data?.description||"").slice(0,120);
+    }
+    case "New Service": {
+      const s = data;
+      title = s?.title || "Service";
+      const at = s?.start_time ? ` at ${fmtAMPM(s.start_time)}` : "";
+      const line2 = humanDur(s?.duration);
+      subtitle = [ (s?.start_time && s?.title) ? `${s.title}${at}` : "", line2 ].filter(Boolean).join("\n");
+      note = s?.description || "";
       break;
-    case "Car Rental":
-      title = `Pick up ${data?.pickup_loc||"?"} (${data?.pickup_date||""} ${fmtAMPM(data?.pickup_time)}) → Drop off ${data?.dropoff_loc||"?"} (${data?.dropoff_date||""} ${fmtAMPM(data?.dropoff_time)})`;
-      subtitle = `${data?.vehicle_type||"Vehicle"} • ${data?.transmission||"Automatic"}${data?.one_way_fee ? ` • One-way fee $${data.one_way_fee}`:""}${data?.mileage ? ` • ${data.mileage}`:""}${data?.insurance ? ` • ${data.insurance}`:""}`;
+    }
+    case "Car Rental": {
+      const l = data;
+      // Line 1
+      title = `Pick up car in ${l?.pickup_loc || "?"}${l?.pickup_airport ? " " + l.pickup_airport : ""}, ${l?.vehicle_type || ""}${l?.transmission ? ` ${l.transmission.toLowerCase()}` : ""} ${l?.mileage || ""} ${l?.insurance || ""}`.replace(/\s+/g," ").trim();
+
+      // One-way fee line if present
+      const fee = l?.one_way_fee && Number(l.one_way_fee) > 0
+        ? `Estimate One Way Fee: $${l.one_way_fee} – to be paid locally`
+        : "";
+
+      // Licence paragraph if checked
+      const licence = l?.intl_driver_license
+        ? `An international driver's license is mandatory to pick up the car. A physical hard copy is required, as digital copies are not accepted locally. Please note that it may take up to 15 days to obtain the license.`
+        : "";
+
+      subtitle = ""; // not used
+      note = [fee, licence].filter(Boolean).join("\n\n");
       break;
+    }
   }
 
   const internal = category==="Internal info" || category==="Cost";
+  const isInternalOnly = category==="Internal info";
 
   return (
     <div className={`service-card ${internal ? "internal" : ""}`}>
@@ -68,16 +104,29 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate }) {
         <button className="icon-vert" aria-label="Delete" onClick={onDelete}>🗑</button>
       </div>
       <div className="svc-body">
-        <div className="service-head">
-          <div className="service-title">{title}</div>
-        </div>
-        {subtitle && <div className="service-sub">{subtitle}</div>}
-        {showMore && (
-          <button className="show-more-btn" onClick={() => setExpanded(!expanded)}>
-            {expanded ? "Show less" : "Show more"}
-          </button>
+        {/* Head row */}
+        {title ? (
+          <div className="service-head">
+            <div className="service-title">{title}</div>
+          </div>
+        ) : null}
+        {/* For internal info, show body directly */}
+        {category === "Internal info" ? (
+          <>
+            {note && <div className="service-note svc-internal-note">{note}</div>}
+            <div className="badge-internal">Internal only</div>
+          </>
+        ) : (
+          <>
+            {subtitle && <div className="service-sub">{subtitle}</div>}
+            {showMore && (
+              <button className="show-more-btn" onClick={() => setExpanded(!expanded)}>
+                {expanded ? "Show less" : "Show more"}
+              </button>
+            )}
+            {note && <div className="service-note">{note}</div>}
+          </>
         )}
-        {note && <div className="service-note">{note}</div>}
         {category === "Cost" && (
           <div className="price-grid">
             <div className="price-row">
@@ -90,7 +139,7 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate }) {
             </div>
           </div>
         )}
-        {internal && <div className="badge-internal">Internal only</div>}
+        {category === "Cost" && <div className="badge-internal">Internal only</div>}
       </div>
     </div>
   );

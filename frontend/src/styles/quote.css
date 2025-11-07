@@ -1015,6 +1015,21 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Typography + brand color */
+.service-title, .service-sub, .service-note {
+  color: #002060;
+}
+
+.service-title {
+  font-weight: 700;
+}
+
+/* Internal note text (form + cards) */
+.input-internal-note, .text-internal-note, .svc-internal-note {
+  color: #9aa3b2;
+}
+
+/* Internal only card surface */
 .service-card.internal {
   background: #2a2f3a;
   border: 1px solid rgba(255,255,255,.12);
