@@ -419,12 +419,29 @@ export default function QuoteEditor(){
   const numDays = useMemo(()=> q.days.length || 0, [q.days]);
 
   const onspotAuto = useMemo(()=>{
+    // ---- ONSPOT ----
+    // cartes: 1 carte / 6 pax (arrondi au supérieur)
+    const pax = Number(q.pax ?? 0);
+    const cards = Math.max(1, Math.ceil((pax || 1) / 6));
 
-    const cards = Math.ceil((q.pax||0)/6);
+    // nb de jours: prends d'abord le nombre de jours de q.days, sinon diff de dates
+    const dayCountFromList = Array.isArray(q.days) ? q.days.length : 0;
+    const dayCountFromDates = (() => {
+      if (!q.start_date || !q.end_date) return 0;
+      const d0 = new Date(q.start_date);
+      const d1 = new Date(q.end_date);
+      // +1 car inclusif
+      return Math.max(0, Math.round((d1 - d0) / 86400000) + 1);
+    })();
 
-    return 9 * cards * numDays;
+    const tripDays = Math.max(dayCountFromList, dayCountFromDates);
 
-  }, [q.pax, numDays]);
+    // **Minimum 3 jours par carte**
+    const effectiveDays = Math.max(tripDays, 3);
+
+    // auto-calc (9 $ / jour / carte)
+    return cards * 9 * effectiveDays;
+  }, [q.pax, q.days, q.start_date, q.end_date]);
 
 
 

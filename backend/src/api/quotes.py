@@ -1,5 +1,5 @@
 from datetime import date as dt_date
-
+import math
 from decimal import Decimal, ROUND_HALF_UP
 
 from math import ceil
@@ -40,6 +40,29 @@ def _to_date(v):
 def _date_str(v):
 
     return v.isoformat() if isinstance(v, dt_date) else (v or None)
+
+
+def _days_count(q):
+    """Calcule le nombre de jours à partir de la liste des jours ou de la différence de dates."""
+    if q.days:
+        return len(q.days)
+    # sinon on tombe sur le diff de dates inclusif
+    try:
+        d0 = q.start_date if isinstance(q.start_date, dt_date) else dt_date.fromisoformat(q.start_date)
+        d1 = q.end_date   if isinstance(q.end_date,   dt_date) else dt_date.fromisoformat(q.end_date)
+        return max(0, (d1 - d0).days + 1)
+    except Exception:
+        return 0
+
+
+def compute_onspot(q):
+    """Calcule le montant Onspot avec minimum 3 jours par carte."""
+    pax = q.pax or 0
+    cards = max(1, math.ceil((pax or 1) / 6))
+    trip_days = _days_count(q)
+    effective_days = max(trip_days, 3)  # **minimum 3 jours par carte**
+    auto_val = cards * 9 * effective_days
+    return q.onspot_manual if q.onspot_manual is not None else Decimal(str(auto_val))
 
 
 
