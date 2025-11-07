@@ -590,6 +590,21 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 
 
+.dest-typeahead {
+  position: relative;
+  margin-bottom: 10px;
+}
+
+.dest-typeahead .menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  max-height: 220px;
+  overflow: auto;
+  z-index: 100000;
+}
+
 .typeahead-dropdown {
   position: absolute;
   top: 100%;
