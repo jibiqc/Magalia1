@@ -22,6 +22,15 @@ import { uid } from "../utils/localId";
 const DEFAULT_MARGIN = 0.1627; // 16.27 %
 const DEFAULT_FX = 0.75;
 
+const isPaidCategory = (cat) => {
+  const paid = new Set([
+    "Activity","Hotel","Transport","Private Transfer","Private","Small Group",
+    "Tickets","Flight","Train","Ferry","Apartment","Villa","Private Driver",
+    "New Hotel","New Service","Cost"
+  ]);
+  return paid.has((cat||"").trim());
+};
+
 const money = (n=0, {digits=2}={}) => `$${(Number(n)||0).toFixed(digits)}`;
 
 const parseNum = v => {
@@ -443,6 +452,33 @@ export default function QuoteEditor(){
 
     });
 
+  };
+
+  // recalcul au BLUR selon les règles
+  const rederiveLineOnBlur = (di, li) => {
+    setQ(prev => {
+      const next = structuredClone(prev);
+      const line = next.days[di].lines[li];
+
+      const eur = Number(line.achat_eur || 0);
+      const usd = Number(line.achat_usd || 0);
+      const fxFallback = fxEuroToUsd ?? DEFAULT_FX;
+      let fx = (line.fx_rate == null ? fxFallback : Number(line.fx_rate||0) || fxFallback);
+
+      // Règles
+      if (eur > 0 && (line._lastEdited === "eur" || line._lastEdited === "fx")) {
+        // si € renseigné → calcule $ à partir de FX
+        line.achat_usd = round2(eur * fx);
+      }
+      if (eur > 0 && line._lastEdited === "usd") {
+        // si € et $ renseignés → recalcule FX
+        if (eur > 0) line.fx_rate = round2(usd / eur);
+      }
+
+      delete line._lastEdited; // reset flag
+      next.dirty = true;
+      return next;
+    });
   };
 
   const getLineFx = (line) => Number(line.fx_rate ?? fxEuroToUsd ?? DEFAULT_FX);
@@ -1066,10 +1102,8 @@ export default function QuoteEditor(){
                   {(() => {
                     const dayLocal = localLines.filter(l => l.dayId === d.id && !l.deleted);
                     const allLines = [...(d.lines||[]), ...dayLocal];
-                    const paidCats = new Set(["Activity","Hotel","Private Transfer","Transport","Private","Small Group","Tickets","Train","Flight","Ferry","Apartment","Villa","Private Driver","New Hotel","New Service"]);
                     return allLines.map((l, idx) => {
                       const isLocal = l.isLocal || dayLocal.some(ll => ll.id === l.id);
-                      const isPaid = paidCats.has((l.category || "").trim());
                       // For local lines, use { category, data }; for backend lines, pass the line as-is (ServiceCard will handle it)
                       const lineData = isLocal ? { category: l.category, data: l.data || {}, isLocal: true } : { category: l.category || "", ...l };
                       // Find line index in d.lines for backend lines
@@ -1114,57 +1148,54 @@ export default function QuoteEditor(){
                               }
                             }}
                           />
-                          {isPaid && !isLocal && lineIdx >= 0 && (
-                            <>
-                              {/* One-line pricing row */}
-                              <div className="price-row-one">
-                                <input
-                                  className="price-inp"
-                                  type="number" step="0.01" inputMode="decimal"
-                                  placeholder="€ buy"
-                                  value={l.achat_eur ?? ""}
-                                  onChange={(e)=>{
-                                    const eur = Number(e.target.value||0);
-                                    const fx  = getLineFx(l);
-                                    const usd = eur ? round2(eur*fx) : (l.achat_usd ?? 0);
-                                    updateLine(dayIdx, lineIdx, { achat_eur: eur, fx_rate: fx, achat_usd: usd });
-                                  }}
-                                />
-                                <input
-                                  className="price-inp"
-                                  type="number" step="0.01" inputMode="decimal"
-                                  placeholder="€→$"
-                                  value={l.fx_rate ?? fxEuroToUsd}
-                                  onChange={(e)=>{
-                                    const fx  = Number(e.target.value||0);
-                                    const eur = Number(l.achat_eur||0);
-                                    const usd = eur ? round2(eur*fx) : Number(l.achat_usd||0);
-                                    updateLine(dayIdx, lineIdx, { fx_rate: fx, achat_usd: usd });
-                                  }}
-                                />
-                                <input
-                                  className="price-inp"
-                                  type="number" step="0.01" inputMode="decimal"
-                                  placeholder="$ buy"
-                                  value={l.achat_usd ?? ""}
-                                  onChange={(e)=>{
-                                    const usd = Number(e.target.value||0);
-                                    const eur = Number(l.achat_eur||0);
-                                    const fx  = eur ? round2(usd/eur) : (l.fx_rate ?? fxEuroToUsd);
-                                    updateLine(dayIdx, lineIdx, { achat_usd: usd, fx_rate: fx });
-                                  }}
-                                />
-                                <input
-                                  className="price-inp"
-                                  type="number" step="0.01" inputMode="decimal"
-                                  placeholder="$ sell"
-                                  value={l.vente_usd ?? ""}
-                                  onChange={(e)=> updateLine(dayIdx, lineIdx, { vente_usd: Number(e.target.value||0) })}
-                                />
-                              </div>
-                              {/* optional small supplier line */}
-                              {l.supplier_name ? <div className="line-supplier">{l.supplier_name}</div> : null}
-                            </>
+                          {isPaidCategory(l.category) && !isLocal && lineIdx >= 0 && (
+                            <div className="price-row-one">
+                              <input
+                                className="price-inp"
+                                type="text" inputMode="decimal"
+                                placeholder="€ buy"
+                                value={l.achat_eur ?? ""}
+                                onChange={(e)=>{
+                                  updateLine(dayIdx, lineIdx, { achat_eur: e.target.value, _lastEdited: "eur" });
+                                }}
+                                onBlur={()=> rederiveLineOnBlur(dayIdx, lineIdx)}
+                              />
+
+                              <input
+                                className="price-inp"
+                                type="text" inputMode="decimal"
+                                placeholder="€→$"
+                                value={l.fx_rate ?? fxEuroToUsd}
+                                onChange={(e)=>{
+                                  const fx = Number(String(e.target.value).replace(",", "."));
+                                  updateLine(dayIdx, lineIdx, { fx_rate: isFinite(fx) ? fx : undefined, _lastEdited: "fx" });
+                                }}
+                                onBlur={()=> rederiveLineOnBlur(dayIdx, lineIdx)}
+                              />
+
+                              <input
+                                className="price-inp"
+                                type="text" inputMode="decimal"
+                                placeholder="$ buy"
+                                value={l.achat_usd ?? ""}
+                                onChange={(e)=>{
+                                  updateLine(dayIdx, lineIdx, { achat_usd: e.target.value, _lastEdited: "usd" });
+                                }}
+                                onBlur={()=> rederiveLineOnBlur(dayIdx, lineIdx)}
+                              />
+
+                              <input
+                                className="price-inp"
+                                type="text" inputMode="decimal"
+                                placeholder="$ sell"
+                                value={l.vente_usd ?? ""}
+                                onChange={(e)=> updateLine(dayIdx, lineIdx, { vente_usd: e.target.value })}
+                                onBlur={()=> updateLine(dayIdx, lineIdx, { vente_usd: round2(Number(l.vente_usd || 0)) })}
+                              />
+                            </div>
+                          )}
+                          {isPaidCategory(l.category) && !isLocal && lineIdx >= 0 && l.supplier_name && (
+                            <div className="line-supplier">{l.supplier_name}</div>
                           )}
                         </React.Fragment>
                       );
