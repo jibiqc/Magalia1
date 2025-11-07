@@ -215,9 +215,38 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   border:1px solid rgba(255,255,255,.12); padding:6px 8px;border-radius:999px;
   background:#102341;color:var(--ink-dim); font-size:12px;
 }
+.insert-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-top: 8px;
+}
+.insert-grid > :nth-child(n+4):nth-child(-n+7) {
+  grid-column: span 1;
+}
+.insert-grid > :nth-child(4) {
+  grid-column: 1;
+}
+.insert-grid > :nth-child(5) {
+  grid-column: 2;
+}
+.insert-grid > :nth-child(6) {
+  grid-column: 3;
+}
+.insert-grid > :nth-child(7) {
+  grid-column: 4;
+}
+@media (min-width: 400px) {
+  .insert-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+  .insert-grid > :nth-child(n+8) {
+    grid-column: span 2;
+  }
+}
 .cat-button{
   width:100%;background:#0f203a;border:1px solid rgba(255,255,255,.10);
-  color:var(--ink);padding:10px;border-radius:12px;margin:6px 0;cursor:pointer;text-align:left;
+  color:var(--ink);padding:10px;border-radius:12px;cursor:pointer;text-align:left;
 }
 .cat-button:hover{background:#142b50}
 

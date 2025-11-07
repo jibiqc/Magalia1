@@ -157,6 +157,8 @@ export default function QuoteEditor(){
   // Destination modal state
 
   const [destModal, setDestModal] = useState({ open: false, quoteId: null, startDate: null });
+  // Car Rental modal state
+  const [carModalOpen, setCarModalOpen] = useState(false);
 
   // Compute safe currentQuoteId
   const currentQuoteId = (q && q.id) || null;
@@ -1259,20 +1261,17 @@ export default function QuoteEditor(){
 
 
             <h4>Insert</h4>
-
-            <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Trip info")}>Trip info</button>
-
-            <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Internal info")}>Internal info</button>
-
-            <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Flight")}>Flight</button>
-
-            <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Train")}>Train</button>
-
-            <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Ferry")}>Ferry</button>
-
-            <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "New Hotel")}>New Hotel</button>
-
-            <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "New Service")}>New Service</button>
+            <div className="insert-grid">
+              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Trip info")}>Trip info</button>
+              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Internal info")}>Internal info</button>
+              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Cost")}>Cost</button>
+              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Flight")}>Flight</button>
+              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Train")}>Train</button>
+              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Ferry")}>Ferry</button>
+              <button className="cat-button" onClick={()=>setCarModalOpen(true)}>Car Rental</button>
+              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "New Hotel")}>New Hotel</button>
+              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "New Service")}>New Service</button>
+            </div>
 
           </div>
 
@@ -1301,6 +1300,14 @@ export default function QuoteEditor(){
             }
             console.log("Destinations updated");
           }}
+        />
+      )}
+
+      {/* Car Rental Modal */}
+      {carModalOpen && (
+        <CarRentalModal
+          open={carModalOpen}
+          onClose={() => setCarModalOpen(false)}
         />
       )}
 
