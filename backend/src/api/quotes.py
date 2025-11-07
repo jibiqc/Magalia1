@@ -301,20 +301,13 @@ async def reprice_quote(quote_id: int, db: Session = Depends(get_db)):
     if not q:
         raise HTTPException(status_code=404, detail="Quote not found")
 
-    # compute days
-    sd = _to_date(q.start_date)
-    ed = _to_date(q.end_date)
-    if sd and ed and ed >= sd:
-        total_days = (ed - sd).days + 1
-    else:
-        total_days = max(len(q.days), 0)
-
+    # Compute onspot using new logic
+    onspot_total = compute_onspot(q)
+    
+    # Calculate total_days and cards for response
+    total_days = _days_count(q)
     pax = q.pax or 0
-    cards = math.ceil(pax/6) if pax>0 else 0
-    onspot_auto = Decimal(str(cards * 9 * total_days))
-    onspot_total = q.onspot_manual if q.onspot_manual is not None else onspot_auto
-    # Enforce minimum $27
-    onspot_total = max(Decimal("27.00"), onspot_total)
+    cards = max(1, math.ceil((pax or 1) / 6))
 
     hassle_auto = pax * 150
     hassle_total = float(q.hassle_manual) if q.hassle_manual is not None else hassle_auto
