@@ -1143,7 +1143,7 @@ export default function QuoteEditor(){
                               }
                             }}
                           />
-                          {isPaidCategory(l.category) && (
+                          {isPaidCategory(l.category) && !isLocal && lineIdx >= 0 && (
                             <div className="price-row-one">
                               {/* Prix d'achat € */}
                               <input
