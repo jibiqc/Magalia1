@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 
 export default function DestinationRangeModal({
@@ -9,17 +10,30 @@ export default function DestinationRangeModal({
   onClose,
   onApplied,
 }) {
-  if (!open) return null;
-
   const [query, setQuery] = useState("");
   const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [applying, setApplying] = useState(false);
   const [nights, setNights] = useState(1);
   const [selectedDest, setSelectedDest] = useState(null);
   const [error, setError] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
   const debounceRef = useRef(null);
   const inputRef = useRef(null);
+
+  if (!open) return null;
+
+  const onBackdropClick = useCallback(() => {
+    if (!applying) onClose?.();
+  }, [applying, onClose]);
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key === "Escape") onClose?.();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
 
   // Debounced fetch destinations
   useEffect(() => {
@@ -148,18 +162,40 @@ export default function DestinationRangeModal({
     setIsCreating(false);
   };
 
-  return (
+  const backdrop = (
     <div
-      id="dest-range-modal-root"
-      className="modal-backdrop"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
+      className="dest-modal-backdrop"
+      style={{
+        position: "fixed",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 99999,               // very high, above everything
+        background: "rgba(0,0,0,0.30)" // force translucency (prevents full black)
       }}
+      onClick={onBackdropClick}
+      aria-modal="true"
+      role="dialog"
     >
-      <div className="modal-card">
-        <div className="modal-title">Set destination</div>
+      <div
+        className="dest-modal-card"
+        style={{
+          width: 380,
+          maxWidth: "92vw",
+          background: "#1b2436",     // lighter panel
+          border: "1px solid rgba(255,255,255,0.14)",
+          borderRadius: 12,
+          padding: 16,
+          boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="dest-modal-title" style={{ fontWeight: 700, marginBottom: 10, color: "#e8eefc", fontSize: 18 }}>
+          Set destination
+        </div>
 
-        <div className="modal-body">
+        <div className="dest-modal-body" style={{ padding: 20 }}>
           <div className="form-field">
             <label>Start Date</label>
             <input type="text" value={startDate} readOnly className="readonly" />
@@ -185,7 +221,7 @@ export default function DestinationRangeModal({
                   <>
                     {destinations.map((dest) => (
                       <div
-                        key={dest.id}
+                        key={dest.id || dest.name}
                         className="typeahead-option"
                         onClick={() => handleSelectDestination(dest)}
                       >
@@ -222,7 +258,7 @@ export default function DestinationRangeModal({
           {error && <div className="error-message">{error}</div>}
         </div>
 
-        <div className="modal-footer">
+        <div className="dest-modal-footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "16px 20px", borderTop: "1px solid rgba(255,255,255,0.1)" }}>
           <button className="btn secondary" onClick={onClose} disabled={applying}>
             Cancel
           </button>
@@ -233,5 +269,7 @@ export default function DestinationRangeModal({
       </div>
     </div>
   );
+
+  return createPortal(backdrop, document.body);
 }
 

@@ -1183,12 +1183,12 @@ export default function QuoteEditor(){
       {destModal.open && (
         <DestinationRangeModal
           open={destModal.open}
-          quoteId={destModal.quoteId ?? currentQuoteId}
+          quoteId={destModal.quoteId ?? ((q && q.id) || null)}
           startDate={destModal.startDate}
           ensureQuoteId={ensureQuoteId}
           onClose={() => setDestModal({ open: false, quoteId: null, startDate: null })}
           onApplied={async () => {
-            const qid = (q && q.id) || null; // after apply we likely have an id
+            const qid = destModal.quoteId ?? ((q && q.id) || null);
             setDestModal({ open: false, quoteId: null, startDate: null });
             if (qid) {
               await fetchQuote(qid);
