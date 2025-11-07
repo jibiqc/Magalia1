@@ -65,15 +65,10 @@ export default function CarRentalModal({
       role="dialog"
     >
       <div
-        className="dest-modal-card"
+        className="modal-card"
         style={{
-          width: 420,
-          maxWidth: "92vw",
-          background: "#1b2436",
-          border: "1px solid rgba(255,255,255,0.14)",
-          borderRadius: 12,
-          padding: 16,
-          boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
+          maxHeight: "90vh",
+          overflowY: "auto",
         }}
         onClick={(e) => e.stopPropagation()}
       >
