@@ -885,19 +885,18 @@ export default function QuoteEditor(){
 
                 <div className="day-title">
                   <span>Day {dayIdx+1} — {d.destination||"—"} — {fmtDate(d.date)}</span>
-                  <button
-                    className="btn-xxs icon-only"
-                    aria-label="Set destination for N nights"
-                    title={!currentQuoteId ? "Save the quote first to set destinations" : "Set destination for N nights"}
-                    disabled={!currentQuoteId}
-                    onClick={() => {
-                      const qid = currentQuoteId;
-                      console.log("[dest] opening modal", { quoteId: qid, startDate: d.date });
-                      setDestModal({ open: true, quoteId: qid, startDate: d.date });
-                    }}
-                  >
-                    📍
-                  </button>
+                        <button
+                          className="btn-xxs icon-only"
+                          aria-label="Set destination for N nights"
+                          title="Set destination for N nights"
+                          onClick={() => {
+                            const qid = (q && q.id) || null;
+                            console.log("[dest] opening modal", { quoteId: qid, startDate: d.date });
+                            setDestModal({ open: true, quoteId: qid, startDate: d.date });
+                          }}
+                        >
+                          📍
+                        </button>
                 </div>
 
 
