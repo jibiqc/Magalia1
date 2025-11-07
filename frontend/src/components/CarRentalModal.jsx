@@ -5,25 +5,39 @@ import "../styles/quote.css";
 export default function CarRentalModal({
   open = true,
   onClose,
+  onSubmit,
+  initialData = null,
 }) {
-  const [pickupLocation, setPickupLocation] = useState("");
-  const [dropoffLocation, setDropoffLocation] = useState("");
-  const [pickupDate, setPickupDate] = useState("");
-  const [pickupTime, setPickupTime] = useState("");
-  const [dropoffDate, setDropoffDate] = useState("");
-  const [dropoffTime, setDropoffTime] = useState("");
-  const [expectedDropoffDate, setExpectedDropoffDate] = useState("");
-  const [vehicleType, setVehicleType] = useState("");
-  const [transmission, setTransmission] = useState("automatic");
-  const [oneWayFee, setOneWayFee] = useState("");
-  const [mileage, setMileage] = useState("");
-  const [insurance, setInsurance] = useState("");
+  const [pickupLocation, setPickupLocation] = useState(initialData?.pickup_loc || "");
+  const [dropoffLocation, setDropoffLocation] = useState(initialData?.dropoff_loc || "");
+  const [pickupDate, setPickupDate] = useState(initialData?.pickup_date || "");
+  const [pickupTime, setPickupTime] = useState(initialData?.pickup_time || "");
+  const [dropoffDate, setDropoffDate] = useState(initialData?.dropoff_date || "");
+  const [dropoffTime, setDropoffTime] = useState(initialData?.dropoff_time || "");
+  const [expectedDropoffDate, setExpectedDropoffDate] = useState(initialData?.expected_dropoff_date || "");
+  const [vehicleType, setVehicleType] = useState(initialData?.vehicle_type || "");
+  const [transmission, setTransmission] = useState(initialData?.transmission || "Automatic");
+  const [oneWayFee, setOneWayFee] = useState(initialData?.one_way_fee || "");
+  const [mileage, setMileage] = useState(initialData?.mileage || "");
+  const [insurance, setInsurance] = useState(initialData?.insurance || "");
 
   if (!open) return null;
 
   const handleContinue = () => {
-    // No API calls yet, just close
-    onClose?.();
+    onSubmit({
+      pickup_loc: pickupLocation,
+      dropoff_loc: dropoffLocation,
+      pickup_date: pickupDate,
+      pickup_time: pickupTime,
+      dropoff_date: dropoffDate,
+      dropoff_time: dropoffTime,
+      expected_dropoff_date: expectedDropoffDate,
+      vehicle_type: vehicleType,
+      transmission: transmission,
+      one_way_fee: oneWayFee,
+      mileage: mileage,
+      insurance: insurance,
+    });
   };
 
   const backdrop = (
@@ -145,8 +159,8 @@ export default function CarRentalModal({
                 <input
                   type="radio"
                   name="transmission"
-                  value="automatic"
-                  checked={transmission === "automatic"}
+                  value="Automatic"
+                  checked={transmission === "Automatic"}
                   onChange={(e) => setTransmission(e.target.value)}
                 />
                 <span>Automatic</span>

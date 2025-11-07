@@ -794,3 +794,134 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   opacity: 0.5;
   cursor: not-allowed;
 }
+
+/* ServiceCard styles */
+.service-card.internal {
+  background: #3a3000;
+}
+
+.badge-internal {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-top: 6px;
+  color: #fbbf24;
+}
+
+.service-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.service-actions .icon-btn {
+  padding: 2px 6px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.2);
+  color: var(--ink);
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.service-actions .icon-btn:hover {
+  background: rgba(255,255,255,0.1);
+}
+
+.service-sub {
+  color: var(--ink-dim);
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+.service-note {
+  color: var(--ink-dim);
+  font-size: 12px;
+  margin-top: 6px;
+  font-style: italic;
+}
+
+/* Trash drawer */
+.trash-drawer {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 100000;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 20px;
+}
+
+.trash-content {
+  background: var(--card);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  width: 400px;
+  max-width: 90vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.5);
+}
+
+.trash-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.trash-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: var(--ink);
+}
+
+.trash-body {
+  padding: 16px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.trash-item {
+  padding: 12px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.trash-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.trash-item-info strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.trash-item-info span {
+  color: var(--ink-dim);
+  font-size: 12px;
+}
+
+.trash-item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.btn.small {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.btn.danger {
+  background: var(--danger);
+  color: #fff;
+}
+
+.btn.danger:hover {
+  background: #ff5a5a;
+}

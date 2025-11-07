@@ -1,10 +1,20 @@
-import React, {useEffect, useMemo, useRef, useState} from "react";
+import React, {useEffect, useMemo, useRef, useState, useCallback} from "react";
 
 import "../styles/quote.css";
 import DestinationRangeModal from "../components/DestinationRangeModal";
 import CarRentalModal from "../components/CarRentalModal";
+import TripInfoModal from "../components/TripInfoModal";
+import InternalInfoModal from "../components/InternalInfoModal";
+import CostModal from "../components/CostModal";
+import FlightModal from "../components/FlightModal";
+import TrainModal from "../components/TrainModal";
+import FerryModal from "../components/FerryModal";
+import HotelModal from "../components/HotelModal";
+import NewServiceModal from "../components/NewServiceModal";
+import ServiceCard from "../components/ServiceCard";
 import { api } from "../lib/api";
 import { fmtDateShortISO, fmtDateLongISO } from "../utils/dateFmt";
+import { uid } from "../utils/localId";
 
 
 
@@ -159,6 +169,21 @@ export default function QuoteEditor(){
   const [destModal, setDestModal] = useState({ open: false, quoteId: null, startDate: null });
   // Car Rental modal state
   const [carModalOpen, setCarModalOpen] = useState(false);
+  // Other modals state
+  const [tripInfoOpen, setTripInfoOpen] = useState(false);
+  const [internalInfoOpen, setInternalInfoOpen] = useState(false);
+  const [costOpen, setCostOpen] = useState(false);
+  const [flightOpen, setFlightOpen] = useState(false);
+  const [trainOpen, setTrainOpen] = useState(false);
+  const [ferryOpen, setFerryOpen] = useState(false);
+  const [hotelOpen, setHotelOpen] = useState(false);
+  const [newServiceOpen, setNewServiceOpen] = useState(false);
+  const [editingLine, setEditingLine] = useState(null);
+  const [trashOpen, setTrashOpen] = useState(false);
+
+  // local-only services and trash
+  const [localLines, setLocalLines] = useState([]);      // LocalLine[]
+  const [trashLines, setTrashLines] = useState([]);    // LocalLine[]
 
   // Compute safe currentQuoteId
   const currentQuoteId = (q && q.id) || null;
@@ -522,27 +547,51 @@ export default function QuoteEditor(){
 
 
   const addLine = (dayId, category) => {
-
     setQ(prev=>{
-
       const days = prev.days.map(d=>{
-
         if (d.id!==dayId) return d;
-
         const l = (category==="Trip info"||category==="Internal info")
-
           ? (category==="Trip info" ? newTripInfo() : {...newTripInfo(), category:"Internal info", title:"Internal note (edit only here)"})
-
           : newPayable(category, `New ${category}`);
-
         return {...d, lines:[...d.lines, l]};
-
       });
-
       return {...prev, days};
-
     });
+  };
 
+  const addLocalLine = (dayId, category, data) => {
+    setLocalLines(prev => [{ id: uid(), dayId, category, data, isLocal: true }, ...prev]);
+  };
+
+  const findDayIdByDate = (iso) => {
+    const day = q.days.find(d => d.date === iso);
+    return day ? day.id : (q.days[0]?.id || null);
+  };
+
+  const openEditModal = useCallback((line) => {
+    setEditingLine(line);
+    const category = line.category;
+    switch(category) {
+      case "Trip info": setTripInfoOpen(true); break;
+      case "Internal info": setInternalInfoOpen(true); break;
+      case "Cost": setCostOpen(true); break;
+      case "Flight": setFlightOpen(true); break;
+      case "Train": setTrainOpen(true); break;
+      case "Ferry": setFerryOpen(true); break;
+      case "Car Rental": setCarModalOpen(true); break;
+      case "New Hotel": setHotelOpen(true); break;
+      case "New Service": setNewServiceOpen(true); break;
+    }
+  }, []);
+
+  const restoreLine = (id) => {
+    setTrashLines(t => t.filter(x=>x.id!==id));
+    setLocalLines(l => l.map(x => x.id===id ? {...x, deleted:false} : x));
+  };
+
+  const purgeLine = (id) => {
+    setTrashLines(t => t.filter(x=>x.id!==id));
+    setLocalLines(l => l.filter(x => x.id!==id));
   };
 
 
@@ -901,6 +950,10 @@ export default function QuoteEditor(){
 
         <button className="btn primary" onClick={saveQuote}>Save</button>
 
+        <button className="btn secondary" onClick={() => setTrashOpen(!trashOpen)} title="Trash">
+          🗑 {trashLines.length > 0 && <span>({trashLines.length})</span>}
+        </button>
+
       </div>
 
 
@@ -1004,216 +1057,50 @@ export default function QuoteEditor(){
 
 
 
-                {d.lines.length===0 && <div className="hint">No services yet… Add from the right panel.</div>}
-
-
+                {d.lines.length===0 && localLines.filter(ll => ll.dayId === d.id && !ll.deleted).length === 0 && <div className="hint">No services yet… Add from the right panel.</div>}
 
                 <div className="day-services">
-
-                  {d.lines.map((l, lineIdx)=>(
-
-                    <React.Fragment key={l.id}>
-
-                      <div className="service" data-index={lineIdx}>
-
-                        { (l.category==="Trip info" || l.category==="Internal info") ? (
-
-                          <div className="hint">This note will export to Word/Excel (Trip info), or remain internal (Internal info).</div>
-
-                        ) : (
-
-                          <div className="service-card">
-
-                            {/* Poignée de drag (seul élément draggable) */}
-
-                            <span
-
-                              className="drag-handle"
-
-                              title="Déplacer"
-
-                              draggable
-
-                              onDragStart={(e) => onDragStart(e, dayIdx, lineIdx)}
-
-                              onClick={(e) => e.preventDefault()}
-
-                            >
-
-                              ⋮⋮
-
-                            </span>
-
-
-
-                            {/* Le contenu actuel de ta carte (titre, badges, inputs…) */}
-
-                            <div className="service-body">
-
-                              <div className="service-head">
-
-                                <div className="service-title">
-
-                                  {l.title} <span className="badge">{l.category}</span>
-
-                                </div>
-
-                                {l.supplier_name && <div className="supplier">{l.supplier_name}</div>}
-
-                              </div>
-
-
-
-                              <div className="price-grid">
-
-                                <label className="field">
-
-                                  <span className="label">Prix d'achat €</span>
-
-                                  <input
-
-                                    className="et-input num"
-
-                                    type="number" step="0.01"
-
-                                    value={l.achat_eur ?? ''}
-
-                                    onChange={(e) => {
-
-                                      const eur = Number(e.target.value||0);
-
-                                      const fx  = Number((l.fx_rate ?? fxEuroToUsd) || 0.75);
-
-                                      const usd = eur ? Math.round(eur*fx*100)/100 : (l.achat_usd ?? 0);
-
-                                      updateLine(dayIdx, lineIdx, { achat_eur: eur, fx_rate: fx, achat_usd: usd });
-
-                                    }}
-
-                                  />
-
-                                </label>
-
-
-
-                                <label className="field">
-
-                                  <span className="label">€→$</span>
-
-                                  <input
-
-                                    className="et-input num"
-
-                                    type="number" step="0.01"
-
-                                    value={l.fx_rate ?? ''}
-
-                                    onChange={(e) => {
-
-                                      const fx  = Number(e.target.value||0);
-
-                                      const eur = Number(l.achat_eur||0);
-
-                                      const usd = eur ? Math.round(eur*fx*100)/100 : Number(l.achat_usd||0);
-
-                                      updateLine(dayIdx, lineIdx, { fx_rate: fx, achat_usd: usd });
-
-                                    }}
-
-                                  />
-
-                                </label>
-
-
-
-                                <label className="field">
-
-                                  <span className="label">Prix d'achat $</span>
-
-                                  <input
-
-                                    className="et-input num"
-
-                                    type="number" step="0.01"
-
-                                    value={l.achat_usd ?? ''}
-
-                                    onChange={(e) => {
-
-                                      const usd = Number(e.target.value||0);
-
-                                      const eur = Number(l.achat_eur||0);
-
-                                      const fx  = eur ? Math.round((usd/eur)*100)/100 : (l.fx_rate ?? fxEuroToUsd);
-
-                                      updateLine(dayIdx, lineIdx, { achat_usd: usd, fx_rate: fx });
-
-                                    }}
-
-                                  />
-
-                                </label>
-
-
-
-                                <label className="field">
-
-                                  <span className="label">Prix de vente $</span>
-
-                                  <input
-
-                                    className="et-input num"
-
-                                    type="number" step="0.01"
-
-                                    value={l.vente_usd ?? ''}
-
-                                    onChange={(e) => updateLine(dayIdx, lineIdx, { vente_usd: Number(e.target.value||0) })}
-
-                                  />
-
-                                </label>
-
-                              </div>
-
-                            </div>
-
-                          </div>
-
-                        )}
-
-                      </div>
-
-
-
-                      {/* Zone de dépôt AVANT la carte suivante (pour réordonner précisément) */}
-
-                      <div
-
-                        className="service-dropline"
-
-                        onDragOver={allowDrop}
-
-                        onDrop={(e) => dropBefore(e, dayIdx, lineIdx + 1)}
-
-                      />
-
-                    </React.Fragment>
-
-                  ))}
-
-                  {/* Zone de dépôt de fin */}
-
-                  <div
-
-                    className="day-dropzone"
-
-                    onDragOver={allowDrop}
-
-                    onDrop={(e) => dropOnDayEnd(e, dayIdx)}
-
-                  />
-
+                  {(() => {
+                    const dayLocal = localLines.filter(l => l.dayId === d.id && !l.deleted);
+                    const allLines = [...(d.lines||[]), ...dayLocal];
+                    return allLines.map((l, idx) => {
+                      const isLocal = l.isLocal || dayLocal.some(ll => ll.id === l.id);
+                      // For local lines, use { category, data }; for backend lines, pass the line as-is (ServiceCard will handle it)
+                      const lineData = isLocal ? { category: l.category, data: l.data || {} } : { category: l.category || "", ...l };
+                      return (
+                        <ServiceCard
+                          key={isLocal ? l.id : (l.id || `line-${idx}`)}
+                          line={lineData}
+                          onEdit={() => {
+                            if (isLocal) {
+                              openEditModal(l);
+                            } else {
+                              // For backend lines, convert to local format for editing
+                              const editData = {
+                                id: l.id,
+                                category: l.category,
+                                data: {
+                                  title: l.title || "",
+                                  body: l.raw_json?.body || "",
+                                  ...(l.raw_json || {})
+                                }
+                              };
+                              openEditModal(editData);
+                            }
+                          }}
+                          onDelete={() => {
+                            if (isLocal) {
+                              setLocalLines(prev => prev.map(x => x.id===l.id ? {...x, deleted:true} : x));
+                              setTrashLines(prev => [l, ...prev]);
+                            } else {
+                              // For backend lines, we could mark for deletion or convert to local
+                              // For now, just remove from display (would need backend delete later)
+                            }
+                          }}
+                        />
+                      );
+                    });
+                  })()}
                 </div>
 
               </div>
@@ -1262,15 +1149,15 @@ export default function QuoteEditor(){
 
             <h4>Insert</h4>
             <div className="insert-grid">
-              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Trip info")}>Trip info</button>
-              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Internal info")}>Internal info</button>
-              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Cost")}>Cost</button>
-              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Flight")}>Flight</button>
-              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Train")}>Train</button>
-              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Ferry")}>Ferry</button>
-              <button className="cat-button" onClick={()=>setCarModalOpen(true)}>Car Rental</button>
-              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "New Hotel")}>New Hotel</button>
-              <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "New Service")}>New Service</button>
+              <button className="cat-button" onClick={()=>{setEditingLine(null); setTripInfoOpen(true);}}>Trip info</button>
+              <button className="cat-button" onClick={()=>{setEditingLine(null); setInternalInfoOpen(true);}}>Internal info</button>
+              <button className="cat-button" onClick={()=>{setEditingLine(null); setCostOpen(true);}}>Cost</button>
+              <button className="cat-button" onClick={()=>{setEditingLine(null); setTrainOpen(true);}}>Train</button>
+              <button className="cat-button" onClick={()=>{setEditingLine(null); setFlightOpen(true);}}>Flight</button>
+              <button className="cat-button" onClick={()=>{setEditingLine(null); setFerryOpen(true);}}>Ferry</button>
+              <button className="cat-button" onClick={()=>{setEditingLine(null); setCarModalOpen(true);}}>Car Rental</button>
+              <button className="cat-button" onClick={()=>{setEditingLine(null); setHotelOpen(true);}}>New Hotel</button>
+              <button className="cat-button" onClick={()=>{setEditingLine(null); setNewServiceOpen(true);}}>New Service</button>
             </div>
 
           </div>
@@ -1307,8 +1194,221 @@ export default function QuoteEditor(){
       {carModalOpen && (
         <CarRentalModal
           open={carModalOpen}
-          onClose={() => setCarModalOpen(false)}
+          onClose={() => { setCarModalOpen(false); setEditingLine(null); }}
+          onSubmit={(payload) => {
+            const dayId = activeDayId ?? q.days[0]?.id;
+            if (dayId) {
+              addLocalLine(dayId, "Car Rental", payload);
+              if (payload.expected_dropoff_date) {
+                const dropoffDayId = findDayIdByDate(payload.expected_dropoff_date);
+                if (dropoffDayId) {
+                  addLocalLine(dropoffDayId, "Trip info", { title: "Drop off the car", body: "" });
+                }
+              }
+            }
+            setCarModalOpen(false);
+            setEditingLine(null);
+          }}
+          initialData={editingLine?.data || null}
         />
+      )}
+
+      {/* Trip Info Modal */}
+      {tripInfoOpen && (
+        <TripInfoModal
+          open={tripInfoOpen}
+          onClose={() => { setTripInfoOpen(false); setEditingLine(null); }}
+          onSubmit={(payload) => {
+            const dayId = activeDayId ?? q.days[0]?.id;
+            if (dayId) {
+              if (editingLine) {
+                setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
+              } else {
+                addLocalLine(dayId, "Trip info", payload);
+              }
+            }
+            setTripInfoOpen(false);
+            setEditingLine(null);
+          }}
+          initialData={editingLine?.data || null}
+        />
+      )}
+
+      {/* Internal Info Modal */}
+      {internalInfoOpen && (
+        <InternalInfoModal
+          open={internalInfoOpen}
+          onClose={() => { setInternalInfoOpen(false); setEditingLine(null); }}
+          onSubmit={(payload) => {
+            const dayId = activeDayId ?? q.days[0]?.id;
+            if (dayId) {
+              if (editingLine) {
+                setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
+              } else {
+                addLocalLine(dayId, "Internal info", payload);
+              }
+            }
+            setInternalInfoOpen(false);
+            setEditingLine(null);
+          }}
+          initialData={editingLine?.data || null}
+        />
+      )}
+
+      {/* Cost Modal */}
+      {costOpen && (
+        <CostModal
+          open={costOpen}
+          onClose={() => { setCostOpen(false); setEditingLine(null); }}
+          onSubmit={(payload) => {
+            const dayId = activeDayId ?? q.days[0]?.id;
+            if (dayId) {
+              if (editingLine) {
+                setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
+              } else {
+                addLocalLine(dayId, "Cost", payload);
+              }
+            }
+            setCostOpen(false);
+            setEditingLine(null);
+          }}
+          initialData={editingLine?.data || null}
+        />
+      )}
+
+      {/* Flight Modal */}
+      {flightOpen && (
+        <FlightModal
+          open={flightOpen}
+          onClose={() => { setFlightOpen(false); setEditingLine(null); }}
+          onSubmit={(payload) => {
+            const dayId = activeDayId ?? q.days[0]?.id;
+            if (dayId) {
+              if (editingLine) {
+                setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
+              } else {
+                addLocalLine(dayId, "Flight", payload);
+              }
+            }
+            setFlightOpen(false);
+            setEditingLine(null);
+          }}
+          initialData={editingLine?.data || null}
+        />
+      )}
+
+      {/* Train Modal */}
+      {trainOpen && (
+        <TrainModal
+          open={trainOpen}
+          onClose={() => { setTrainOpen(false); setEditingLine(null); }}
+          onSubmit={(payload) => {
+            const dayId = activeDayId ?? q.days[0]?.id;
+            if (dayId) {
+              if (editingLine) {
+                setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
+              } else {
+                addLocalLine(dayId, "Train", payload);
+              }
+            }
+            setTrainOpen(false);
+            setEditingLine(null);
+          }}
+          initialData={editingLine?.data || null}
+        />
+      )}
+
+      {/* Ferry Modal */}
+      {ferryOpen && (
+        <FerryModal
+          open={ferryOpen}
+          onClose={() => { setFerryOpen(false); setEditingLine(null); }}
+          onSubmit={(payload) => {
+            const dayId = activeDayId ?? q.days[0]?.id;
+            if (dayId) {
+              if (editingLine) {
+                setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
+              } else {
+                addLocalLine(dayId, "Ferry", payload);
+              }
+            }
+            setFerryOpen(false);
+            setEditingLine(null);
+          }}
+          initialData={editingLine?.data || null}
+        />
+      )}
+
+      {/* Hotel Modal */}
+      {hotelOpen && (
+        <HotelModal
+          open={hotelOpen}
+          onClose={() => { setHotelOpen(false); setEditingLine(null); }}
+          onSubmit={(payload) => {
+            const dayId = activeDayId ?? q.days[0]?.id;
+            if (dayId) {
+              if (editingLine) {
+                setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
+              } else {
+                addLocalLine(dayId, "New Hotel", payload);
+              }
+            }
+            setHotelOpen(false);
+            setEditingLine(null);
+          }}
+          initialData={editingLine?.data || null}
+        />
+      )}
+
+      {/* New Service Modal */}
+      {newServiceOpen && (
+        <NewServiceModal
+          open={newServiceOpen}
+          onClose={() => { setNewServiceOpen(false); setEditingLine(null); }}
+          onSubmit={(payload) => {
+            const dayId = activeDayId ?? q.days[0]?.id;
+            if (dayId) {
+              if (editingLine) {
+                setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
+              } else {
+                addLocalLine(dayId, "New Service", payload);
+              }
+            }
+            setNewServiceOpen(false);
+            setEditingLine(null);
+          }}
+          initialData={editingLine?.data || null}
+        />
+      )}
+
+      {/* Trash Drawer */}
+      {trashOpen && (
+        <div className="trash-drawer" onClick={(e) => { if (e.target === e.currentTarget) setTrashOpen(false); }}>
+          <div className="trash-content" onClick={(e) => e.stopPropagation()}>
+            <div className="trash-header">
+              <h3>Trash ({trashLines.length})</h3>
+              <button className="icon-btn" onClick={() => setTrashOpen(false)}>✕</button>
+            </div>
+            <div className="trash-body">
+              {trashLines.length === 0 ? (
+                <div className="hint">Trash is empty</div>
+              ) : (
+                trashLines.map((line) => (
+                  <div key={line.id} className="trash-item">
+                    <div className="trash-item-info">
+                      <strong>{line.category}</strong>
+                      <span>{line.data?.title || line.data?.hotel_name || line.data?.from || "Untitled"}</span>
+                    </div>
+                    <div className="trash-item-actions">
+                      <button className="btn small" onClick={() => { restoreLine(line.id); }}>Restore</button>
+                      <button className="btn small danger" onClick={() => { purgeLine(line.id); }}>Delete permanently</button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
     </div>
