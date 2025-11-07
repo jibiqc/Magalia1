@@ -115,17 +115,20 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 
 .day-title{
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  white-space:nowrap;
   font-weight:700;
   margin-bottom:10px;
-  white-space: nowrap;
 }
-
-.day-title > span {
-  flex: 1;
-  min-width: 0;
+.day-pin {
+  padding:2px 6px;
+  line-height:1;
+  opacity:.85;
+}
+.day-pin:hover {
+  opacity:1;
 }
 
 .btn-xxs.icon-only {
