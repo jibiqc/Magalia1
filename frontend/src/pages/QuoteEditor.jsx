@@ -23,6 +23,20 @@ const parseNum = v => {
 
 const round2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
 
+// --- Commission helpers (acceptent "16,27", "16.27%", "0,1627") ---
+const pctToDisplay = (p) =>
+  (typeof p === "number" ? p * 100 : parseFloat(p || 0) * 100)
+    .toFixed(2)
+    .replace(".", ",");
+
+const displayToPct = (s, fallback = 0.1627) => {
+  if (!s && s !== 0) return fallback;
+  const t = String(s).replace("%", "").replace(/\s/g, "").replace(",", ".");
+  const n = parseFloat(t);
+  if (isNaN(n)) return fallback;
+  return n > 1 ? n / 100 : n; // 16.27 -> 0.1627, 0.1627 -> 0.1627
+};
+
 function isFirstOfDestBlock(days, idx){
   const cur = days[idx];
   if (!cur?.destination) return false;
