@@ -469,9 +469,6 @@ export default function QuoteEditor(){
 
 
 
-    const hassle = (q.hassle_manual===null || q.hassle_manual===undefined || q.hassle_manual==="")
-
-      ? hassleAuto : parseNum(q.hassle_manual);
 
 
 
