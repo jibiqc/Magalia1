@@ -1053,6 +1053,20 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   opacity: .9;
 }
 
+.svc-hotel-link {
+  margin-top: 6px;
+}
+
+.svc-link {
+  color: #002060;
+  text-decoration: underline;
+  word-break: break-word;
+}
+
+.svc-link:hover {
+  opacity: .9;
+}
+
 /* Internal note text (form + cards) */
 .input-internal-note, .text-internal-note, .svc-internal-note {
   color: #9aa3b2;

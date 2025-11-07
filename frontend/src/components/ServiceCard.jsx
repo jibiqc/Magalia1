@@ -11,6 +11,21 @@ const humanDur = (d) => {
   return `Duration: ${H}hrs${M ? ` ${M}mins` : ""}`;
 };
 
+// URL helpers for hotel links
+const normalizeUrl = (u) => {
+  if (!u) return "";
+  const s = u.trim();
+  if (/^https?:\/\//i.test(s)) return s;
+  return "https://" + s;
+};
+
+const displayUrl = (u) => {
+  try {
+    const url = new URL(normalizeUrl(u));
+    return (url.host + url.pathname).replace(/\/$/, "");
+  } catch { return u; }
+};
+
 export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onChangeLocalData }) {
   const { category } = line;
   // For backend lines, data might be in line directly; for local lines, it's in line.data
@@ -59,9 +74,9 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
       const stars = h?.stars && h.stars !== "NA" ? " " + "★".repeat(Math.min(5, Number(h.stars))) : " ****";
       // Head line in bold color
       title = `${h?.room_type || ""}${h?.breakfast ? ", breakfast & VAT taxes included" : ", VAT taxes included"} at ${h?.hotel_name || "Hotel"}${stars}`;
-      // Body long description + url
+      // Body long description (URL shown separately as link)
       subtitle = "";
-      note = [h?.description || "", h?.hotel_url || ""].filter(Boolean).join("\n");
+      note = h?.description || "";
       break;
     }
     case "New Service": {
@@ -128,6 +143,19 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
               </button>
             )}
             {note && <div className="service-note">{note}</div>}
+            {category === "New Hotel" && data?.hotel_url?.trim() && (
+              <div className="svc-hotel-link">
+                <a
+                  href={normalizeUrl(data.hotel_url)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="svc-link"
+                  aria-label="Open hotel website"
+                >
+                  {displayUrl(data.hotel_url)}
+                </a>
+              </div>
+            )}
           </>
         )}
         {category === "Cost" && (
