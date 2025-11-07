@@ -51,6 +51,7 @@ export default function HotelModal({
             <label>Hotel name</label>
             <input
               type="text"
+              className="input"
               value={hotel_name}
               onChange={(e) => setHotelName(e.target.value)}
               placeholder=""
@@ -63,6 +64,7 @@ export default function HotelModal({
               type="number"
               min="0"
               max="5"
+              className="input"
               value={stars}
               onChange={(e) => setStars(e.target.value)}
               placeholder=""
@@ -73,6 +75,7 @@ export default function HotelModal({
             <label>Room type</label>
             <input
               type="text"
+              className="input"
               value={room_type}
               onChange={(e) => setRoomType(e.target.value)}
               placeholder="e.g., 1 suite, 2 double rooms"
