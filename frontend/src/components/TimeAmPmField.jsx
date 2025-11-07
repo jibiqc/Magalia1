@@ -25,11 +25,28 @@ export default function TimeAmPmField({ label, value24, onChange }) {
     <div className="field">
       <label>{label}</label>
       <div style={{display:"flex", gap:"8px", alignItems:"center"}}>
-        <input className="input" style={{width:64}} type="number" min="1" max="12"
-               value={parts.hh} onChange={e=>update(e.target.value, parts.mm, parts.ap)} />
+        <input className="input" style={{width:64}}
+          inputMode="numeric" pattern="[0-9]*"
+          value={parts.hh}
+          onChange={e=>{
+            const v = e.target.value.replace(/\D/g,'').slice(0,2);
+            // allow empty while typing
+            if (v === "") return onChange("");
+            let h = Math.max(1, Math.min(12, parseInt(v,10)));
+            update(String(h), parts.mm, parts.ap);
+          }}
+        />
         <span>:</span>
-        <input className="input" style={{width:64}} type="number" min="0" max="59"
-               value={parts.mm} onChange={e=>update(parts.hh, e.target.value, parts.ap)} />
+        <input className="input" style={{width:64}}
+          inputMode="numeric" pattern="[0-9]*"
+          value={parts.mm}
+          onChange={e=>{
+            const v = e.target.value.replace(/\D/g,'').slice(0,2);
+            if (v === "") return onChange("");
+            let m = Math.max(0, Math.min(59, parseInt(v,10)));
+            update(parts.hh, String(m).padStart(2,"0"), parts.ap);
+          }}
+        />
         <select className="select" style={{width:80}}
                 value={parts.ap} onChange={e=>update(parts.hh, parts.mm, e.target.value)}>
           <option>AM</option><option>PM</option>

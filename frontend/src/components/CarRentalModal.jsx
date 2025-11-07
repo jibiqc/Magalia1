@@ -220,6 +220,12 @@ export default function CarRentalModal({
           </div>
 
           <div className="field">
+            <label>One-way fee (USD)</label>
+            <input className="input" type="number" step="1" min="0"
+              value={oneWayFee} onChange={e=>setOneWayFee(e.target.value)} />
+          </div>
+
+          <div className="field">
             <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
               <input
                 type="checkbox"

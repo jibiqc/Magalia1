@@ -14,7 +14,7 @@ export default function TrainModal({
   const [class_type, setClassType] = useState(initialData?.class_type || "");
   const [dep_time, setDepTime] = useState(initialData?.dep_time || "");
   const [arr_time, setArrTime] = useState(initialData?.arr_time || "");
-  const [seat_res, setSeatRes] = useState(initialData?.seat_res || false);
+  const [seat_res, setSeatRes] = useState(initialData?.seat_res !== undefined ? initialData.seat_res : true);
   const [description, setDescription] = useState(initialData?.note || initialData?.description || "");
   const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
 

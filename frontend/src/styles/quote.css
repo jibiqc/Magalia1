@@ -1024,6 +1024,35 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   font-weight: 700;
 }
 
+/* no italics anywhere by default */
+.service-card, .service-card * {
+  font-style: normal;
+}
+
+/* allow Trip info body to be italic only */
+.service-card.tripinfo .service-note,
+.service-card.tripinfo .service-sub {
+  font-style: italic;
+}
+
+.price-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.pg-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pg-row label {
+  font-weight: 600;
+  opacity: .9;
+}
+
 /* Internal note text (form + cards) */
 .input-internal-note, .text-internal-note, .svc-internal-note {
   color: #9aa3b2;

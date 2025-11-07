@@ -1064,11 +1064,14 @@ export default function QuoteEditor(){
                     return allLines.map((l, idx) => {
                       const isLocal = l.isLocal || dayLocal.some(ll => ll.id === l.id);
                       // For local lines, use { category, data }; for backend lines, pass the line as-is (ServiceCard will handle it)
-                      const lineData = isLocal ? { category: l.category, data: l.data || {} } : { category: l.category || "", ...l };
+                      const lineData = isLocal ? { category: l.category, data: l.data || {}, isLocal: true } : { category: l.category || "", ...l };
                       return (
                         <ServiceCard
                           key={isLocal ? l.id : (l.id || `line-${idx}`)}
                           line={lineData}
+                          onChangeLocalData={isLocal ? (newData)=>{
+                            setLocalLines(prev => prev.map(x => x.id===l.id ? { ...x, data:newData } : x));
+                          } : undefined}
                           onEdit={() => {
                             if (isLocal) {
                               openEditModal(l);

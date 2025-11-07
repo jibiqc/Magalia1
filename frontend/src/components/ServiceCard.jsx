@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { fmtAMPM } from "../utils/timeFmt";
+import PriceGrid from "./PriceGrid";
 
 // Helper to print duration as "3hrs 30mins"
 const humanDur = (d) => {
@@ -10,7 +11,7 @@ const humanDur = (d) => {
   return `Duration: ${H}hrs${M ? ` ${M}mins` : ""}`;
 };
 
-export default function ServiceCard({ line, onEdit, onDelete, onDuplicate }) {
+export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onChangeLocalData }) {
   const { category } = line;
   // For backend lines, data might be in line directly; for local lines, it's in line.data
   const data = line.data || line;
@@ -30,7 +31,6 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate }) {
       subtitle = ""; // none
       // body in data.body
       note = data?.body || "";
-      isInternalOnly = true;
       break;
     case "Cost":
       title = data?.title || "Cost";
@@ -42,11 +42,13 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate }) {
       subtitle = `Departure at ${fmtAMPM(data?.dep_time)}; arrival at ${fmtAMPM(data?.arr_time)} – Schedule subject to change`;
       note = data?.note || "";
       break;
-    case "Train":
-      title = `${data?.class_type||"First Class Train"} from ${data?.from||"?"} to ${data?.to||"?"}${data?.seat_res ? " with seat reservations":""}`;
+    case "Train": {
+      const withSeats = data?.seat_res ? " with seat reservations" : "";
+      title = `${data?.class_type || "First Class Train"} from ${data?.from||"?"} to ${data?.to||"?"}${withSeats}`;
       subtitle = `Departure at ${fmtAMPM(data?.dep_time)}; arrival at ${fmtAMPM(data?.arr_time)} – Schedule subject to change`;
       note = data?.note || "";
       break;
+    }
     case "Ferry":
       title = `Ferry from ${data?.from||"?"} to ${data?.to||"?"}`;
       subtitle = `Departure ${fmtAMPM(data?.dep_time)}; Arrival ${fmtAMPM(data?.arr_time)} – Schedule subject to change`;
@@ -77,26 +79,27 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate }) {
       title = `Pick up car in ${l?.pickup_loc || "?"}${l?.pickup_airport ? " " + l.pickup_airport : ""}, ${l?.vehicle_type || ""}${l?.transmission ? ` ${l.transmission.toLowerCase()}` : ""} ${l?.mileage || ""} ${l?.insurance || ""}`.replace(/\s+/g," ").trim();
 
       // One-way fee line if present
-      const fee = l?.one_way_fee && Number(l.one_way_fee) > 0
-        ? `Estimate One Way Fee: $${l.one_way_fee} – to be paid locally`
+      const feeLine = (l?.one_way_fee && Number(l.one_way_fee) > 0)
+        ? `Estimate One Way Fee: $${Number(l.one_way_fee).toFixed(0)} – to be paid locally`
         : "";
 
       // Licence paragraph if checked
-      const licence = l?.intl_driver_license
+      const licenceLine = l?.intl_driver_license
         ? `An international driver's license is mandatory to pick up the car. A physical hard copy is required, as digital copies are not accepted locally. Please note that it may take up to 15 days to obtain the license.`
         : "";
 
       subtitle = ""; // not used
-      note = [fee, licence].filter(Boolean).join("\n\n");
+      note = [feeLine, licenceLine].filter(Boolean).join("\n\n");
       break;
     }
   }
 
   const internal = category==="Internal info" || category==="Cost";
   const isInternalOnly = category==="Internal info";
+  const wrapperCls = `service-card ${internal ? "internal" : ""} ${category==="Trip info" ? "tripinfo":""}`;
 
   return (
-    <div className={`service-card ${internal ? "internal" : ""}`}>
+    <div className={wrapperCls}>
       <div className="svc-actions-col">
         <button className="icon-vert" aria-label="Edit" onClick={onEdit}>✎</button>
         <button className="icon-vert" aria-label="Duplicate" onClick={onDuplicate}>⧉</button>
@@ -140,6 +143,17 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate }) {
           </div>
         )}
         {category === "Cost" && <div className="badge-internal">Internal only</div>}
+        {category !== "Trip info" && category !== "Internal info" && (
+          <PriceGrid
+            value={data?.pricing}
+            onChange={(p)=>{
+              // persist into localLines
+              if (onChangeLocalData) {
+                onChangeLocalData({ ...data, pricing: p });
+              }
+            }}
+          />
+        )}
       </div>
     </div>
   );
