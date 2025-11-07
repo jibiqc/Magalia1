@@ -38,14 +38,17 @@ function effectiveFx(lineFx, globalFx) {
   return lineFx ?? globalFx ?? DEFAULT_FX;
 }
 
-const isPaidCategory = (cat) => {
-  const paid = new Set([
-    "Activity","Hotel","Transport","Private Transfer","Private","Small Group",
-    "Tickets","Flight","Train","Ferry","Apartment","Villa","Private Driver",
-    "New Hotel","New Service","Cost","Car Rental"
-  ]);
-  return paid.has((cat||"").trim());
-};
+// Normaliseur pour les catégories (insensible à la casse et aux espaces)
+const norm = (s) => (s || "").trim().toLowerCase();
+
+// Source unique de vérité pour les catégories payantes
+const PAID_CATS = new Set([
+  "activity","hotel","transport","private transfer","private","small group",
+  "tickets","flight","train","ferry","apartment","villa","private driver",
+  "new hotel","new service","cost","car rental"
+]);
+
+const isPaidCategory = (cat) => PAID_CATS.has(norm(cat));
 
 const money = (n=0, {digits=2}={}) => `$${(Number(n)||0).toFixed(digits)}`;
 
@@ -733,7 +736,10 @@ export default function QuoteEditor(){
 
       (day.lines || []).forEach((line) => {
 
-        if (!isPaidCategory(line.category)) return;
+        if (!isPaidCategory(line.category)) {
+          console.debug("[skip non-paid]", line.category);
+          return;
+        }
 
 
 
