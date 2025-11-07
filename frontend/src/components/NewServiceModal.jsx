@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { createPortal } from "react-dom";
 import "../styles/quote.css";
+import { parseHHMM, fmtHm, addMins } from "../utils/duration";
 
 export default function NewServiceModal({
   open = true,
@@ -12,14 +13,34 @@ export default function NewServiceModal({
   const [description, setDescription] = useState(initialData?.description || "");
   const [category_label, setCategoryLabel] = useState(initialData?.category_label || "");
   const [start_time, setStartTime] = useState(initialData?.start_time || "");
+  const [end_time, setEndTime] = useState(initialData?.end_time || "");
   const [duration, setDuration] = useState(initialData?.duration || "");
-  const [price_amount, setPriceAmount] = useState(initialData?.price_amount || "");
-  const [currency, setCurrency] = useState(initialData?.currency || "");
+  const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
 
   if (!open) return null;
 
   const handleSubmit = () => {
-    onSubmit({ title, description, category_label, start_time, duration, price_amount, currency });
+    onSubmit({ title, description, category_label, start_time, end_time, duration, internal_note });
+  };
+
+  const handleEndChange = (v) => {
+    setEndTime(v);
+    const startMins = parseHHMM(start_time);
+    const endMins = parseHHMM(v);
+    if (startMins != null && endMins != null) {
+      const d = ((endMins - startMins + 1440) % 1440);
+      setDuration(fmtHm(d));
+    }
+  };
+
+  const handleDurChange = (v) => {
+    setDuration(v);
+    const m = /(\d+)h(?:(\d{1,2}))?/.exec(v);
+    const startMins = parseHHMM(start_time);
+    if (startMins != null && m) {
+      const mins = (parseInt(m[1]) * 60 + (parseInt(m[2] || "0")));
+      setEndTime(addMins(start_time, mins));
+    }
   };
 
   const backdrop = (
@@ -41,27 +62,17 @@ export default function NewServiceModal({
       role="dialog"
     >
       <div
-        className="dest-modal-card"
-        style={{
-          width: 420,
-          maxWidth: "92vw",
-          background: "#1b2436",
-          border: "1px solid rgba(255,255,255,0.14)",
-          borderRadius: 12,
-          padding: 16,
-          boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
-        }}
+        className="modal-card"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="dest-modal-title" style={{ fontWeight: 700, marginBottom: 16, color: "#e8eefc", fontSize: 18 }}>
-          New Service
-        </div>
+        <div className="modal-title">New Service</div>
 
         <div className="dest-modal-body" style={{ padding: 0 }}>
           <div className="field">
             <label>Title</label>
             <input
               type="text"
+              className="input"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder=""
@@ -71,17 +82,18 @@ export default function NewServiceModal({
           <div className="field">
             <label>Description</label>
             <textarea
+              className="textarea"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder=""
               rows={4}
-              style={{ width: "100%", resize: "vertical" }}
             />
           </div>
 
           <div className="field">
             <label>Category</label>
             <select
+              className="select"
               value={category_label}
               onChange={(e) => setCategoryLabel(e.target.value)}
             >
@@ -99,8 +111,19 @@ export default function NewServiceModal({
             <label>Start time (HH:mm)</label>
             <input
               type="time"
+              className="input"
               value={start_time}
               onChange={(e) => setStartTime(e.target.value)}
+            />
+          </div>
+
+          <div className="field">
+            <label>End time (HH:mm)</label>
+            <input
+              type="time"
+              className="input"
+              value={end_time}
+              onChange={(e) => handleEndChange(e.target.value)}
             />
           </div>
 
@@ -108,38 +131,26 @@ export default function NewServiceModal({
             <label>Duration</label>
             <input
               type="text"
+              className="input"
               value={duration}
-              onChange={(e) => setDuration(e.target.value)}
-              placeholder=""
+              onChange={(e) => handleDurChange(e.target.value)}
+              placeholder="e.g., 3h or 3h30"
             />
           </div>
 
           <div className="field">
-            <label>Price amount</label>
-            <input
-              type="number"
-              step="0.01"
-              value={price_amount}
-              onChange={(e) => setPriceAmount(e.target.value)}
+            <label>Internal note</label>
+            <textarea
+              className="textarea"
+              value={internal_note}
+              onChange={(e) => setInternalNote(e.target.value)}
               placeholder=""
+              rows={3}
             />
-          </div>
-
-          <div className="field">
-            <label>Currency</label>
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-            >
-              <option value="">Select currency</option>
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-            </select>
           </div>
         </div>
 
-        <div className="dest-modal-footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "16px 0 0", borderTop: "1px solid rgba(255,255,255,0.1)", marginTop: 16 }}>
+        <div className="actions">
           <button className="btn secondary" onClick={onClose}>
             Cancel
           </button>

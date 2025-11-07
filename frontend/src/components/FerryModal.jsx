@@ -13,14 +13,12 @@ export default function FerryModal({
   const [dep_time, setDepTime] = useState(initialData?.dep_time || "");
   const [arr_time, setArrTime] = useState(initialData?.arr_time || "");
   const [note, setNote] = useState(initialData?.note || "");
-  const [price_amount, setPriceAmount] = useState(initialData?.price_amount || "");
-  const [currency, setCurrency] = useState(initialData?.currency || "");
   const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
 
   if (!open) return null;
 
   const handleSubmit = () => {
-    onSubmit({ from, to, dep_time, arr_time, note, price_amount, currency, internal_note });
+    onSubmit({ from, to, dep_time, arr_time, note, internal_note });
   };
 
   const backdrop = (
@@ -42,27 +40,17 @@ export default function FerryModal({
       role="dialog"
     >
       <div
-        className="dest-modal-card"
-        style={{
-          width: 420,
-          maxWidth: "92vw",
-          background: "#1b2436",
-          border: "1px solid rgba(255,255,255,0.14)",
-          borderRadius: 12,
-          padding: 16,
-          boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
-        }}
+        className="modal-card"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="dest-modal-title" style={{ fontWeight: 700, marginBottom: 16, color: "#e8eefc", fontSize: 18 }}>
-          Ferry
-        </div>
+        <div className="modal-title">Ferry</div>
 
         <div className="dest-modal-body" style={{ padding: 0 }}>
           <div className="field">
             <label>From</label>
             <input
               type="text"
+              className="input"
               value={from}
               onChange={(e) => setFrom(e.target.value)}
               placeholder=""
@@ -73,6 +61,7 @@ export default function FerryModal({
             <label>To</label>
             <input
               type="text"
+              className="input"
               value={to}
               onChange={(e) => setTo(e.target.value)}
               placeholder=""
@@ -83,6 +72,7 @@ export default function FerryModal({
             <label>Departure time (HH:mm)</label>
             <input
               type="time"
+              className="input"
               value={dep_time}
               onChange={(e) => setDepTime(e.target.value)}
             />
@@ -92,6 +82,7 @@ export default function FerryModal({
             <label>Arrival time (HH:mm)</label>
             <input
               type="time"
+              className="input"
               value={arr_time}
               onChange={(e) => setArrTime(e.target.value)}
             />
@@ -100,51 +91,27 @@ export default function FerryModal({
           <div className="field">
             <label>Note</label>
             <textarea
+              className="textarea"
               value={note}
               onChange={(e) => setNote(e.target.value)}
               placeholder=""
               rows={3}
-              style={{ width: "100%", resize: "vertical" }}
             />
-          </div>
-
-          <div className="field">
-            <label>Price amount</label>
-            <input
-              type="number"
-              step="0.01"
-              value={price_amount}
-              onChange={(e) => setPriceAmount(e.target.value)}
-              placeholder=""
-            />
-          </div>
-
-          <div className="field">
-            <label>Currency</label>
-            <select
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-            >
-              <option value="">Select currency</option>
-              <option value="USD">USD</option>
-              <option value="EUR">EUR</option>
-              <option value="GBP">GBP</option>
-            </select>
           </div>
 
           <div className="field">
             <label>Internal note</label>
             <textarea
+              className="textarea"
               value={internal_note}
               onChange={(e) => setInternalNote(e.target.value)}
               placeholder=""
               rows={3}
-              style={{ width: "100%", resize: "vertical" }}
             />
           </div>
         </div>
 
-        <div className="dest-modal-footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "16px 0 0", borderTop: "1px solid rgba(255,255,255,0.1)", marginTop: 16 }}>
+        <div className="actions">
           <button className="btn secondary" onClick={onClose}>
             Cancel
           </button>

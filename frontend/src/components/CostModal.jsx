@@ -38,27 +38,17 @@ export default function CostModal({
       role="dialog"
     >
       <div
-        className="dest-modal-card"
-        style={{
-          width: 420,
-          maxWidth: "92vw",
-          background: "#1b2436",
-          border: "1px solid rgba(255,255,255,0.14)",
-          borderRadius: 12,
-          padding: 16,
-          boxShadow: "0 12px 32px rgba(0,0,0,0.35)",
-        }}
+        className="modal-card"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="dest-modal-title" style={{ fontWeight: 700, marginBottom: 16, color: "#e8eefc", fontSize: 18 }}>
-          Cost
-        </div>
+        <div className="modal-title">Cost</div>
 
         <div className="dest-modal-body" style={{ padding: 0 }}>
           <div className="field">
             <label>Title</label>
             <input
               type="text"
+              className="input"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder=""
@@ -70,6 +60,7 @@ export default function CostModal({
             <input
               type="number"
               step="0.01"
+              className="input"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
               placeholder=""
@@ -79,6 +70,7 @@ export default function CostModal({
           <div className="field">
             <label>Currency</label>
             <select
+              className="select"
               value={currency}
               onChange={(e) => setCurrency(e.target.value)}
             >
@@ -92,16 +84,16 @@ export default function CostModal({
           <div className="field">
             <label>Body</label>
             <textarea
+              className="textarea"
               value={body}
               onChange={(e) => setBody(e.target.value)}
               placeholder=""
               rows={4}
-              style={{ width: "100%", resize: "vertical" }}
             />
           </div>
         </div>
 
-        <div className="dest-modal-footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "16px 0 0", borderTop: "1px solid rgba(255,255,255,0.1)", marginTop: 16 }}>
+        <div className="actions">
           <button className="btn secondary" onClick={onClose}>
             Cancel
           </button>

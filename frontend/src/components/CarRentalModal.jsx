@@ -20,6 +20,9 @@ export default function CarRentalModal({
   const [oneWayFee, setOneWayFee] = useState(initialData?.one_way_fee || "");
   const [mileage, setMileage] = useState(initialData?.mileage || "");
   const [insurance, setInsurance] = useState(initialData?.insurance || "");
+  const [notes, setNotes] = useState(initialData?.notes || "");
+  const [intl_driver_license, setIntlDriverLicense] = useState(initialData?.intl_driver_license !== undefined ? initialData.intl_driver_license : true);
+  const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
 
   if (!open) return null;
 
@@ -37,6 +40,9 @@ export default function CarRentalModal({
       one_way_fee: oneWayFee,
       mileage: mileage,
       insurance: insurance,
+      notes: notes,
+      intl_driver_license: intl_driver_license,
+      internal_note: internal_note,
     });
   };
 
@@ -71,15 +77,14 @@ export default function CarRentalModal({
         }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="dest-modal-title" style={{ fontWeight: 700, marginBottom: 16, color: "#e8eefc", fontSize: 18 }}>
-          Car Rental
-        </div>
+        <div className="modal-title">Car Rental Details</div>
 
         <div className="dest-modal-body" style={{ padding: 0 }}>
           <div className="field">
             <label>Pick-up Location</label>
             <input
               type="text"
+              className="input"
               value={pickupLocation}
               onChange={(e) => setPickupLocation(e.target.value)}
               placeholder=""
@@ -90,6 +95,7 @@ export default function CarRentalModal({
             <label>Drop-off Location</label>
             <input
               type="text"
+              className="input"
               value={dropoffLocation}
               onChange={(e) => setDropoffLocation(e.target.value)}
               placeholder=""
@@ -101,12 +107,14 @@ export default function CarRentalModal({
             <div style={{ display: "flex", gap: 8 }}>
               <input
                 type="date"
+                className="input"
                 value={pickupDate}
                 onChange={(e) => setPickupDate(e.target.value)}
                 style={{ flex: 1 }}
               />
               <input
                 type="time"
+                className="input"
                 value={pickupTime}
                 onChange={(e) => setPickupTime(e.target.value)}
                 style={{ flex: 1 }}
@@ -119,12 +127,14 @@ export default function CarRentalModal({
             <div style={{ display: "flex", gap: 8 }}>
               <input
                 type="date"
+                className="input"
                 value={dropoffDate}
                 onChange={(e) => setDropoffDate(e.target.value)}
                 style={{ flex: 1 }}
               />
               <input
                 type="time"
+                className="input"
                 value={dropoffTime}
                 onChange={(e) => setDropoffTime(e.target.value)}
                 style={{ flex: 1 }}
@@ -136,6 +146,7 @@ export default function CarRentalModal({
             <label>Expected Drop-off date</label>
             <input
               type="date"
+              className="input"
               value={expectedDropoffDate}
               onChange={(e) => setExpectedDropoffDate(e.target.value)}
               placeholder="same as drop-off date"
@@ -146,6 +157,7 @@ export default function CarRentalModal({
             <label>Type of Vehicle</label>
             <input
               type="text"
+              className="input"
               value={vehicleType}
               onChange={(e) => setVehicleType(e.target.value)}
               placeholder=""
@@ -183,6 +195,7 @@ export default function CarRentalModal({
             <input
               type="number"
               step="0.01"
+              className="input"
               value={oneWayFee}
               onChange={(e) => setOneWayFee(e.target.value)}
               placeholder=""
@@ -193,6 +206,7 @@ export default function CarRentalModal({
             <label>Mileage</label>
             <input
               type="text"
+              className="input"
               value={mileage}
               onChange={(e) => setMileage(e.target.value)}
               placeholder="unlimited mileage"
@@ -203,14 +217,48 @@ export default function CarRentalModal({
             <label>Insurance</label>
             <input
               type="text"
+              className="input"
               value={insurance}
               onChange={(e) => setInsurance(e.target.value)}
               placeholder="CDW & theft included"
             />
           </div>
+
+          <div className="field">
+            <label>Notes</label>
+            <textarea
+              className="textarea"
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder=""
+              rows={3}
+            />
+          </div>
+
+          <div className="field">
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={intl_driver_license}
+                onChange={(e) => setIntlDriverLicense(e.target.checked)}
+              />
+              <span>International Driver License</span>
+            </label>
+          </div>
+
+          <div className="field">
+            <label>Internal note</label>
+            <textarea
+              className="textarea"
+              value={internal_note}
+              onChange={(e) => setInternalNote(e.target.value)}
+              placeholder=""
+              rows={3}
+            />
+          </div>
         </div>
 
-        <div className="dest-modal-footer" style={{ display: "flex", justifyContent: "flex-end", gap: 8, padding: "16px 0 0", borderTop: "1px solid rgba(255,255,255,0.1)", marginTop: 16 }}>
+        <div className="actions">
           <button className="btn secondary" onClick={onClose}>
             Cancel
           </button>

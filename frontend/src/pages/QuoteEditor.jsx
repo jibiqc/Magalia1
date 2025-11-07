@@ -560,7 +560,9 @@ export default function QuoteEditor(){
   };
 
   const addLocalLine = (dayId, category, data) => {
-    setLocalLines(prev => [{ id: uid(), dayId, category, data, isLocal: true }, ...prev]);
+    const line = { id: uid(), dayId, category, data, isLocal: true, deleted: false };
+    setLocalLines(prev => [line, ...prev]);
+    console.log("[addLocalLine]", { dayId, category, data });
   };
 
   const findDayIdByDate = (iso) => {
@@ -1091,7 +1093,8 @@ export default function QuoteEditor(){
                           onDelete={() => {
                             if (isLocal) {
                               setLocalLines(prev => prev.map(x => x.id===l.id ? {...x, deleted:true} : x));
-                              setTrashLines(prev => [l, ...prev]);
+                              const victim = localLines.find(x => x.id === l.id);
+                              if (victim) setTrashLines(t => [victim, ...t]);
                             } else {
                               // For backend lines, we could mark for deletion or convert to local
                               // For now, just remove from display (would need backend delete later)
@@ -1196,7 +1199,8 @@ export default function QuoteEditor(){
           open={carModalOpen}
           onClose={() => { setCarModalOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const dayId = activeDayId ?? q.days[0]?.id;
+            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
+            const dayId = currentDay?.id;
             if (dayId) {
               addLocalLine(dayId, "Car Rental", payload);
               if (payload.expected_dropoff_date) {
@@ -1219,7 +1223,8 @@ export default function QuoteEditor(){
           open={tripInfoOpen}
           onClose={() => { setTripInfoOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const dayId = activeDayId ?? q.days[0]?.id;
+            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
+            const dayId = currentDay?.id;
             if (dayId) {
               if (editingLine) {
                 setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
@@ -1240,7 +1245,8 @@ export default function QuoteEditor(){
           open={internalInfoOpen}
           onClose={() => { setInternalInfoOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const dayId = activeDayId ?? q.days[0]?.id;
+            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
+            const dayId = currentDay?.id;
             if (dayId) {
               if (editingLine) {
                 setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
@@ -1261,7 +1267,8 @@ export default function QuoteEditor(){
           open={costOpen}
           onClose={() => { setCostOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const dayId = activeDayId ?? q.days[0]?.id;
+            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
+            const dayId = currentDay?.id;
             if (dayId) {
               if (editingLine) {
                 setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
@@ -1282,7 +1289,8 @@ export default function QuoteEditor(){
           open={flightOpen}
           onClose={() => { setFlightOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const dayId = activeDayId ?? q.days[0]?.id;
+            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
+            const dayId = currentDay?.id;
             if (dayId) {
               if (editingLine) {
                 setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
@@ -1303,7 +1311,8 @@ export default function QuoteEditor(){
           open={trainOpen}
           onClose={() => { setTrainOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const dayId = activeDayId ?? q.days[0]?.id;
+            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
+            const dayId = currentDay?.id;
             if (dayId) {
               if (editingLine) {
                 setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
@@ -1324,7 +1333,8 @@ export default function QuoteEditor(){
           open={ferryOpen}
           onClose={() => { setFerryOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const dayId = activeDayId ?? q.days[0]?.id;
+            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
+            const dayId = currentDay?.id;
             if (dayId) {
               if (editingLine) {
                 setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
@@ -1345,7 +1355,8 @@ export default function QuoteEditor(){
           open={hotelOpen}
           onClose={() => { setHotelOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const dayId = activeDayId ?? q.days[0]?.id;
+            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
+            const dayId = currentDay?.id;
             if (dayId) {
               if (editingLine) {
                 setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
@@ -1366,7 +1377,8 @@ export default function QuoteEditor(){
           open={newServiceOpen}
           onClose={() => { setNewServiceOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const dayId = activeDayId ?? q.days[0]?.id;
+            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
+            const dayId = currentDay?.id;
             if (dayId) {
               if (editingLine) {
                 setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));

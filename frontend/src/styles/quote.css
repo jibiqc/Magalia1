@@ -925,3 +925,90 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .btn.danger:hover {
   background: #ff5a5a;
 }
+
+/* Shared modal styles */
+.modal-card {
+  background: #192333;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 14px;
+  padding: 18px 18px 14px;
+  box-shadow: 0 14px 44px rgba(0,0,0,.35);
+  width: 420px;
+  maxWidth: 92vw;
+}
+
+.modal-title {
+  font-size: 20px;
+  font-weight: 700;
+  margin-bottom: 10px;
+  color: #e9eefc;
+}
+
+.field {
+  margin-bottom: 10px;
+}
+
+.field label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 600;
+  opacity: .9;
+  color: var(--ink);
+}
+
+.input, .select, .textarea {
+  width: 100%;
+  background: #222c42;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #e6edf7;
+  font-size: 14px;
+}
+
+.input:focus, .textarea:focus, .select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.textarea {
+  resize: vertical;
+  font-family: inherit;
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* Center column scrollbar */
+.center-rail {
+  scrollbar-gutter: stable both-edges;
+}
+
+.center-rail::-webkit-scrollbar {
+  width: 10px;
+}
+
+.center-rail::-webkit-scrollbar-track {
+  background: rgba(255,255,255,.05);
+  border-radius: 8px;
+}
+
+.center-rail::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,.25);
+  border-radius: 8px;
+  border: 2px solid rgba(0,0,0,0);
+}
+
+.center-rail::-webkit-scrollbar-thumb:hover {
+  background: rgba(255,255,255,.35);
+}
+
+/* Firefox */
+.center-rail {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,.3) rgba(255,255,255,.08);
+}
