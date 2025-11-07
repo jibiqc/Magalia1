@@ -459,9 +459,10 @@ export default function QuoteEditor(){
 
 
 
-    const onspot = (q.onspot_manual===null || q.onspot_manual===undefined || q.onspot_manual==="")
-
-      ? onspotAuto : parseNum(q.onspot_manual);
+    // si l'utilisateur a saisi un override, on le garde
+    const onspot = (q.onspot_manual ?? null) !== null
+      ? Number(q.onspot_manual || 0)
+      : onspotAuto;
 
 
 
