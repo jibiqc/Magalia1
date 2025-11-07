@@ -95,44 +95,49 @@ export default function DestinationRangeModal({
         return;
       }
 
-    try {
-      let destinationName = finalName;
+      try {
+        let destinationName = finalName;
 
-      // If creating new destination
-      if (isCreating || !selectedDest) {
-        try {
-          const created = await api.createDestination(finalName);
-          destinationName = created.name;
-        } catch (err) {
-          // If duplicate, fetch and use existing
-          if (err.message.includes("already exists") || err.message.includes("duplicate")) {
-            const results = await api.getDestinations(finalName);
-            if (results && results.length > 0) {
-              destinationName = results[0].name;
+        // If creating new destination
+        if (isCreating || !selectedDest) {
+          try {
+            const created = await api.createDestination(finalName);
+            destinationName = created.name;
+          } catch (err) {
+            // If duplicate, fetch and use existing
+            if (err.message.includes("already exists") || err.message.includes("duplicate")) {
+              const results = await api.getDestinations(finalName);
+              if (results && results.length > 0) {
+                destinationName = results[0].name;
+              } else {
+                throw err;
+              }
             } else {
               throw err;
             }
-          } else {
-            throw err;
           }
+        } else {
+          destinationName = selectedDest.name;
         }
-      } else {
-        destinationName = selectedDest.name;
+
+        // Patch days
+        await api.patchQuoteDays(qid, {
+          start_date: startDate,
+          nights: nights,
+          destination: destinationName,
+          overwrite: true,
+        });
+
+        // Success - call parent callback
+        await onApplied?.();
+      } catch (err) {
+        setError(err.message || "Failed to update destinations");
+      } finally {
+        setApplying(false);
       }
-
-      // Patch days
-      await api.patchQuoteDays(qid, {
-        start_date: startDate,
-        nights: nights,
-        destination: destinationName,
-        overwrite: true,
-      });
-
-      // Success - call parent callback
-      await onApplied?.();
-    } catch (err) {
-      setError(err.message || "Failed to update destinations");
-    } finally {
+    } catch (outerErr) {
+      // This catch handles ensureQuoteId errors that weren't caught above
+      setError(outerErr.message || "Failed to ensure quote ID");
       setApplying(false);
     }
   };
