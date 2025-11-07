@@ -294,6 +294,57 @@ export default function QuoteEditor(){
     }
   };
 
+  const ensureQuoteId = async () => {
+    // If already have an id, return it
+    const existing = (q && q.id) || null;
+    if (existing) return existing;
+
+    // Otherwise, trigger save/create flow
+    try {
+      const payload = {
+        title: q.title,
+        pax: q.pax,
+        start_date: q.start_date,
+        end_date: q.end_date,
+        margin_pct: q.margin_pct,
+        onspot_manual: q.onspot_manual,
+        hassle_manual: q.hassle_manual,
+        days: q.days.map((d, idx) => ({
+          position: idx,
+          date: d.date,
+          destination: d.destination,
+          decorative_images: d.decorative_images || [],
+          lines: (d.lines || []).map((l, liIdx) => ({
+            position: liIdx,
+            service_id: l.service_id,
+            category: l.category,
+            title: l.title,
+            supplier_name: l.supplier_name,
+            visibility: l.visibility || "client",
+            achat_eur: l.achat_eur,
+            achat_usd: l.achat_usd,
+            vente_usd: l.vente_usd,
+            fx_rate: l.fx_rate,
+            currency: l.currency,
+            base_net_amount: l.base_net_amount,
+            raw_json: l.raw_json || {},
+          })),
+        })),
+      };
+      const created = await api.createOrSaveQuote(payload);
+      // Update local state with the created quote
+      if (created && created.id) {
+        setQ(created);
+        setOpenId(String(created.id));
+        return created.id;
+      }
+      return null;
+    } catch (err) {
+      console.error("ensureQuoteId error:", err);
+      throw err;
+    }
+  };
+
 
 
   // utilitaires pour maj de lignes
@@ -1135,9 +1186,10 @@ export default function QuoteEditor(){
           open={destModal.open}
           quoteId={destModal.quoteId ?? currentQuoteId}
           startDate={destModal.startDate}
+          ensureQuoteId={ensureQuoteId}
           onClose={() => setDestModal({ open: false, quoteId: null, startDate: null })}
           onApplied={async () => {
-            const qid = destModal.quoteId ?? currentQuoteId;
+            const qid = (q && q.id) || null; // after apply we likely have an id
             setDestModal({ open: false, quoteId: null, startDate: null });
             if (qid) {
               await fetchQuote(qid);
@@ -1146,10 +1198,8 @@ export default function QuoteEditor(){
               } catch (err) {
                 console.error("Reprice error:", err);
               }
-            } else {
-              console.warn("[dest] No quoteId available, skipped refresh/reprice");
             }
-            console.log("Destinations updated (modal closed)");
+            console.log("Destinations updated");
           }}
         />
       )}

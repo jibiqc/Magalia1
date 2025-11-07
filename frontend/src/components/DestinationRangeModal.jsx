@@ -5,6 +5,7 @@ export default function DestinationRangeModal({
   open = true,
   quoteId,
   startDate,
+  ensureQuoteId,
   onClose,
   onApplied,
 }) {
@@ -58,12 +59,31 @@ export default function DestinationRangeModal({
   }, []);
 
   const handleApply = async () => {
+    if (applying) return; // Prevent double clicks
     setError(null);
-    if (!quoteId) {
-      setError("Quote ID is missing. Save or open a quote, then retry.");
-      return;
-    }
-    const finalName = query.trim();
+    setApplying(true);
+    
+    try {
+      let qid = quoteId;
+      
+      // Ensure quoteId exists before proceeding
+      if (!qid) {
+        try {
+          qid = await ensureQuoteId?.();
+        } catch (e) {
+          setError("Unable to save the quote. Please try again.");
+          setApplying(false);
+          return;
+        }
+      }
+      
+      if (!qid) {
+        setError("Quote ID is missing. Save or open a quote, then retry.");
+        setApplying(false);
+        return;
+      }
+      
+      const finalName = query.trim();
     if (!finalName) {
       setError("Destination name is required");
       return;
@@ -99,7 +119,7 @@ export default function DestinationRangeModal({
       }
 
       // Patch days
-      await api.patchQuoteDays(quoteId, {
+      await api.patchQuoteDays(qid, {
         start_date: startDate,
         nights: nights,
         destination: destinationName,
@@ -107,9 +127,11 @@ export default function DestinationRangeModal({
       });
 
       // Success - call parent callback
-      await onApplied();
+      await onApplied?.();
     } catch (err) {
       setError(err.message || "Failed to update destinations");
+    } finally {
+      setApplying(false);
     }
   };
 

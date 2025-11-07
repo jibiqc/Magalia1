@@ -470,16 +470,17 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   align-items: center;
   justify-content: center;
   z-index: 9999; /* make sure it's above everything */
-  background: rgba(0,0,0,0.35);
+  background: rgba(0,0,0,0.30); /* slightly lighter backdrop */
 }
 
 .modal-card {
-  width: 360px;
+  width: 380px;               /* a bit wider */
   max-width: 92vw;
-  background: #0b1220;
-  border: 1px solid rgba(255,255,255,0.08);
-  border-radius: 10px;
-  padding: 16px;
+  background: #1b2436;        /* lighter than #0b1220 */
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 12px;
+  padding: 16px 16px 12px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.35);
   max-height: 90vh;
   overflow-y: auto;
 }
@@ -516,7 +517,8 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 
 .modal-title {
   font-weight: 700;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
+  color: #e8eefc;             /* brighter title */
   font-size: 18px;
 }
 
@@ -563,14 +565,22 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 
 .form-field input[type="text"],
-.form-field input[type="number"] {
+.form-field input[type="number"],
+.modal-card input,
+.modal-card select {
   width: 100%;
   padding: 8px 12px;
-  background: #0b1830;
-  color: var(--ink);
-  border: 1px solid rgba(255,255,255,0.1);
+  background: #222c42;        /* lighter inputs */
+  border: 1px solid rgba(255,255,255,0.16);
+  color: #e6edf7;
   border-radius: 6px;
   font-size: 14px;
+}
+
+.modal-card .hint {
+  color: #aeb9d1;
+  font-size: 12px;
+  margin-top: 4px;
 }
 
 .form-field input.readonly {

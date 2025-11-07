@@ -46,5 +46,10 @@ export const api = {
   async saveQuote(quoteId, payload) {
     return apiCall("PUT", `/quotes/${quoteId}`, payload);
   },
+
+  async createOrSaveQuote(payload) {
+    // Create new quote with POST
+    return apiCall("POST", "/quotes", payload);
+  },
 };
 
