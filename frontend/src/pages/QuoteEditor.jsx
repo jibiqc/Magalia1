@@ -160,7 +160,21 @@ export default function QuoteEditor(){
   // Compute safe currentQuoteId
   const currentQuoteId = (q && q.id) || null;
 
+  // Commission edit state
+  const [commEdit, setCommEdit] = React.useState({
+    active: false,
+    text: ((q.margin_pct ?? DEFAULT_MARGIN) * 100).toFixed(2), // "16.27"
+  });
 
+  // Si la marge change ailleurs, resynchroniser l'affichage quand on N'édite pas
+  React.useEffect(() => {
+    if (!commEdit.active) {
+      setCommEdit(s => ({
+        ...s,
+        text: ((q.margin_pct ?? DEFAULT_MARGIN) * 100).toFixed(2),
+      }));
+    }
+  }, [q.margin_pct, commEdit.active]);
 
   // --- Drag & drop state & helpers ---
 
@@ -784,15 +798,34 @@ export default function QuoteEditor(){
             <div className="value">{asMoney(calc.achatsTotal)}</div>
 
             <div className="label">Commission</div>
-            <div className="middle">
+            <div className="middle" style={{display:'flex', alignItems:'center', gap:6}}>
               <input
-                className="pct-cell"
-                value={((q.margin_pct ?? DEFAULT_MARGIN) * 100).toFixed(2)}
-                onChange={(e) => {
-                  const pct = parsePct(e.target.value);
-                  setQ(prev => ({ ...prev, margin_pct: pct }));
-                }}
+                type="text"
                 inputMode="decimal"
+                className="pct-cell"
+                value={commEdit.text}
+                placeholder="16.27"
+                onFocus={() => {
+                  setCommEdit({
+                    active: true,
+                    // afficher sans forcer 2 décimales pendant l'édition
+                    text: ((q.margin_pct ?? DEFAULT_MARGIN) * 100).toString().replace('.', ','),
+                  });
+                }}
+                onChange={(e) => setCommEdit(s => ({ ...s, text: e.target.value }))}
+                onBlur={() => {
+                  const raw = (commEdit.text ?? '')
+                    .toString()
+                    .replace(',', '.')
+                    .replace(/[^\d.]/g, '');
+                  const num = raw === '' ? NaN : Number(raw);
+                  const pct = Number.isFinite(num) ? num / 100 : DEFAULT_MARGIN; // 16.27 -> 0.1627
+                  setQ(prev => ({ ...prev, margin_pct: pct }));
+                  setCommEdit({ active: false, text: (pct * 100).toFixed(2) });
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') e.currentTarget.blur(); // commit au Enter
+                }}
               />
               <span className="pct-suffix">%</span>
             </div>

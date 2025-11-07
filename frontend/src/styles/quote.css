@@ -385,12 +385,11 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   width: 86px;
   height: 32px;
   text-align: right;
-  border-radius: 8px;
   border: 1px solid rgba(0,0,0,.08);
-  background:#fff;
-  color:#1a1a1a;
-  padding:4px 8px;
-  margin-right:6px;
+  border-radius: 8px;
+  background: #fff;
+  color: #1a1a1a;
+  padding: 4px 8px;
 }
 
 .money-cell{
