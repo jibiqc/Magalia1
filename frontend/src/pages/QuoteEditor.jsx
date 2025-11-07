@@ -2,6 +2,7 @@ import React, {useEffect, useMemo, useRef, useState} from "react";
 
 import "../styles/quote.css";
 import DestinationRangeModal from "../components/DestinationRangeModal";
+import CarRentalModal from "../components/CarRentalModal";
 import { api } from "../lib/api";
 import { fmtDateShortISO, fmtDateLongISO } from "../utils/dateFmt";
 
