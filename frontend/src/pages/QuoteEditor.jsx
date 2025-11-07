@@ -22,21 +22,21 @@ import { uid } from "../utils/localId";
 const DEFAULT_MARGIN = 0.1627; // 16.27 %
 const DEFAULT_FX = 0.75;
 
-const round2 = (n) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
-const round6 = (n) => Math.round((Number(n) + Number.EPSILON) * 1e6) / 1e6;
+const round2 = (v) => Math.round((Number(v)||0)*100)/100;
 
-// "123,45" -> 123.45, "" -> null
-function parseLocaleFloat(v) {
-  if (v === null || v === undefined) return null;
-  const s = String(v).trim().replace(/\s+/g, "").replace(",", ".");
-  if (s === "") return null;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : null;
-}
+const parseLocaleFloat = (s) => {
+  if (s == null) return 0;
+  if (typeof s === "number") return s;
+  return Number(String(s).trim().replace(/\s/g,"").replace(",", ".")) || 0;
+};
 
-function effectiveFx(lineFx, globalFx) {
-  return lineFx ?? globalFx ?? DEFAULT_FX;
-}
+const toStr = (v) => (v === undefined || v === null ? "" : String(v));
+
+const effectiveFx = (lineFx, globalFx) => {
+  const fx = parseLocaleFloat(lineFx);
+  const g  = parseLocaleFloat(globalFx);
+  return fx > 0 ? fx : (g > 0 ? g : DEFAULT_FX);
+};
 
 // Normaliseur pour les catégories (insensible à la casse et aux espaces)
 const norm = (s) => (s || "").trim().toLowerCase();
@@ -216,7 +216,7 @@ export default function QuoteEditor(){
   const currentQuoteId = (q && q.id) || null;
 
   // Commission edit state
-  const [marginStr, setMarginStr] = useState(() => "16.27");
+  const [marginStr, setMarginStr] = useState(toStr(q.margin_pct ?? 0.1627));
   useEffect(() => {
     // initialisation depuis q.margin_pct si dispo
     if (q?.margin_pct != null) setMarginStr(String(round2(q.margin_pct*100)));
@@ -741,35 +741,24 @@ export default function QuoteEditor(){
           return;
         }
 
-
-
-        const eur  = parseLocaleFloat(line.achat_eur) || 0;
-        const fx   = effectiveFx(parseLocaleFloat(line.fx_rate), fxEuroToUsd);
-        const usd  = parseLocaleFloat(line.achat_usd) || (eur && fx ? round2(eur * fx) : 0);
-        const sell = parseLocaleFloat(line.vente_usd) || 0;
-
-
+        const eur = round2(parseLocaleFloat(line.achat_eur));
+        const fx  = effectiveFx(line.fx_rate, fxEuroToUsd);
+        // si achat_usd vide mais eur>0, on calcule
+        const usdRaw  = line.achat_usd;
+        const usdCalc = eur>0 ? round2(eur * fx) : 0;
+        const usd = (usdRaw===undefined || usdRaw===null || usdRaw==="") ? usdCalc : round2(parseLocaleFloat(usdRaw));
+        const sell = round2(parseLocaleFloat(line.vente_usd));
 
         rows.push({
-
           dest: printedDest ? "" : (day.destination || ""),
-
           name: line.title || line.service_name || "—",
-
           eur, fx, usd, sell
-
         });
-
         printedDest = true;
 
-
-
         sumEur  += eur;
-
         sumUsd  += usd;
-
         sumSell += sell;
-
       });
 
     });
@@ -913,16 +902,13 @@ export default function QuoteEditor(){
             <div className="label">Commission</div>
             <div className="middle" style={{display:'flex', alignItems:'center', gap:6}}>
               <input
-                className="price-inp" inputMode="decimal" value={marginStr}
+                className="margin-inp" type="text" inputMode="decimal" placeholder="16.27"
+                value={marginStr}
                 onChange={(e)=> setMarginStr(e.target.value)}
                 onBlur={()=>{
-                  const v = parseLocaleFloat(marginStr);
-                  setQ(prev=>{
-                    const next = structuredClone(prev);
-                    next.margin_pct = v != null ? round6(v/100) : 0.1627; // défaut 16.27%
-                    next.dirty = true;
-                    return next;
-                  });
+                  const pct = round2(parseLocaleFloat(marginStr)/100); // 16.27 → 0.1627
+                  setMarginStr((parseLocaleFloat(marginStr)).toString()); // reste lisible
+                  setQ(prev => ({...prev, margin_pct: pct, dirty:true}));
                 }}
               />
               <span className="pct-suffix">%</span>
@@ -990,7 +976,7 @@ export default function QuoteEditor(){
 
         <input type="date" className="date-input" value={endDateStr} onChange={onEndDateChange}/>
 
-        <div className="fx-wrap"><span>€→$</span><input className="fx-input" type="number" step="0.01" value={fxEuroToUsd} onChange={(e)=>setFxEuroToUsd(e.target.value)} /></div>
+        <div className="fx-wrap"><span>€→$</span><input className="fx-global-inp" type="text" inputMode="decimal" placeholder="€→$" value={toStr(fxEuroToUsd)} onChange={(e)=> setFxEuroToUsd(e.target.value)} onBlur={()=> setFxEuroToUsd(round2(parseLocaleFloat(fxEuroToUsd)))} /></div>
 
 
 
@@ -1151,34 +1137,58 @@ export default function QuoteEditor(){
                               }
                             }}
                           />
-                          {isPaidCategory(l.category) && !isLocal && lineIdx >= 0 && (
+                          {isPaidCategory(l.category) && (
                             <div className="price-row-one">
+                              {/* Prix d'achat € */}
                               <input
-                                className="price-inp" inputMode="decimal" placeholder="Prix d'achat €"
-                                value={l.achat_eur ?? ""}
+                                className="price-inp"
+                                type="text" inputMode="decimal" placeholder="Prix d'achat €"
+                                value={toStr(l.achat_eur)}
                                 onChange={(e)=> updateLine(dayIdx, lineIdx, { achat_eur: e.target.value })}
-                                onBlur={()=> rederiveLine(dayIdx, lineIdx, "eur")}
+                                onBlur={()=>{
+                                  const eur = round2(parseLocaleFloat(l.achat_eur));
+                                  const fx  = effectiveFx(l.fx_rate, fxEuroToUsd);
+                                  const usd = round2(eur * fx);
+                                  updateLine(dayIdx, lineIdx, { achat_eur: eur, achat_usd: eur>0 ? usd : l.achat_usd });
+                                }}
                               />
 
+                              {/* FX €→$ */}
                               <input
-                                className="price-inp" inputMode="decimal" placeholder="€→$"
-                                value={l.fx_rate ?? fxEuroToUsd}
+                                className="price-inp"
+                                type="text" inputMode="decimal" placeholder="€→$"
+                                value={toStr(l.fx_rate ?? fxEuroToUsd)}
                                 onChange={(e)=> updateLine(dayIdx, lineIdx, { fx_rate: e.target.value })}
-                                onBlur={()=> rederiveLine(dayIdx, lineIdx, "fx")}
+                                onBlur={()=>{
+                                  const fx  = round2(parseLocaleFloat(l.fx_rate ?? fxEuroToUsd));
+                                  const eur = round2(parseLocaleFloat(l.achat_eur));
+                                  const usd = eur>0 ? round2(eur * fx) : parseLocaleFloat(l.achat_usd);
+                                  updateLine(dayIdx, lineIdx, { fx_rate: fx, achat_usd: eur>0 ? usd : l.achat_usd });
+                                }}
                               />
 
+                              {/* Prix d'achat $ */}
                               <input
-                                className="price-inp" inputMode="decimal" placeholder="Prix d'achat $"
-                                value={l.achat_usd ?? ""}
+                                className="price-inp"
+                                type="text" inputMode="decimal" placeholder="Prix d'achat $"
+                                value={toStr(l.achat_usd)}
                                 onChange={(e)=> updateLine(dayIdx, lineIdx, { achat_usd: e.target.value })}
-                                onBlur={()=> rederiveLine(dayIdx, lineIdx, "usd")}
+                                onBlur={()=>{
+                                  const usd = round2(parseLocaleFloat(l.achat_usd));
+                                  const eur = round2(parseLocaleFloat(l.achat_eur));
+                                  // Si € est saisi, on recalcule FX = $ / €
+                                  const fx  = eur>0 ? round2(usd / eur) : round2(parseLocaleFloat(l.fx_rate ?? fxEuroToUsd));
+                                  updateLine(dayIdx, lineIdx, { achat_usd: usd, fx_rate: fx });
+                                }}
                               />
 
+                              {/* Prix de vente $ (indépendant) */}
                               <input
-                                className="price-inp" inputMode="decimal" placeholder="Prix de vente $"
-                                value={l.vente_usd ?? ""}
+                                className="price-inp"
+                                type="text" inputMode="decimal" placeholder="Prix de vente $"
+                                value={toStr(l.vente_usd)}
                                 onChange={(e)=> updateLine(dayIdx, lineIdx, { vente_usd: e.target.value })}
-                                onBlur={()=> setQ(p=>{const n=structuredClone(p); n.days[dayIdx].lines[lineIdx].vente_usd = round2(parseLocaleFloat(l.vente_usd)||0); n.dirty=true; return n;})}
+                                onBlur={()=> updateLine(dayIdx, lineIdx, { vente_usd: round2(parseLocaleFloat(l.vente_usd)) })}
                               />
                             </div>
                           )}
