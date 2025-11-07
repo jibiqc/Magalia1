@@ -104,13 +104,16 @@ def _to_out(q: Quote) -> QuoteOut:
 
         ))
 
+    # Forcer le fallback pour margin_pct si null (pour d'anciens enregistrements)
+    margin_pct = float(q.margin_pct) if q.margin_pct is not None else 0.1627
+
     return QuoteOut(
 
         id=q.id, title=q.title, pax=q.pax,
 
         start_date=_date_str(q.start_date), end_date=_date_str(q.end_date), days=days,
 
-        margin_pct=float(q.margin_pct) if q.margin_pct is not None else None,
+        margin_pct=margin_pct,
 
         onspot_total=float(q.onspot_total) if q.onspot_total is not None else None,
 
