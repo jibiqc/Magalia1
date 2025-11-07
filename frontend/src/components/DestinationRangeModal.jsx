@@ -59,6 +59,10 @@ export default function DestinationRangeModal({
 
   const handleApply = async () => {
     setError(null);
+    if (!quoteId) {
+      setError("Quote ID is missing. Save or open a quote, then retry.");
+      return;
+    }
     const finalName = query.trim();
     if (!finalName) {
       setError("Destination name is required");

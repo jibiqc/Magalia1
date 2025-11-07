@@ -122,6 +122,9 @@ export default function QuoteEditor(){
 
   const [destModal, setDestModal] = useState({ open: false, quoteId: null, startDate: null });
 
+  // Compute safe currentQuoteId
+  const currentQuoteId = (q && q.id) || null;
+
 
 
   // --- Drag & drop state & helpers ---
@@ -834,10 +837,12 @@ export default function QuoteEditor(){
                   <button
                     className="btn-xxs icon-only"
                     aria-label="Set destination for N nights"
-                    title="Set destination for N nights"
+                    title={!currentQuoteId ? "Save the quote first to set destinations" : "Set destination for N nights"}
+                    disabled={!currentQuoteId}
                     onClick={() => {
-                      console.log("[dest] opening modal", { quoteId: q.id, startDate: d.date });
-                      setDestModal({ open: true, quoteId: q.id, startDate: d.date });
+                      const qid = currentQuoteId;
+                      console.log("[dest] opening modal", { quoteId: qid, startDate: d.date });
+                      setDestModal({ open: true, quoteId: qid, startDate: d.date });
                     }}
                   >
                     📍
@@ -1125,21 +1130,26 @@ export default function QuoteEditor(){
       </div>
 
       {/* Destination Range Modal */}
-      {destModal.open && q.id && (
+      {destModal.open && (
         <DestinationRangeModal
           open={destModal.open}
-          quoteId={q.id}
+          quoteId={destModal.quoteId ?? currentQuoteId}
           startDate={destModal.startDate}
           onClose={() => setDestModal({ open: false, quoteId: null, startDate: null })}
           onApplied={async () => {
+            const qid = destModal.quoteId ?? currentQuoteId;
             setDestModal({ open: false, quoteId: null, startDate: null });
-            await fetchQuote(q.id);
-            try {
-              await api.repriceQuote(q.id);
-            } catch (err) {
-              console.error("Reprice error:", err);
+            if (qid) {
+              await fetchQuote(qid);
+              try {
+                await api.repriceQuote(qid);
+              } catch (err) {
+                console.error("Reprice error:", err);
+              }
+            } else {
+              console.warn("[dest] No quoteId available, skipped refresh/reprice");
             }
-            console.log("Destinations updated and repriced");
+            console.log("Destinations updated (modal closed)");
           }}
         />
       )}
