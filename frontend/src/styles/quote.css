@@ -181,15 +181,24 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .left-group{
   margin-bottom:12px;
 }
-
+.day-list-item {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:8px;
+}
+.day-list-label {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
 .day-pill, .total-pill{
-  width:100%;
+  flex:1;
   background:#0f203a;border:1px solid rgba(255,255,255,.08);
   color:var(--ink);
   padding:10px 12px;border-radius:12px; cursor:pointer;
   text-align:left;
   display:flex;justify-content:space-between;align-items:center;
-  margin-bottom:8px;
 }
 
 .day-pill.active{outline:2px solid var(--accent)}
