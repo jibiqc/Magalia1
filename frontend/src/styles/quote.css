@@ -221,26 +221,13 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   gap: 6px;
   margin-top: 8px;
 }
-.insert-grid > :nth-child(n+4):nth-child(-n+7) {
-  grid-column: span 1;
-}
-.insert-grid > :nth-child(4) {
-  grid-column: 1;
-}
-.insert-grid > :nth-child(5) {
-  grid-column: 2;
-}
-.insert-grid > :nth-child(6) {
-  grid-column: 3;
-}
-.insert-grid > :nth-child(7) {
-  grid-column: 4;
-}
 @media (min-width: 400px) {
   .insert-grid {
     grid-template-columns: repeat(4, 1fr);
   }
-  .insert-grid > :nth-child(n+8) {
+  /* Row 3: New Hotel and New Service span 2 columns each */
+  .insert-grid > :nth-child(8),
+  .insert-grid > :nth-child(9) {
     grid-column: span 2;
   }
 }
