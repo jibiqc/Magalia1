@@ -913,13 +913,29 @@ export default function QuoteEditor(){
             <div className="left-group">
 
               {q.days.map((d,i)=>{
-                const label = `${fmtDateShortISO(d.date)}${d.destination ? " — " + d.destination : ""}`;
                 return (
-                  <button key={d.id}
-                    className={`day-pill ${activeDayId===d.id ? "active":""}`}
-                    onClick={()=>{ setActiveDayId(d.id); const el=document.getElementById(`day-${d.id}`); el?.scrollIntoView({behavior:"smooth", block:"start"}); }}>
-                    <span>{label}</span>
-                  </button>
+                  <div key={d.id} className="day-list-item">
+                    <button
+                      className="day-pin btn-xxs icon-only"
+                      aria-label="Set destination for N nights"
+                      title="Set destination for N nights"
+                      onClick={(e) => {
+                        e.stopPropagation(); // don't change selection
+                        const qid = (q && q.id) || null;
+                        setDestModal({ open: true, quoteId: qid, startDate: d.date });
+                      }}
+                    >
+                      📍
+                    </button>
+                    <button
+                      className={`day-pill ${activeDayId===d.id ? "active":""}`}
+                      onClick={()=>{ setActiveDayId(d.id); const el=document.getElementById(`day-${d.id}`); el?.scrollIntoView({behavior:"smooth", block:"start"}); }}
+                    >
+                      <span className="day-list-label">
+                        {fmtDateShortISO(d.date)}{d.destination ? ` — ${d.destination}` : ""}
+                      </span>
+                    </button>
+                  </div>
                 );
               })}
 
@@ -965,9 +981,8 @@ export default function QuoteEditor(){
                     }
                     return (
                       <>
-                        <span>{title}</span>
                         <button
-                          className="btn-xxs icon-only"
+                          className="day-pin btn-xxs icon-only"
                           aria-label="Set destination for N nights"
                           title="Set destination for N nights"
                           onClick={() => {
@@ -978,6 +993,7 @@ export default function QuoteEditor(){
                         >
                           📍
                         </button>
+                        <span>{title}</span>
                       </>
                     );
                   })()}
