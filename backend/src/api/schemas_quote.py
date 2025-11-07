@@ -1,6 +1,6 @@
 from typing import List, Optional
-
-from pydantic import BaseModel
+from datetime import date
+from pydantic import BaseModel, conint, constr
 
 
 
@@ -155,3 +155,10 @@ class QuoteOut(BaseModel):
     sell_total: Optional[float] = None
 
     grand_total: Optional[float] = None
+
+
+class DestinationRangePatch(BaseModel):
+    start_date: date
+    nights: conint(ge=1)
+    destination: constr(strip_whitespace=True, min_length=1)
+    overwrite: bool = True

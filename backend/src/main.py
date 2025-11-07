@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from src.api.quotes import router as quotes_router
+from src.api.destinations import router as destinations_router
 
 app = FastAPI(title="Magalia API")
 
@@ -55,3 +56,4 @@ def health():
     return {"ok": True, "origins": ALLOWED_ORIGINS}
 
 app.include_router(quotes_router)
+app.include_router(destinations_router)

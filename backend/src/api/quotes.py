@@ -14,7 +14,8 @@ from ..db import get_db
 
 from ..models_quote import Quote, QuoteDay, QuoteLine
 
-from .schemas_quote import QuoteIn, QuoteOut
+from .schemas_quote import QuoteIn, QuoteOut, DestinationRangePatch, QuoteDayOut
+from typing import List
 
 
 
@@ -287,11 +288,13 @@ async def reprice_quote(quote_id: int, db: Session = Depends(get_db)):
 
     pax = q.pax or 0
     cards = math.ceil(pax/6) if pax>0 else 0
-    onspot_auto = cards * 9 * total_days
+    onspot_auto = Decimal(str(cards * 9 * total_days))
     onspot_total = q.onspot_manual if q.onspot_manual is not None else onspot_auto
+    # Enforce minimum $27
+    onspot_total = max(Decimal("27.00"), onspot_total)
 
     hassle_auto = pax * 150
-    hassle_total = q.hassle_manual if q.hassle_manual is not None else hassle_auto
+    hassle_total = float(q.hassle_manual) if q.hassle_manual is not None else hassle_auto
 
     # paid lines only
     paid_lines = []
@@ -305,8 +308,8 @@ async def reprice_quote(quote_id: int, db: Session = Depends(get_db)):
     achats_sum = sum(float(l.achat_usd or 0) for l in paid_lines)
     ventes_sum = sum(float(l.vente_usd or 0) for l in paid_lines)
 
-    achats_total = round(onspot_total + achats_sum, 2)
-    margin = float(q.margin_pct or 0.1627)
+    achats_total = round(float(onspot_total) + achats_sum, 2)
+    margin = float(q.margin_pct) if q.margin_pct is not None else 0.1627
     commission_total = round(achats_total * margin, 2)
     ventes_total = round(ventes_sum + hassle_total, 2)
     grand_total = round(achats_total + commission_total + ventes_total, 2)
@@ -317,10 +320,94 @@ async def reprice_quote(quote_id: int, db: Session = Depends(get_db)):
         "days": total_days,
         "onspot_cards": cards,
         "margin_pct": margin,
-        "onspot_total": onspot_total,
+        "onspot_total": float(onspot_total),
         "hassle_total": hassle_total,
         "achats_total": achats_total,
         "commission_total": commission_total,
         "ventes_total": ventes_total,
         "grand_total": grand_total
     }
+
+
+@router.patch("/{quote_id}/days", response_model=List[QuoteDayOut])
+def patch_days_by_range(
+    quote_id: int,
+    payload: DestinationRangePatch,
+    db: Session = Depends(get_db)
+):
+    """Batch update destination for N nights starting from a date."""
+    from ..services.audit import log_change
+    from ..models_geo import Destination
+    from sqlalchemy import func
+    
+    # Validate quote exists
+    q = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    # Ensure destination exists in destinations table (create if needed)
+    dest_name_clean = payload.destination.strip()
+    existing_dest = db.query(Destination).filter(
+        func.lower(Destination.name) == func.lower(dest_name_clean)
+    ).first()
+    
+    if existing_dest:
+        dest_name = existing_dest.name
+    else:
+        new_dest = Destination(name=dest_name_clean)
+        db.add(new_dest)
+        db.flush()
+        dest_name = new_dest.name
+    
+    # Query days where date >= start_date, ordered by date
+    days_to_update = db.query(QuoteDay).filter(
+        QuoteDay.quote_id == quote_id,
+        QuoteDay.date >= payload.start_date
+    ).order_by(QuoteDay.date).limit(payload.nights).all()
+    
+    # Update each day
+    updated_days = []
+    for day in days_to_update:
+        old_dest = day.destination
+        if payload.overwrite:
+            day.destination = dest_name
+        # Log the change
+        log_change(
+            db,
+            actor="system",
+            action="update",
+            entity_type="quote_day",
+            entity_id=day.id,
+            field="destination",
+            old_value=old_dest,
+            new_value=day.destination
+        )
+        updated_days.append(day)
+    
+    db.commit()
+    
+    # Refresh and return as QuoteDayOut
+    result = []
+    for day in updated_days:
+        db.refresh(day)
+        lines = []
+        for l in sorted(day.lines, key=lambda x: x.position or 0):
+            lines.append(dict(
+                position=l.position, service_id=l.service_id, category=l.category,
+                title=l.title, supplier_name=l.supplier_name, visibility=l.visibility,
+                achat_eur=float(l.achat_eur) if l.achat_eur is not None else None,
+                achat_usd=float(l.achat_usd) if l.achat_usd is not None else None,
+                vente_usd=float(l.vente_usd) if l.vente_usd is not None else None,
+                fx_rate=float(l.fx_rate) if l.fx_rate is not None else None,
+                currency=l.currency, base_net_amount=float(l.base_net_amount) if l.base_net_amount is not None else None,
+                raw_json=l.raw_json
+            ))
+        result.append(QuoteDayOut(
+            position=day.position,
+            date=_date_str(day.date),
+            destination=day.destination,
+            decorative_images=(day.decorative_images or []),
+            lines=lines
+        ))
+    
+    return result
