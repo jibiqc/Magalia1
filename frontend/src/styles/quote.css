@@ -115,8 +115,34 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 
 .day-title{
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-weight:700;
   margin-bottom:10px;
+  white-space: nowrap;
+}
+
+.day-title > span {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-xxs.icon-only {
+  padding: 2px 6px;
+  line-height: 1;
+  font-size: 14px;
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.btn-xxs.icon-only:hover {
+  opacity: 1;
+  background: rgba(255,255,255,0.05);
 }
 
 .service{
@@ -434,4 +460,167 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .num{
   text-align:right;
   font-variant-numeric: tabular-nums;
+}
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--card);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  padding: 0;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 24px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--ink-dim);
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.modal-close:hover {
+  color: var(--ink);
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.form-field {
+  margin-bottom: 16px;
+  position: relative;
+}
+
+.form-field label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink);
+}
+
+.form-field input[type="text"],
+.form-field input[type="number"] {
+  width: 100%;
+  padding: 8px 12px;
+  background: #0b1830;
+  color: var(--ink);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  font-size: 14px;
+}
+
+.form-field input.readonly {
+  background: rgba(255,255,255,0.05);
+  color: var(--ink-dim);
+  cursor: not-allowed;
+}
+
+
+.typeahead-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: var(--card);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  margin-top: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 10;
+}
+
+.typeahead-option {
+  padding: 10px 12px;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+.typeahead-option:hover {
+  background: rgba(255,255,255,0.05);
+}
+
+.typeahead-option:last-child {
+  border-bottom: none;
+}
+
+.typeahead-option.typeahead-create {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.typeahead-loading {
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--ink-dim);
+  font-style: italic;
+}
+
+.error-message {
+  padding: 10px 12px;
+  background: rgba(255, 123, 123, 0.1);
+  border: 1px solid var(--danger);
+  border-radius: 6px;
+  color: var(--danger);
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255,255,255,0.1);
+}
+
+.modal-footer .btn {
+  padding: 8px 16px;
+}
+
+.modal-footer .btn.secondary {
+  background: transparent;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.modal-footer .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

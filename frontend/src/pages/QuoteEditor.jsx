@@ -1,6 +1,8 @@
 import React, {useEffect, useMemo, useRef, useState} from "react";
 
 import "../styles/quote.css";
+import DestinationRangeModal from "../components/DestinationRangeModal";
+import { api } from "../lib/api";
 
 
 
@@ -115,6 +117,10 @@ export default function QuoteEditor(){
   // États pour la topbar
 
   const [openId, setOpenId] = useState("");
+
+  // Destination modal state
+
+  const [destModal, setDestModal] = useState({ open: false, quoteId: null, startDate: null });
 
 
 
@@ -234,7 +240,56 @@ export default function QuoteEditor(){
 
   const handleNew = () => { setQ(emptyQuote()); setOpenId(""); };
 
-  const saveQuote = () => { /* hook to backend later */ };
+  const saveQuote = async () => {
+    if (!q.id) return;
+    try {
+      const payload = {
+        title: q.title,
+        pax: q.pax,
+        start_date: q.start_date,
+        end_date: q.end_date,
+        margin_pct: q.margin_pct,
+        onspot_manual: q.onspot_manual,
+        hassle_manual: q.hassle_manual,
+        days: q.days.map((d, idx) => ({
+          position: idx,
+          date: d.date,
+          destination: d.destination,
+          decorative_images: d.decorative_images || [],
+          lines: (d.lines || []).map((l, liIdx) => ({
+            position: liIdx,
+            service_id: l.service_id,
+            category: l.category,
+            title: l.title,
+            supplier_name: l.supplier_name,
+            visibility: l.visibility || "client",
+            achat_eur: l.achat_eur,
+            achat_usd: l.achat_usd,
+            vente_usd: l.vente_usd,
+            fx_rate: l.fx_rate,
+            currency: l.currency,
+            base_net_amount: l.base_net_amount,
+            raw_json: l.raw_json || {},
+          })),
+        })),
+      };
+      const updated = await api.saveQuote(q.id, payload);
+      setQ(updated);
+    } catch (err) {
+      console.error("Save error:", err);
+    }
+  };
+
+  const fetchQuote = async (quoteId) => {
+    if (!quoteId) return;
+    try {
+      const quote = await api.getQuote(quoteId);
+      setQ(quote);
+      setOpenId(String(quoteId));
+    } catch (err) {
+      console.error("Fetch error:", err);
+    }
+  };
 
 
 
@@ -774,7 +829,17 @@ export default function QuoteEditor(){
 
               <div key={d.id} id={`day-${d.id}`} className="day-card">
 
-                <div className="day-title">Day {dayIdx+1} — {d.destination||"—"} — {fmtDate(d.date)}</div>
+                <div className="day-title">
+                  <span>Day {dayIdx+1} — {d.destination||"—"} — {fmtDate(d.date)}</span>
+                  <button
+                    className="btn-xxs icon-only"
+                    aria-label="Set destination for N nights"
+                    title="Set destination for N nights"
+                    onClick={() => setDestModal({ open: true, quoteId: q.id, startDate: d.date })}
+                  >
+                    📍
+                  </button>
+                </div>
 
 
 
@@ -1055,6 +1120,28 @@ export default function QuoteEditor(){
         </div>
 
       </div>
+
+      {/* Destination Range Modal */}
+      {destModal.open && q.id && (
+        <DestinationRangeModal
+          quoteId={q.id}
+          startDate={destModal.startDate}
+          onClose={() => setDestModal({ open: false, quoteId: null, startDate: null })}
+          onApplied={async () => {
+            setDestModal({ open: false, quoteId: null, startDate: null });
+            // 1) Refresh quote data
+            await fetchQuote(q.id);
+            // 2) Trigger reprice
+            try {
+              await api.repriceQuote(q.id);
+            } catch (err) {
+              console.error("Reprice error:", err);
+            }
+            // 3) Show success (simple console for now, can add toast later)
+            console.log("Destinations updated and repriced");
+          }}
+        />
+      )}
 
     </div>
 
