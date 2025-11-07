@@ -1,11 +1,1063 @@
-function QuoteEditor() {
+import React, {useEffect, useMemo, useRef, useState} from "react";
+
+import "../styles/quote.css";
+
+
+
+const money = (n=0, {digits=2}={}) => `$${(Number(n)||0).toFixed(digits)}`;
+
+const parseNum = v => {
+
+  if (v===null || v===undefined || v==="") return 0;
+
+  const n = typeof v==="number" ? v : Number(String(v).replace(/[^\d.-]/g,""));
+
+  return Number.isFinite(n) ? n : 0;
+
+};
+
+// Helpers à placer en haut du fichier (hors composant)
+
+const round2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
+
+const fmtDate = (iso) => {
+
+  try{
+
+    const d = new Date(iso+"T00:00:00");
+
+    const opt = {weekday:"long", year:"numeric", month:"long", day:"numeric"};
+
+    // English long form as demandé
+
+    return new Intl.DateTimeFormat("en-US", opt).format(d);
+
+  }catch{ return iso }
+
+};
+
+
+
+const newTripInfo = () => ({
+
+  id: crypto.randomUUID(),
+
+  category: "Trip info",
+
+  title: "Trip info (edit me…)",
+
+  supplier_name: null,
+
+  achat_eur: 0, achat_usd: 0, vente_usd: 0,
+
+});
+
+const newPayable = (category, title, supplier=null) => ({
+
+  id: crypto.randomUUID(),
+
+  category, title, supplier_name: supplier,
+
+  achat_eur: 0, achat_usd: 0, vente_usd: 0,
+
+});
+
+
+
+const emptyQuote = () => ({
+
+  id: null,
+
+  title: "",
+
+  pax: 2,
+
+  start_date: "2025-04-07",
+
+  end_date: "2025-04-09",
+
+  days: [
+
+    { id: crypto.randomUUID(), date:"2025-04-07", destination:"Paris", lines:[ newTripInfo() ] },
+
+    { id: crypto.randomUUID(), date:"2025-04-08", destination:"Paris", lines:[] },
+
+    { id: crypto.randomUUID(), date:"2025-04-09", destination:"Paris", lines:[] },
+
+  ],
+
+  margin_pct: 0.1627,
+
+  onspot_manual: null,
+
+  hassle_manual: null,
+
+});
+
+
+
+export default function QuoteEditor(){
+
+  const [q,setQ] = useState(emptyQuote);
+
+  const [activeDayId,setActiveDayId] = useState(null);
+
+  const totalsRef = useRef(null);
+
+
+
+  // FX global (par défaut 0.75)
+
+  const [fxEuroToUsd, setFxEuroToUsd] = useState(0.75);
+
+
+
+  // États pour la topbar
+
+  const [openId, setOpenId] = useState("");
+
+
+
+  // --- Drag & drop state & helpers ---
+
+  const [dragging, setDragging] = useState(null);
+
+
+
+  const onDragStart = (e, fromDay, fromIndex) => {
+
+    e.dataTransfer.effectAllowed = 'move';
+
+    e.dataTransfer.setData('text/plain', JSON.stringify({ fromDay, fromIndex }));
+
+    setDragging({ fromDay, fromIndex });
+
+  };
+
+
+
+  const allowDrop = (e) => {
+
+    e.preventDefault();
+
+    e.dataTransfer.dropEffect = 'move';
+
+  };
+
+
+
+  const dropOnDayEnd = (e, toDay) => {
+
+    e.preventDefault();
+
+    const data = e.dataTransfer.getData('text/plain');
+
+    if (!data) return;
+
+    const { fromDay, fromIndex } = JSON.parse(data);
+
+    setQ((prev) => {
+
+      const next = structuredClone(prev);
+
+      const src = [...next.days[fromDay].lines];
+
+      const [moved] = src.splice(fromIndex, 1);
+
+      const dst = [...next.days[toDay].lines, moved];
+
+      next.days[fromDay].lines = src;
+
+      next.days[toDay].lines = dst;
+
+      return next;
+
+    });
+
+    setDragging(null);
+
+  };
+
+
+
+  const dropBefore = (e, toDay, toIndex) => {
+
+    e.preventDefault();
+
+    const data = e.dataTransfer.getData('text/plain');
+
+    if (!data) return;
+
+    const { fromDay, fromIndex } = JSON.parse(data);
+
+    setQ((prev) => {
+
+      const next = structuredClone(prev);
+
+      const src = [...next.days[fromDay].lines];
+
+      const [moved] = src.splice(fromIndex, 1);
+
+      const dst = [...next.days[toDay].lines];
+
+      const insertAt = (fromDay === toDay && fromIndex < toIndex) ? toIndex - 1 : toIndex;
+
+      dst.splice(insertAt, 0, moved);
+
+      next.days[fromDay].lines = src;
+
+      next.days[toDay].lines = dst;
+
+      return next;
+
+    });
+
+    setDragging(null);
+
+  };
+
+
+
+  // Helpers pour les dates
+
+  const startDateStr = q.start_date || "";
+
+  const endDateStr = q.end_date || "";
+
+  const onStartDateChange = (e) => setQ(p=>({...p,start_date:e.target.value}));
+
+  const onEndDateChange = (e) => setQ(p=>({...p,end_date:e.target.value}));
+
+
+
+  // Handlers
+
+  const handleNew = () => { setQ(emptyQuote()); setOpenId(""); };
+
+  const saveQuote = () => { /* hook to backend later */ };
+
+
+
+  // utilitaires pour maj de lignes
+
+  const updateLine = (dayIdx, lineIdx, patch) => {
+
+    setQ(prev => {
+
+      const next = structuredClone(prev);
+
+      Object.assign(next.days[dayIdx].lines[lineIdx], patch);
+
+      return next;
+
+    });
+
+  };
+
+
+
+
+
+
+  // rebuild between start/end if needed
+
+  useEffect(()=>{
+
+    const d0 = new Date(q.start_date+"T00:00:00");
+
+    const d1 = new Date(q.end_date+"T00:00:00");
+
+    if (isNaN(d0) || isNaN(d1)) return;
+
+    const n = Math.max(1, Math.round((d1 - d0)/(24*3600*1000))+1);
+
+    const days = Array.from({length:n}, (_,i)=>{
+
+      const iso = new Date(d0.getTime()+i*86400000).toISOString().slice(0,10);
+
+      const existing = q.days[i];
+
+      return existing ? {...existing, date: iso} : { id: crypto.randomUUID(), date: iso, destination: q.days[0]?.destination ?? "", lines:[] };
+
+    });
+
+    setQ(prev=>({...prev, days}));
+
+    if (!activeDayId && days.length) setActiveDayId(days[0].id);
+
+  // eslint-disable-next-line
+
+  }, [q.start_date, q.end_date]);
+
+
+
+  const numDays = useMemo(()=> q.days.length || 0, [q.days]);
+
+  const onspotAuto = useMemo(()=>{
+
+    const cards = Math.ceil((q.pax||0)/6);
+
+    return 9 * cards * numDays;
+
+  }, [q.pax, numDays]);
+
+
+
+  const hassleAuto = useMemo(()=> 150 * (q.pax||0), [q.pax]);
+
+
+
+  const calc = useMemo(()=>{
+
+    const achatsService = q.days.flatMap(d=>d.lines)
+
+      .filter(l => l.category!=="Trip info" && l.category!=="Internal info")
+
+      .reduce((sum,l)=> sum + parseNum(l.achat_usd), 0);
+
+
+
+    const onspot = (q.onspot_manual===null || q.onspot_manual===undefined || q.onspot_manual==="")
+
+      ? onspotAuto : parseNum(q.onspot_manual);
+
+
+
+    const hassle = (q.hassle_manual===null || q.hassle_manual===undefined || q.hassle_manual==="")
+
+      ? hassleAuto : parseNum(q.hassle_manual);
+
+
+
+    const achatsTotal = achatsService + onspot; // commissionnable = achats + onspot
+
+    const commission = (parseNum(q.margin_pct) || 0) * achatsTotal;
+
+    const ventes = q.days.flatMap(d=>d.lines).reduce((sum,l)=> sum + parseNum(l.vente_usd), 0) + hassle;
+
+
+
+    const grand = ventes + commission + achatsTotal;
+
+    return {
+
+      onspot, hassle, achatsService, achatsTotal,
+
+      commission, ventes,
+
+      grandRounded: Math.round(grand)
+
+    };
+
+  }, [q, onspotAuto, hassleAuto]);
+
+
+
+
+
+
+  const addLine = (dayId, category) => {
+
+    setQ(prev=>{
+
+      const days = prev.days.map(d=>{
+
+        if (d.id!==dayId) return d;
+
+        const l = (category==="Trip info"||category==="Internal info")
+
+          ? (category==="Trip info" ? newTripInfo() : {...newTripInfo(), category:"Internal info", title:"Internal note (edit only here)"})
+
+          : newPayable(category, `New ${category}`);
+
+        return {...d, lines:[...d.lines, l]};
+
+      });
+
+      return {...prev, days};
+
+    });
+
+  };
+
+
+
+  const totalScroll = ()=> totalsRef.current?.scrollIntoView({behavior:"smooth", block:"start"});
+
+
+
+  // Recalculate totals (trigger re-render)
+
+  const recalculateTotals = () => {
+
+    setQ(prev => ({...prev})); // Force re-render to recalc
+
+  };
+
+
+
+  // Render Excel preview table
+
+  function renderExcelPreview() {
+
+    // Agrège toutes les lignes "payantes"
+
+    const paidCats = new Set(["Activity","Hotel","Transport","Flight","Train","Ferry","Cost","New Hotel","New Service"]);
+
+    const rows = [];
+
+    let sumEur = 0, sumUsd = 0, sumSell = 0;
+
+
+
+    // Onspot/Hassle actuels (les tiennes dans le state)
+
+    const onspotTotal = Number(calc?.onspot ?? 0);   // dans Achats $
+
+    const hassleTotal = Number(calc?.hassle ?? 0);   // dans Ventes $
+
+
+
+    // Onspot row
+
+    rows.push({
+
+      dest: "",
+
+      name: "Onspot",
+
+      eur: 0,
+
+      fx: "",
+
+      usd: onspotTotal,
+
+      sell: 0,
+
+      kind: "meta"
+
+    });
+
+
+
+    // Hassle row
+
+    rows.push({
+
+      dest: "",
+
+      name: "Hassle",
+
+      eur: 0,
+
+      fx: "",
+
+      usd: 0,
+
+      sell: hassleTotal,
+
+      kind: "meta"
+
+    });
+
+
+
+    // Lignes payantes par jour
+
+    q.days.forEach((day, dIdx) => {
+
+      let printedDest = false;
+
+      (day.lines || []).forEach((line) => {
+
+        if (!paidCats.has((line.category || "").trim())) return;
+
+
+
+        const eur  = Number(line.achat_eur || 0);
+
+        const fx   = line.fx_rate ?? "";
+
+        const usd  = Number(line.achat_usd || 0);
+
+        const sell = Number(line.vente_usd || 0);
+
+
+
+        rows.push({
+
+          dest: printedDest ? "" : (day.destination || ""),
+
+          name: line.title || line.service_name || "—",
+
+          eur, fx, usd, sell
+
+        });
+
+        printedDest = true;
+
+
+
+        sumEur  += eur;
+
+        sumUsd  += usd;
+
+        sumSell += sell;
+
+      });
+
+    });
+
+
+
+    // Ajoute Onspot/Hassle dans les totaux comme demandé
+
+    const totalEur  = round2(sumEur);
+
+    const totalUsd  = round2(sumUsd + onspotTotal);
+
+    const totalSell = round2(sumSell + hassleTotal);
+
+
+
+    return (
+
+      <div ref={totalsRef} className="excel-card">
+
+        <div className="excel-title">Excel preview</div>
+
+        <table className="et-table table-compact">
+
+          <thead>
+
+            <tr>
+
+              <th>Destination</th>
+
+              <th>Nom du service</th>
+
+              <th>Prix d'achat €</th>
+
+              <th>FX €→$</th>
+
+              <th>Prix d'achat $</th>
+
+              <th>Prix de vente $</th>
+
+            </tr>
+
+          </thead>
+
+          <tbody>
+
+            {rows.map((r, i) => (
+
+              <tr key={i} className={r.kind==="meta" ? "row-meta" : ""}>
+
+                <td>{r.dest}</td>
+
+                <td>{r.name}</td>
+
+                <td className="num">{r.eur ? r.eur.toFixed(2) : ""}</td>
+
+                <td className="num">{r.fx !== "" ? Number(r.fx).toFixed(2) : ""}</td>
+
+
+
+                {/* USD: vide pour Hassle */}
+
+                <td className="num">
+
+                  {r.name==="Hassle" ? "" : `$${r.usd.toFixed(2)}`}
+
+                </td>
+
+
+
+                {/* Vente: vide pour Onspot */}
+
+                <td className="num">
+
+                  {r.name==="Onspot" ? "" : `$${r.sell.toFixed(2)}`}
+
+                </td>
+
+              </tr>
+
+            ))}
+
+          </tbody>
+
+            <tfoot>
+
+              <tr className="totals">
+
+                <td colSpan={2}>Totaux</td>
+
+                <td className="num">${totalEur.toFixed(2)}</td>
+
+                <td />
+
+                <td className="num">${totalUsd.toFixed(2)}</td>
+
+                <td className="num">${totalSell.toFixed(2)}</td>
+
+              </tr>
+
+            </tfoot>
+
+          </table>
+
+
+
+          {/* Récap final (comme avant) */}
+
+          <div className="recap">
+
+            <div className="recap-row">
+
+              <div>Prix d'achat (USD)</div>
+
+              <div className="num">${totalUsd.toFixed(2)}</div>
+
+            </div>
+
+            <div className="recap-row">
+
+              <div>Commission</div>
+
+              <div className="num">${round2(totalUsd * Number(q.margin_pct || 0)).toFixed(2)}</div>
+
+            </div>
+
+            <div className="recap-row">
+
+              <div>Prix de vente (USD)</div>
+
+              <div className="num">${totalSell.toFixed(2)}</div>
+
+            </div>
+
+            <div className="recap-row grand">
+
+              <div>Total</div>
+
+              <div className="num">
+
+                ${round2(totalUsd + (totalUsd * Number(q.margin_pct || 0)) + totalSell).toFixed(0)}
+
+              </div>
+
+            </div>
+
+
+
+            <button className="btn recalc" onClick={recalculateTotals}>Recalculate</button>
+
+          </div>
+
+        </div>
+
+      );
+
+    }
+
+
+
   return (
-    <div>
-      <h1>Quote Editor</h1>
-      <p>Quote editor component</p>
+
+    <div className="app">
+
+      {/* TOP BAR */}
+
+      <div className="topbar">
+
+        <div className="brand">Magal'IA</div>
+
+
+
+        <button onClick={handleNew} className="btn">New</button>
+
+
+
+        <input className="id-input" placeholder="id…" value={openId} onChange={e=>setOpenId(e.target.value)} />
+
+
+
+        {/* >>> élargir le titre : il prend la place restante */}
+
+        <input
+
+          className="title-input"
+
+          placeholder="Quote title"
+
+          value={q.title||""}
+
+          onChange={e=>setQ(p=>({...p,title:e.target.value}))}
+
+        />
+
+
+
+        {/* le reste: pax, dates, fx, Save… */}
+
+        <input className="pax-input" type="number" value={q.pax||0} onChange={e=>setQ(p=>({...p,pax: Number(e.target.value||0)}))} />
+
+        <input type="date" className="date-input" value={startDateStr} onChange={onStartDateChange}/>
+
+        <input type="date" className="date-input" value={endDateStr} onChange={onEndDateChange}/>
+
+        <div className="fx-wrap"><span>€→$</span><input className="fx-input" type="number" step="0.01" value={fxEuroToUsd} onChange={(e)=>setFxEuroToUsd(e.target.value)} /></div>
+
+
+
+        <button className="btn primary" onClick={saveQuote}>Save</button>
+
+      </div>
+
+
+
+      <div className="shell">
+
+        {/* Left rail */}
+
+        <div className="rail">
+
+          <div className="left-list">
+
+            <div className="left-group">
+
+              {q.days.map((d,i)=>(
+
+                <button key={d.id}
+
+                  className={`day-pill ${activeDayId===d.id ? "active":""}`}
+
+                  onClick={()=>{ setActiveDayId(d.id); const el=document.getElementById(`day-${d.id}`); el?.scrollIntoView({behavior:"smooth", block:"start"}); }}>
+
+                  <span>Day {i+1} — {d.destination||"—"}</span>
+
+                  <span className="small">{fmtDate(d.date)}</span>
+
+                </button>
+
+              ))}
+
+              {/* Total row */}
+
+              <button className="total-pill" onClick={totalScroll}>
+
+                <span>Total</span>
+
+                <span className="small">{money(calc.grandRounded,{digits:0})}</span>
+
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+
+        {/* COLONNE CENTRALE */}
+
+        <div className="center-rail">
+
+          <div className="page" id="wordPage">
+
+            {/* ---- tout ce qui suit doit être DEDANS ---- */}
+
+            {q.days.map((d, dayIdx)=>(
+
+              <div key={d.id} id={`day-${d.id}`} className="day-card">
+
+                <div className="day-title">Day {dayIdx+1} — {d.destination||"—"} — {fmtDate(d.date)}</div>
+
+
+
+                {d.lines.length===0 && <div className="hint">No services yet… Add from the right panel.</div>}
+
+
+
+                <div className="day-services">
+
+                  {d.lines.map((l, lineIdx)=>(
+
+                    <React.Fragment key={l.id}>
+
+                      <div className="service" data-index={lineIdx}>
+
+                        { (l.category==="Trip info" || l.category==="Internal info") ? (
+
+                          <div className="hint">This note will export to Word/Excel (Trip info), or remain internal (Internal info).</div>
+
+                        ) : (
+
+                          <div className="service-card">
+
+                            {/* Poignée de drag (seul élément draggable) */}
+
+                            <span
+
+                              className="drag-handle"
+
+                              title="Déplacer"
+
+                              draggable
+
+                              onDragStart={(e) => onDragStart(e, dayIdx, lineIdx)}
+
+                              onClick={(e) => e.preventDefault()}
+
+                            >
+
+                              ⋮⋮
+
+                            </span>
+
+
+
+                            {/* Le contenu actuel de ta carte (titre, badges, inputs…) */}
+
+                            <div className="service-body">
+
+                              <div className="service-head">
+
+                                <div className="service-title">
+
+                                  {l.title} <span className="badge">{l.category}</span>
+
+                                </div>
+
+                                {l.supplier_name && <div className="supplier">{l.supplier_name}</div>}
+
+                              </div>
+
+
+
+                              <div className="price-grid">
+
+                                <label className="field">
+
+                                  <span className="label">Prix d'achat €</span>
+
+                                  <input
+
+                                    className="et-input num"
+
+                                    type="number" step="0.01"
+
+                                    value={l.achat_eur ?? ''}
+
+                                    onChange={(e) => {
+
+                                      const eur = Number(e.target.value||0);
+
+                                      const fx  = Number((l.fx_rate ?? fxEuroToUsd) || 0.75);
+
+                                      const usd = eur ? Math.round(eur*fx*100)/100 : (l.achat_usd ?? 0);
+
+                                      updateLine(dayIdx, lineIdx, { achat_eur: eur, fx_rate: fx, achat_usd: usd });
+
+                                    }}
+
+                                  />
+
+                                </label>
+
+
+
+                                <label className="field">
+
+                                  <span className="label">€→$</span>
+
+                                  <input
+
+                                    className="et-input num"
+
+                                    type="number" step="0.01"
+
+                                    value={l.fx_rate ?? ''}
+
+                                    onChange={(e) => {
+
+                                      const fx  = Number(e.target.value||0);
+
+                                      const eur = Number(l.achat_eur||0);
+
+                                      const usd = eur ? Math.round(eur*fx*100)/100 : Number(l.achat_usd||0);
+
+                                      updateLine(dayIdx, lineIdx, { fx_rate: fx, achat_usd: usd });
+
+                                    }}
+
+                                  />
+
+                                </label>
+
+
+
+                                <label className="field">
+
+                                  <span className="label">Prix d'achat $</span>
+
+                                  <input
+
+                                    className="et-input num"
+
+                                    type="number" step="0.01"
+
+                                    value={l.achat_usd ?? ''}
+
+                                    onChange={(e) => {
+
+                                      const usd = Number(e.target.value||0);
+
+                                      const eur = Number(l.achat_eur||0);
+
+                                      const fx  = eur ? Math.round((usd/eur)*100)/100 : (l.fx_rate ?? fxEuroToUsd);
+
+                                      updateLine(dayIdx, lineIdx, { achat_usd: usd, fx_rate: fx });
+
+                                    }}
+
+                                  />
+
+                                </label>
+
+
+
+                                <label className="field">
+
+                                  <span className="label">Prix de vente $</span>
+
+                                  <input
+
+                                    className="et-input num"
+
+                                    type="number" step="0.01"
+
+                                    value={l.vente_usd ?? ''}
+
+                                    onChange={(e) => updateLine(dayIdx, lineIdx, { vente_usd: Number(e.target.value||0) })}
+
+                                  />
+
+                                </label>
+
+                              </div>
+
+                            </div>
+
+                          </div>
+
+                        )}
+
+                      </div>
+
+
+
+                      {/* Zone de dépôt AVANT la carte suivante (pour réordonner précisément) */}
+
+                      <div
+
+                        className="service-dropline"
+
+                        onDragOver={allowDrop}
+
+                        onDrop={(e) => dropBefore(e, dayIdx, lineIdx + 1)}
+
+                      />
+
+                    </React.Fragment>
+
+                  ))}
+
+                  {/* Zone de dépôt de fin */}
+
+                  <div
+
+                    className="day-dropzone"
+
+                    onDragOver={allowDrop}
+
+                    onDrop={(e) => dropOnDayEnd(e, dayIdx)}
+
+                  />
+
+                </div>
+
+              </div>
+
+            ))}
+
+
+
+            {/* ===== Excel-like preview (new spec) ===== */}
+
+            {renderExcelPreview()}
+
+          </div>
+
+        </div>
+
+
+
+        {/* Right rail */}
+
+        <div className="rail right">
+
+          <div className="catalog">
+
+            <input className="cat-button" placeholder="Search name / company" readOnly />
+
+            <div className="chipbar">
+
+              <span className="chip">Hotels</span>
+
+              <span className="chip">Activities</span>
+
+              <span className="chip">Transport</span>
+
+            </div>
+
+
+
+            <h4>Popular</h4>
+
+            <button className="cat-button">Louvre ticket — Tiqets <span className="chip">Activity</span> <span className="chip">Tiqets</span></button>
+
+            <button className="cat-button">Seine dinner cruise <span className="chip">Activity</span> <span className="chip">Bateaux</span></button>
+
+
+
+            <h4>Insert</h4>
+
+            <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Trip info")}>Trip info</button>
+
+            <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Internal info")}>Internal info</button>
+
+            <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Flight")}>Flight</button>
+
+            <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Train")}>Train</button>
+
+            <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "Ferry")}>Ferry</button>
+
+            <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "New Hotel")}>New Hotel</button>
+
+            <button className="cat-button" onClick={()=>addLine(activeDayId ?? q.days[0].id, "New Service")}>New Service</button>
+
+          </div>
+
+        </div>
+
+      </div>
+
     </div>
+
   );
+
 }
-
-export default QuoteEditor;
-

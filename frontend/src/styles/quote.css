@@ -1,0 +1,437 @@
+:root{
+  --ink:#e6eefc;
+  --ink-dim:#b7c3d9;
+  --bg:#091424;
+  --rail:#0c1a2f;
+  --page:#0f1f37;
+  --card:#122747;
+  --accent:#6ea8ff;
+  --accent-2:#98c1ff;
+  --danger:#ff7b7b;
+  --ok:#46d19e;
+  --left:280px;
+  --right:360px;
+  --top:52px;
+}
+
+html,body,#root{height:100%;}
+
+html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial;}
+
+*{box-sizing:border-box}
+
+.app{
+  display:grid;
+  grid-template-rows: var(--top) 1fr;
+  height:100%;
+}
+
+.topbar{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 12px;
+  background:var(--rail);
+  border-bottom:1px solid rgba(255,255,255,.06);
+}
+
+.brand{
+  font-weight:800;
+  font-size:20px;
+  color:#fff;
+  margin-right:8px;
+}
+
+.title-input{
+  flex:1;
+  min-width:360px; /* élargit le champ */
+  background:#0b1220;
+  color:#e6edf7;
+  border:1px solid #26334d;
+  border-radius:10px;
+  padding:10px 12px;
+  height:36px;
+}
+
+.fx-wrap{
+  display:flex;
+  align-items:center;
+  gap:6px;
+  color:#c7d2fe;
+}
+
+.fx-input{
+  width:84px;
+  text-align:right;
+  background:#0b1220;
+  color:#e6edf7;
+  border:1px solid #26334d;
+  border-radius:10px;
+  padding:10px 12px;
+  height:36px;
+}
+
+.id-input, .pax-input, .date-input{
+  background:#0b1220;
+  color:#e6edf7;
+  border:1px solid #26334d;
+  border-radius:10px;
+  padding:10px 12px;
+  height:36px;
+}
+
+.topbar input, .topbar button{
+  height:36px;border-radius:10px;border:1px solid rgba(255,255,255,.08);
+  background:#0b1830;color:var(--ink);padding:0 10px;
+}
+.btn{background:#1a2b4b;cursor:pointer;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:0 14px;height:36px;}
+.btn.primary{background:var(--accent);color:#061124;border:none}
+
+.shell{
+  display:grid;
+  grid-template-columns: var(--left) 1fr var(--right);
+  height:calc(100vh - var(--top));
+}
+
+.rail{
+  background:var(--rail);
+  overflow:auto;
+  border-right:1px solid rgba(255,255,255,.06);
+}
+.rail.right{border-right:none;border-left:1px solid rgba(255,255,255,.06)}
+
+.center-rail{
+  overflow:auto;
+  background:linear-gradient(180deg, var(--page), #0e1b31 60%, #0c1730);
+}
+
+
+.day-card{
+  background:rgba(255,255,255,.03);
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:14px;
+  padding:14px;
+  margin-bottom:14px;
+}
+
+.day-title{
+  font-weight:700;
+  margin-bottom:10px;
+}
+
+.service{
+  background:var(--card);
+  border:1px solid rgba(255,255,255,.06);
+  border-radius:12px;
+  padding:10px 12px;
+  margin:8px 0;
+}
+
+.service h4{
+  margin:0 0 6px 0; font-weight:600;
+}
+
+.line-prices{
+  display:grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap:8px;
+}
+.compact-price{
+  display:flex;flex-direction:column;gap:4px
+}
+.compact-price input{
+  width:100%;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.10);
+  background:#0b1830;color:var(--ink);padding:0 10px;
+}
+.hint{font-size:12px;color:var(--ink-dim)}
+
+.left-list{
+  padding:12px; position:sticky; top:0;
+}
+
+.left-group{
+  margin-bottom:12px;
+}
+
+.day-pill, .total-pill{
+  width:100%;
+  background:#0f203a;border:1px solid rgba(255,255,255,.08);
+  color:var(--ink);
+  padding:10px 12px;border-radius:12px; cursor:pointer;
+  text-align:left;
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:8px;
+}
+
+.day-pill.active{outline:2px solid var(--accent)}
+.total-pill{background:#10304c;}
+.small{color:var(--ink-dim);font-size:12px}
+
+.catalog{
+  padding:12px;
+}
+
+.catalog h4{margin:12px 0 8px 0}
+.catalog .chipbar{display:flex;gap:8px;margin:6px 0 10px 0}
+.chip{
+  border:1px solid rgba(255,255,255,.12); padding:6px 8px;border-radius:999px;
+  background:#102341;color:var(--ink-dim); font-size:12px;
+}
+.cat-button{
+  width:100%;background:#0f203a;border:1px solid rgba(255,255,255,.10);
+  color:var(--ink);padding:10px;border-radius:12px;margin:6px 0;cursor:pointer;text-align:left;
+}
+.cat-button:hover{background:#142b50}
+
+.table{
+  margin-top:12px;background:#0b1830;border:1px solid rgba(255,255,255,.08);
+  border-radius:16px; overflow:hidden;
+}
+.table.mini .trow{grid-template-columns: 1fr 180px 160px;}
+.table .tinput{
+  width:100%;height:34px;border-radius:10px;border:1px solid rgba(255,255,255,.10);
+  background:#0b1830;color:var(--ink);padding:0 10px;
+}
+.trow{display:grid; grid-template-columns: 200px 1fr 160px 120px 160px 160px; gap:0; }
+.tcell{padding:10px 12px;border-top:1px solid rgba(255,255,255,.07)}
+.trow.head .tcell{background:#10203a;font-weight:600;border-top:none}
+
+.num{ text-align:right }
+.fx{ font-size:12px; color:var(--ink-dim); margin-top:2px }
+
+.actions-bar{
+  display:flex;justify-content:flex-end;padding:12px 10px;background:#0f203a;border-top:1px solid rgba(255,255,255,.08)
+}
+.actions-bar .btn{
+  background:var(--accent);color:#031025;border:none;border-radius:12px;padding:10px 14px;cursor:pointer
+}
+.actions-bar .btn.secondary{background:#162a4d;color:var(--ink)}
+
+/* FX global (bandeau droit) */
+.topbar-right .fx-label {
+  color:#fff; font-weight:600; margin-right:8px; white-space:nowrap;
+}
+.topbar-right .fx-input {
+  width:86px; height:36px; border-radius:8px; padding:4px 8px;
+  background:#0f1a26; color:#e6edf3; border:1px solid #2a3b4d;
+}
+
+/* Rangée prix service */
+.line-price-row {
+  display: grid;
+  grid-template-columns: 1fr 110px 140px 140px; /* € | fx | $achat | $vente */
+  gap: 10px;
+  margin-top: 10px;
+}
+.lp-col { display: flex; flex-direction: column; gap: 4px; }
+.micro-label { font-size: 11px; opacity: .75; }
+.et-input {
+  background:#0f1a26; color:#e6edf3; border:1px solid #2a3b4d;
+  border-radius:8px; padding:8px 10px; font-size:14px;
+}
+.et-input::placeholder { color:#8aa0b3; }
+.input-xs {
+  height: 36px;
+  font-size: 14px;
+  padding: 8px 10px;
+}
+.line-supplier {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity:.8;
+}
+
+/* Fournisseur en petit après le titre */
+.svc-supplier {
+  font-size: 0.85rem;
+  opacity: 0.7;
+}
+
+/* Tableau compact */
+.quote-table th, .quote-table td {
+  padding: 8px 10px;
+  line-height: 1.15;
+}
+.quote-table thead th {
+  position: sticky;
+  top: 0;
+  background: rgba(10, 18, 30, 0.9);
+  backdrop-filter: blur(4px);
+}
+
+/* Colonnes un peu plus serrées */
+.quote-table .col-dest      { width: 14%; }
+.quote-table .col-service   { width: 28%; }
+.quote-table .col-eur       { width: 14%; }
+.quote-table .col-fx        { width: 12%; }
+.quote-table .col-usd       { width: 14%; }
+.quote-table .col-sell      { width: 18%; }
+
+/* Rail gauche: montrer le total plus dense */
+.left-rail .total-row {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 12px; border-radius:10px;
+  background: rgba(255,255,255,0.05);
+  cursor:pointer;
+}
+
+/* Tableau compact (déjà en place, je complète) */
+.et-table.table-compact th, .et-table.table-compact td { padding: 8px 10px; }
+.et-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.et-table .row-meta td { font-style: italic; color: #64748b; }
+.table-compact tfoot .totals td { font-weight: 600; border-top: 1px solid #2a3a4d; }
+
+.excel-card { margin-top: 12px; }
+.excel-title { margin: 8px 0 6px; font-weight: 600; opacity: .9; }
+
+.recap { margin-top: 14px; border-top: 1px solid #2a3a4d; padding-top: 12px; }
+.recap-row {
+  display: grid;
+  grid-template-columns: 1fr 180px;
+  margin: 6px 0;
+}
+.recap-row.grand { font-weight: 700; }
+.btn.recalc { margin-top: 8px; display:none; }
+
+/* Tableaux – garder l'existant ; juste un peu de densité sur petits écrans */
+@media (max-width: 1200px) {
+  .excel-like .table td, .excel-like .table th { padding:8px 10px; }
+  .input-xs { min-width:120px; }
+}
+
+/* Colonne centrale = page Word */
+.center-rail { padding: 12px; }
+
+.page {
+  background: #ffffff !important;
+  color: #0f172a;
+  border-radius: 16px;
+  box-shadow: 0 10px 24px rgba(2,6,23,0.12);
+  padding: 20px clamp(16px, 2.2vw, 28px);
+  max-width: 980px;           /* optionnel : largeur type page */
+  margin: 0 auto;             /* centre la page dans la colonne */
+}
+
+.page h2.day-title { margin: 6px 0 10px; }
+
+/* Neutralise les "cards" sombres à l'intérieur de la page */
+.page .card,
+.page .day-card,
+.page .et-panel,
+.page .excel-panel,
+.page .section {
+  background: transparent !important;
+  border: 1px solid #e5e7eb;
+  box-shadow: none;
+}
+
+/* Titres & textes */
+.page h1, .page h2, .page h3, .page h4 { color: #0f172a; }
+
+/* Tableau blanc */
+.page .et-table   { background:#fff; border:1px solid #e5e7eb; }
+.page .et-table th{ background:#f8fafc; color:#0f172a; }
+.page .et-table td{ color:#111827; }
+.page .et-table .num{ text-align:right; font-variant-numeric:tabular-nums; }
+
+/* Inputs plus lisibles sur fond blanc */
+.page .et-input { background:#ffffff; color:#0f172a; border:1px solid #d0d5dd; }
+.page .et-input:focus { outline: none; border-color:#2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+
+/* Cartes service sur la page blanche */
+.page .service-card{
+  display: grid;
+  grid-template-columns: 20px 1fr;
+  gap: 10px;
+  align-items: start;
+  padding: 10px 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  margin: 10px 0;
+}
+
+.service-body {
+  flex: 1;
+}
+
+.drag-handle {
+  user-select: none;
+  cursor: grab;
+  color: #9aa5b1;
+  font-weight: 700;
+  line-height: 1;
+  padding: 6px 2px;
+}
+.drag-handle:active { cursor: grabbing; }
+
+.day-services { position: relative; }
+
+.service-dropline {
+  height: 8px;
+  margin: 2px 0;
+}
+
+.day-dropzone {
+  height: 16px;
+  border: 2px dashed transparent;
+  border-radius: 8px;
+}
+
+.day-dropzone.dragover,
+.service-dropline.dragover {
+  border-color: #7c8cff;
+  background: rgba(124,140,255,0.10);
+}
+
+.service-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:8px;
+}
+
+.service-title{
+  font-weight:700;
+  color:#0f172a;
+}
+
+.badge{
+  margin-left:8px;
+  font-size:12px;
+  padding:2px 8px;
+  border-radius:999px;
+  background:#eef2ff;
+  color:#3730a3;
+}
+
+.supplier{
+  color:#475569;
+  font-size:13px;
+}
+
+/* Grille des prix (inputs plus compacts) */
+.price-grid {
+  display: grid;
+  grid-template-columns: 120px 80px 120px 120px; /* € | FX | $ | Vente */
+  gap: 8px;
+  align-items: center;
+}
+
+.price-grid input {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 14px;
+}
+
+.field .label{
+  display:block;
+  font-size:12px;
+  color:#64748b;
+  margin:0 0 4px;
+}
+
+.num{
+  text-align:right;
+  font-variant-numeric: tabular-nums;
+}
