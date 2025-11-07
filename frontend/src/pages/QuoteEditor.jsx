@@ -19,6 +19,19 @@ const parseNum = v => {
 
 };
 
+// Affichages
+const asMoney = (n) => `$${Number(n || 0).toFixed(2)}`;
+
+// Commission: afficher 16.27 quand margin_pct = 0.1627
+const fmtPct = (p) => (p == null ? '' : (Math.round((p * 100) * 100) / 100).toString());
+
+// Saisie utilisateur "16,27" ou "16.27" -> 0.1627
+const parsePct = (s) => {
+  const x = String(s ?? '').replace(',', '.').trim();
+  const num = Number(x);
+  return Number.isFinite(num) ? num / 100 : 0;
+};
+
 // Helpers à placer en haut du fichier (hors composant)
 
 const round2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
@@ -753,56 +766,34 @@ export default function QuoteEditor(){
 
 
 
-          {/* Récap final (comme avant) */}
+          {/* Récap final */}
+          <div className="summary-grid">
+            <div className="label">Prix d'achat (USD)</div>
+            <div></div>
+            <div className="value">{asMoney(calc.achatsTotal)}</div>
 
-          <div className="recap recap-grid">
-
-            <div className="recap-row sum-row">
-
-              <div className="sum-label">Prix d'achat (USD)</div>
-
-              <div></div>
-
-              <div className="sum-amount num">${totalUsd.toFixed(2)}</div>
-
+            <div className="label">Commission</div>
+            <div className="middle">
+              <input
+                className="pct-input"
+                value={fmtPct(q.margin_pct ?? 0.1627)}
+                onChange={(e) => {
+                  const pct = parsePct(e.target.value);
+                  setQ(prev => ({ ...prev, margin_pct: pct }));
+                }}
+                inputMode="decimal"
+              />
+              <span className="pct-suffix">%</span>
             </div>
+            <div className="value">{asMoney(calc.commission)}</div>
 
-            <div className="recap-row">
+            <div className="label">Prix de vente (USD)</div>
+            <div></div>
+            <div className="value">{asMoney(calc.ventes)}</div>
 
-              <div>Commission</div>
-
-              <div className="num">${round2(totalUsd * Number(q.margin_pct || 0)).toFixed(2)}</div>
-
-            </div>
-
-            <div className="recap-row sum-row">
-
-              <div className="sum-label">Prix de vente (USD)</div>
-
-              <div></div>
-
-              <div className="sum-amount num">${totalSell.toFixed(2)}</div>
-
-            </div>
-
-            <div className="recap-row grand sum-row">
-
-              <div className="sum-label">Total</div>
-
-              <div></div>
-
-              <div className="sum-amount num">
-
-                ${round2(totalUsd + (totalUsd * Number(q.margin_pct || 0)) + totalSell).toFixed(0)}
-
-              </div>
-
-            </div>
-
-
-
-            <button className="btn recalc" onClick={recalculateTotals}>Recalculate</button>
-
+            <div className="total label">Total</div>
+            <div></div>
+            <div className="total value">{asMoney(calc.grandRounded)}</div>
           </div>
 
         </div>

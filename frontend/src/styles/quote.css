@@ -357,6 +357,30 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .recap-row.grand { font-weight: 700; }
 .btn.recalc { margin-top: 8px; display:none; }
 
+.summary-grid{
+  display:grid;
+  grid-template-columns: 1fr 180px 160px; /* libellé | champ (%) | montant */
+  gap:10px 18px;
+  align-items:center;
+  margin-top: 12px;
+}
+
+.summary-grid .label{ font-weight:600; }
+.summary-grid .value{ text-align:right; }
+.summary-grid .middle{ display:flex; align-items:center; gap:6px; justify-self:stretch; }
+.pct-input{
+  width:100%;
+  height:36px;
+  border-radius:8px;
+  border:1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color:#fff;
+  text-align:right;
+  padding: 6px 10px;
+}
+.pct-suffix{ opacity:0.7; }
+.summary-grid .total{ font-weight:700; font-size:1.05rem; }
+
 /* Tableaux – garder l'existant ; juste un peu de densité sur petits écrans */
 @media (max-width: 1200px) {
   .excel-like .table td, .excel-like .table th { padding:8px 10px; }
