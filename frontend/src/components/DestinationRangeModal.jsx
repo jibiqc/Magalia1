@@ -14,12 +14,14 @@ export default function DestinationRangeModal({
   const [destinations, setDestinations] = useState([]);
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
-  const [nights, setNights] = useState(1);
+  const [nightsStr, setNightsStr] = useState("1");
   const [selectedDest, setSelectedDest] = useState(null);
   const [error, setError] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const debounceRef = useRef(null);
   const inputRef = useRef(null);
+  const nightsRef = useRef(null);
 
   if (!open) return null;
 
@@ -44,6 +46,7 @@ export default function DestinationRangeModal({
       if (query.trim().length === 0) {
         setDestinations([]);
         setSelectedDest(null);
+        setShowMenu(false);
         return;
       }
       setLoading(true);
@@ -56,6 +59,7 @@ export default function DestinationRangeModal({
         );
         setSelectedDest(exactMatch || null);
         setIsCreating(!exactMatch && query.trim().length > 0);
+        setShowMenu(true);
       } catch (err) {
         setError(`Failed to fetch destinations: ${err.message}`);
       } finally {
@@ -103,6 +107,7 @@ export default function DestinationRangeModal({
         setApplying(false);
         return;
       }
+      const nights = Math.max(1, parseInt(nightsStr || "1", 10));
       if (nights < 1) {
         setError("Nights must be at least 1");
         setApplying(false);
@@ -135,9 +140,10 @@ export default function DestinationRangeModal({
         }
 
         // Patch days
+        const nightsNum = Math.max(1, parseInt(nightsStr || "1", 10));
         await api.patchQuoteDays(qid, {
           start_date: startDate,
-          nights: nights,
+          nights: nightsNum,
           destination: destinationName,
           overwrite: true,
         });
@@ -156,10 +162,16 @@ export default function DestinationRangeModal({
     }
   };
 
-  const handleSelectDestination = (dest) => {
-    setQuery(dest.name);
-    setSelectedDest(dest);
+  const selectDestination = (name) => {
+    setQuery(name);
+    setSelectedDest({ name });
     setIsCreating(false);
+    setShowMenu(false); // CLOSE menu
+    setTimeout(() => nightsRef.current?.focus(), 0); // focus nights
+  };
+
+  const handleSelectDestination = (dest) => {
+    selectDestination(dest.name);
   };
 
   const backdrop = (
@@ -201,7 +213,7 @@ export default function DestinationRangeModal({
             <input type="text" value={startDate} readOnly className="readonly" />
           </div>
 
-          <div className="form-field">
+          <div className="form-field dest-typeahead" style={{ position: "relative", marginBottom: 10 }}>
             <label>Destination</label>
             <input
               ref={inputRef}
@@ -210,13 +222,19 @@ export default function DestinationRangeModal({
               onChange={(e) => {
                 setQuery(e.target.value);
                 setSelectedDest(null);
+                setShowMenu(true);
+              }}
+              onFocus={() => {
+                if (query.trim().length > 0 && destinations.length > 0) {
+                  setShowMenu(true);
+                }
               }}
               placeholder="Type to search..."
               className="typeahead-input"
             />
             {loading && <div className="typeahead-loading">Loading...</div>}
-            {!loading && query.trim().length > 0 && (
-              <div className="typeahead-dropdown">
+            {!loading && showMenu && query.trim().length > 0 && (
+              <div className="typeahead-dropdown" style={{ position: "absolute", left: 0, right: 0, top: "100%", maxHeight: 220, overflow: "auto", zIndex: 100000, background: "#222c42", border: "1px solid rgba(255,255,255,0.16)", borderRadius: 6, marginTop: 4 }}>
                 {destinations.length > 0 && (
                   <>
                     {destinations.map((dest) => (
@@ -233,10 +251,7 @@ export default function DestinationRangeModal({
                 {isCreating && (
                   <div
                     className="typeahead-option typeahead-create"
-                    onClick={() => {
-                      setSelectedDest({ name: query.trim() });
-                      setIsCreating(true);
-                    }}
+                    onClick={() => selectDestination(query.trim())}
                   >
                     Add new: <strong>{query.trim()}</strong>
                   </div>
@@ -248,10 +263,17 @@ export default function DestinationRangeModal({
           <div className="form-field">
             <label>Nights</label>
             <input
-              type="number"
-              min="1"
-              value={nights}
-              onChange={(e) => setNights(Math.max(1, parseInt(e.target.value) || 1))}
+              ref={nightsRef}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={nightsStr}
+              onChange={(e) => {
+                // keep only digits; allow empty while typing
+                const v = e.target.value.replace(/\D/g, "");
+                setNightsStr(v);
+              }}
+              placeholder="1"
             />
           </div>
 

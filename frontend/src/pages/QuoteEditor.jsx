@@ -3,6 +3,7 @@ import React, {useEffect, useMemo, useRef, useState} from "react";
 import "../styles/quote.css";
 import DestinationRangeModal from "../components/DestinationRangeModal";
 import { api } from "../lib/api";
+import { fmtDateShortISO, fmtDateLongISO } from "../utils/dateFmt";
 
 
 
@@ -22,21 +23,22 @@ const parseNum = v => {
 
 const round2 = (x) => Math.round((Number(x) || 0) * 100) / 100;
 
-const fmtDate = (iso) => {
+function isFirstOfDestBlock(days, idx){
+  const cur = days[idx];
+  if (!cur?.destination) return false;
+  if (idx === 0) return true;
+  return days[idx-1]?.destination !== cur.destination;
+}
 
-  try{
-
-    const d = new Date(iso+"T00:00:00");
-
-    const opt = {weekday:"long", year:"numeric", month:"long", day:"numeric"};
-
-    // English long form as demandé
-
-    return new Intl.DateTimeFormat("en-US", opt).format(d);
-
-  }catch{ return iso }
-
-};
+function countNightsFromIndex(days, idx){
+  const dest = days[idx]?.destination;
+  if (!dest) return 0;
+  let n = 1;
+  for (let j=idx+1;j<days.length;j++){
+    if (days[j]?.destination === dest) n++; else break;
+  }
+  return n;
+}
 
 
 
@@ -884,7 +886,18 @@ export default function QuoteEditor(){
               <div key={d.id} id={`day-${d.id}`} className="day-card">
 
                 <div className="day-title">
-                  <span>Day {dayIdx+1} — {d.destination||"—"} — {fmtDate(d.date)}</span>
+                  {(() => {
+                    const longDate = fmtDateLongISO(d.date);
+                    let title = longDate;
+                    if (isFirstOfDestBlock(q.days, dayIdx)) {
+                      const n = countNightsFromIndex(q.days, dayIdx);
+                      if (d.destination && n > 0) {
+                        title = `${longDate} : ${d.destination} for ${n} night${n>1?"s":""}`;
+                      }
+                    }
+                    return (
+                      <>
+                        <span>{title}</span>
                         <button
                           className="btn-xxs icon-only"
                           aria-label="Set destination for N nights"
@@ -897,6 +910,9 @@ export default function QuoteEditor(){
                         >
                           📍
                         </button>
+                      </>
+                    );
+                  })()}
                 </div>
 
 
