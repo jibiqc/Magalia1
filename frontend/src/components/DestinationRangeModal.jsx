@@ -84,14 +84,16 @@ export default function DestinationRangeModal({
       }
       
       const finalName = query.trim();
-    if (!finalName) {
-      setError("Destination name is required");
-      return;
-    }
-    if (nights < 1) {
-      setError("Nights must be at least 1");
-      return;
-    }
+      if (!finalName) {
+        setError("Destination name is required");
+        setApplying(false);
+        return;
+      }
+      if (nights < 1) {
+        setError("Nights must be at least 1");
+        setApplying(false);
+        return;
+      }
 
     try {
       let destinationName = finalName;
