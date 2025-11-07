@@ -737,13 +737,15 @@ export default function QuoteEditor(){
 
           {/* Récap final (comme avant) */}
 
-          <div className="recap">
+          <div className="recap recap-grid">
 
-            <div className="recap-row">
+            <div className="recap-row sum-row">
 
-              <div>Prix d'achat (USD)</div>
+              <div className="sum-label">Prix d'achat (USD)</div>
 
-              <div className="num">${totalUsd.toFixed(2)}</div>
+              <div></div>
+
+              <div className="sum-amount num">${totalUsd.toFixed(2)}</div>
 
             </div>
 
@@ -755,19 +757,23 @@ export default function QuoteEditor(){
 
             </div>
 
-            <div className="recap-row">
+            <div className="recap-row sum-row">
 
-              <div>Prix de vente (USD)</div>
+              <div className="sum-label">Prix de vente (USD)</div>
 
-              <div className="num">${totalSell.toFixed(2)}</div>
+              <div></div>
+
+              <div className="sum-amount num">${totalSell.toFixed(2)}</div>
 
             </div>
 
-            <div className="recap-row grand">
+            <div className="recap-row grand sum-row">
 
-              <div>Total</div>
+              <div className="sum-label">Total</div>
 
-              <div className="num">
+              <div></div>
+
+              <div className="sum-amount num">
 
                 ${round2(totalUsd + (totalUsd * Number(q.margin_pct || 0)) + totalSell).toFixed(0)}
 

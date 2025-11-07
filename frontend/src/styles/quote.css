@@ -311,6 +311,44 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .excel-title { margin: 8px 0 6px; font-weight: 600; opacity: .9; }
 
 .recap { margin-top: 14px; border-top: 1px solid #2a3a4d; padding-top: 12px; }
+
+/* Grille du récap (3 colonnes: label | edit | montant) */
+.summary-grid, .recap-grid {
+  display: grid;
+  grid-template-columns: 1fr 140px 140px; /* ajuste si besoin */
+  gap: 8px 12px;
+  align-items: center;
+}
+
+.sum-row { display: contents; }
+
+.sum-label { font-weight: 600; }
+
+.sum-edit {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-self: start;
+}
+
+.sum-pct {
+  width: 90px;             /* compact */
+  text-align: right;
+  padding-right: 24px;     /* place au suffixe % */
+}
+
+.sum-suffix {
+  position: absolute;
+  right: 8px;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.sum-amount {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .recap-row {
   display: grid;
   grid-template-columns: 1fr 180px;
