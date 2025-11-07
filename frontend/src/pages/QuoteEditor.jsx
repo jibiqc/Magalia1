@@ -26,7 +26,7 @@ const isPaidCategory = (cat) => {
   const paid = new Set([
     "Activity","Hotel","Transport","Private Transfer","Private","Small Group",
     "Tickets","Flight","Train","Ferry","Apartment","Villa","Private Driver",
-    "New Hotel","New Service","Cost"
+    "New Hotel","New Service","Cost","Car Rental"
   ]);
   return paid.has((cat||"").trim());
 };
