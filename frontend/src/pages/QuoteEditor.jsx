@@ -7,6 +7,9 @@ import { fmtDateShortISO, fmtDateLongISO } from "../utils/dateFmt";
 
 
 
+// Défaut global pour la marge
+const DEFAULT_MARGIN = 0.1627; // 16.27 %
+
 const money = (n=0, {digits=2}={}) => `$${(Number(n)||0).toFixed(digits)}`;
 
 const parseNum = v => {
@@ -28,14 +31,11 @@ const parseUsd = (s) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-// Commission: afficher 16.27 quand margin_pct = 0.1627
-const fmtPct = (p) => (p == null ? '' : (Math.round((p * 100) * 100) / 100).toString());
-
 // Saisie utilisateur "16,27" ou "16.27" -> 0.1627
 const parsePct = (s) => {
-  const x = String(s ?? '').replace(',', '.').trim();
-  const num = Number(x);
-  return Number.isFinite(num) ? num / 100 : 0;
+  const x = String(s ?? '').replace(',', '.').replace(/[^0-9.\-]/g,'').trim();
+  const n = Number(x);
+  return Number.isFinite(n) ? Math.max(0, n/100) : DEFAULT_MARGIN; // "16.27" -> 0.1627
 };
 
 // Helpers à placer en haut du fichier (hors composant)
@@ -123,7 +123,7 @@ const emptyQuote = () => ({
 
   ],
 
-  margin_pct: 0.1627,
+  margin_pct: DEFAULT_MARGIN,
 
   onspot_manual: null,
 
@@ -322,6 +322,8 @@ export default function QuoteEditor(){
     if (!quoteId) return;
     try {
       const quote = await api.getQuote(quoteId);
+      // Assurer que margin_pct a une valeur par défaut
+      if (quote.margin_pct == null) quote.margin_pct = DEFAULT_MARGIN;
       setQ(quote);
       setOpenId(String(quoteId));
     } catch (err) {
@@ -785,8 +787,8 @@ export default function QuoteEditor(){
             <div className="label">Commission</div>
             <div className="middle">
               <input
-                className="pct-input"
-                value={fmtPct(q.margin_pct ?? 0.1627)}
+                className="pct-cell"
+                value={((q.margin_pct ?? DEFAULT_MARGIN) * 100).toFixed(2)}
                 onChange={(e) => {
                   const pct = parsePct(e.target.value);
                   setQ(prev => ({ ...prev, margin_pct: pct }));

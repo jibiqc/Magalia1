@@ -68,7 +68,7 @@ class QuoteIn(BaseModel):
 
     # quote-level cost controls
 
-    margin_pct: Optional[float] = None
+    margin_pct: Optional[float] = 0.1627
 
     onspot_manual: Optional[float] = None
 

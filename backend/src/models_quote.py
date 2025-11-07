@@ -37,7 +37,7 @@ class Quote(Base):
 
     # ---- Cost fields (quote-level) ----
 
-    margin_pct = Column(DEC6, nullable=False, default=Decimal("0.1627"))   # 16.27%
+    margin_pct = Column(DEC6, nullable=False, server_default="0.1627")   # 16.27%
 
     onspot_manual = Column(DEC2, nullable=True)   # if set, overrides calc
 
