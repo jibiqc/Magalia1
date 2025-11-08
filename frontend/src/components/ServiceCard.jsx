@@ -172,21 +172,28 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
     }
     case "Car Rental": {
       const l = data;
-      // Line 1
-      title = `Pick up car in ${l?.pickup_loc || "?"}${l?.pickup_airport ? " " + l.pickup_airport : ""}, ${l?.vehicle_type || ""}${l?.transmission ? ` ${l.transmission.toLowerCase()}` : ""} ${l?.mileage || ""} ${l?.insurance || ""}`.replace(/\s+/g," ").trim();
+      const loc = l?.pickup_loc || "?";
+      const atAir = l?.pickup_airport ? " " + l.pickup_airport : "";
+      const vehicle = l?.vehicle_type || "";
+      const tx = (l?.transmission && l.transmission !== "Do not precise")
+        ? `${l.transmission.toLowerCase()}, `
+        : "";
+      const mileage = l?.mileage || "";
+      const ins = l?.insurance || "";
+      title = `Pick up car in ${loc}${atAir}, ${vehicle} ${tx}${mileage} ${ins}`.replace(/\s+/g," ").trim();
 
-      // One-way fee line if present
       const feeLine = (l?.one_way_fee && Number(l.one_way_fee) > 0)
         ? `Estimate One Way Fee: $${Number(l.one_way_fee).toFixed(0)} – to be paid locally`
         : "";
 
-      // Licence paragraph if checked
+      // description juste avant la licence
+      const desc = l?.description ? l.description : "";
       const licenceLine = l?.intl_driver_license
         ? `An international driver's license is mandatory to pick up the car. A physical hard copy is required, as digital copies are not accepted locally. Please note that it may take up to 15 days to obtain the license.`
         : "";
 
-      subtitle = ""; // not used
-      note = [feeLine, licenceLine].filter(Boolean).join("\n\n");
+      subtitle = ""; // non utilisé
+      note = [feeLine, desc, licenceLine].filter(Boolean).join("\n\n");
       break;
     }
   }

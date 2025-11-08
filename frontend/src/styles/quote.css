@@ -1134,6 +1134,30 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .service-card .svc-subtitle,
 .service-card .service-note { white-space: pre-line; }
 
+.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.radio-row{display:flex;gap:10px;align-items:center}
+.pill{display:inline-flex;gap:8px;align-items:center;padding:8px 12px;border-radius:12px;background:#e9edf3;color:#0f172a;cursor:pointer}
+.pill input{display:none}
+.pill.active{outline:2px solid #94a3b8;background:#f1f5f9}
+.modal-card .field small.help{opacity:.7;font-size:.85rem}
+.modal-card .radio-pills{display:flex;gap:10px;flex-wrap:wrap}
+.modal-card .radio-pill{padding:10px 14px;border:1px solid #cbd5e1;border-radius:12px;background:#eef2f6;color:#0f172a;font-weight:600}
+.modal-card .radio-pill.selected{border-color:#8ab4ff;background:#e6f0ff}
+
+/* segmented control */
+.seg{display:flex;gap:12px;flex-wrap:wrap}
+.seg-option{padding:10px 16px;border-radius:14px;border:1px solid #cfd6e3;background:#e8ecf3;color:#0f172a;opacity:.65;transition:.12s}
+.seg-option:hover{opacity:.9}
+.seg-option.selected{
+  opacity:1;
+  background:#fff;
+  color:#0b1220;
+  border:2px solid #3b82f6;
+  box-shadow:0 0 0 2px rgba(59,130,246,.16) inset;
+  font-weight:700
+}
+
 .icon-vert {
   display: inline-flex;
   align-items: center;

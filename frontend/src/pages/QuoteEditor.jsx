@@ -186,7 +186,7 @@ const emptyQuote = () => ({
 
   days: [
 
-    { id: crypto.randomUUID(), date:"2025-04-07", destination:"Paris", lines:[ newTripInfo() ] },
+    { id: crypto.randomUUID(), date:"2025-04-07", destination:"Paris", lines:[] },
 
     { id: crypto.randomUUID(), date:"2025-04-08", destination:"Paris", lines:[] },
 
@@ -258,28 +258,23 @@ export default function QuoteEditor(){
   // --- Drag & drop state & helpers ---
 
   const [dragging, setDragging] = useState(null);
+  const [hoverSlot, setHoverSlot] = useState({ day: -1, index: -1 });
 
+  const allowDrop = (e) => { 
+    e.preventDefault(); 
+    e.dataTransfer.dropEffect = 'move'; 
+  };
 
-
-  const onDragStart = (e, fromDay, fromIndex) => {
-
-    e.dataTransfer.effectAllowed = 'move';
-
-    e.dataTransfer.setData('text/plain', JSON.stringify({ fromDay, fromIndex }));
-
-    setDragging({ fromDay, fromIndex });
-
+  const readDnd = (e) => {
+    const raw = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
+    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
   };
 
 
 
-  const allowDrop = (e) => {
 
-    e.preventDefault();
 
-    e.dataTransfer.dropEffect = 'move';
 
-  };
 
 
 
@@ -317,40 +312,72 @@ export default function QuoteEditor(){
 
 
 
-  const dropBefore = (e, toDay, toIndex) => {
 
+  const dropBefore = (e, toDay, toDispIndex) => {
     e.preventDefault();
+    const meta = readDnd(e);
+    if (!meta) return;
 
-    const data = e.dataTransfer.getData('text/plain');
-
-    if (!data) return;
-
-    const { fromDay, fromIndex } = JSON.parse(data);
-
-    setQ((prev) => {
-
+    setQ(prev => {
       const next = structuredClone(prev);
+      const srcDay = next.days[meta.fromDay];
+      const dstDay = next.days[toDay];
 
-      const src = [...next.days[fromDay].lines];
+      const dstBack = [...(dstDay.lines || [])];
+      const srcBack = [...(srcDay.lines || [])];
 
-      const [moved] = src.splice(fromIndex, 1);
+      if (!meta.isLocal) {
+        // backend → backend
+        const fromIdx = meta.fromBackendIndex;
+        if (fromIdx < 0) return prev;
 
-      const dst = [...next.days[toDay].lines];
+        const [moved] = srcBack.splice(fromIdx, 1);
 
-      const insertAt = (fromDay === toDay && fromIndex < toIndex) ? toIndex - 1 : toIndex;
+        // compute backend insert index from visual index
+        let insertBackIdx = Math.min(Math.max(0, toDispIndex), dstBack.length);
+        // same-day downward adjustment
+        if (meta.fromDay === toDay && fromIdx < insertBackIdx) insertBackIdx -= 1;
 
-      dst.splice(insertAt, 0, moved);
+        dstBack.splice(insertBackIdx, 0, moved);
 
-      next.days[fromDay].lines = src;
+        next.days[meta.fromDay].lines = srcBack;
+        next.days[toDay].lines = dstBack;
+        next.dirty = true;
+        console.log('[dnd] drop backend', {fromIdx, insertBackIdx, toDispIndex});
+        return next;
+      }
 
-      next.days[toDay].lines = dst;
+      // local → update via localLines using absolute anchor
+      const dstBackLen = dstBack.length;
+      const insertLocalIdx = Math.max(0, toDispIndex - dstBackLen);
 
+      // defer to localLines so we keep one source of truth
+      setTimeout(() => {
+        setLocalLines(prevLL => {
+          const all = [...prevLL];
+          const old = all.findIndex(x => x.id === meta.lineId);
+          if (old < 0) return prevLL;
+          const [moved] = all.splice(old, 1);
+          moved.dayId = dstDay.id;
+
+          const dstLocals = all.filter(x => x.dayId === dstDay.id && !x.deleted);
+          const anchorId = dstLocals[insertLocalIdx]?.id;
+          if (anchorId) {
+            const anchorIdx = all.findIndex(x => x.id === anchorId);
+            all.splice(anchorIdx, 0, moved);
+          } else {
+            all.push(moved);
+          }
+          console.log('[dnd] drop local', {insertLocalIdx, toDispIndex, dstBackLen});
+          return all;
+        });
+      }, 0);
+
+      next.dirty = true;
       return next;
-
     });
 
-    setDragging(null);
-
+    setHoverSlot({ day:-1, index:-1 });
   };
 
 
@@ -642,8 +669,8 @@ export default function QuoteEditor(){
     setQ(prev=>{
       const days = prev.days.map(d=>{
         if (d.id!==dayId) return d;
-        const l = (category==="Trip info"||category==="Internal info")
-          ? (category==="Trip info" ? newTripInfo() : {...newTripInfo(), category:"Internal info", title:"Internal note (edit only here)"})
+        const l = (category==="Internal info")
+          ? {...newTripInfo(), category:"Internal info", title:"Internal note (edit only here)"}
           : newPayable(category, `New ${category}`);
         return {...d, lines:[...d.lines, l]};
       });
@@ -651,15 +678,46 @@ export default function QuoteEditor(){
     });
   };
 
-  const addLocalLine = (dayId, category, data) => {
-    const line = { id: uid(), dayId, category, data, isLocal: true, deleted: false };
-    setLocalLines(prev => [line, ...prev]);
-    console.log("[addLocalLine]", { dayId, category, data });
+  // --- Helpers ---------------------------------------------------------------
+  function ensureDropoffTripInfo(next, targetISO){
+    if (!targetISO) return;
+    const i = next.days.findIndex(d => d.date === targetISO);
+    if (i < 0) return;
+    const key = "drop off the car";
+    const norm = (s)=> (s||"").trim().toLowerCase();
+    const lines = next.days[i].lines || [];
+    const firstIdx = lines.findIndex(l => l.category==="Trip info" && norm(l.title)===key);
+    if (firstIdx === -1){
+      lines.push({ id: crypto.randomUUID(), category: "Trip info", title: "Drop off the car" });
+      next.days[i].lines = lines;
+    }else{
+      // garde la première occurrence uniquement
+      next.days[i].lines = lines.filter((l, idx) => !(l.category==="Trip info" && norm(l.title)===key && idx!==firstIdx));
+    }
+  }
+
+  const addLocalLine = (dayId, category, data={}) => {
+    const id = crypto.randomUUID();
+    setLocalLines(prev => [{ id, dayId, category, data, isLocal:true, deleted:false }, ...prev]);
+    setQ(prev => ({ ...prev, dirty: true }));
+
+    // Si Car Rental → s'assurer du Trip info "Drop off the car" à la date attendue
+    if (category === "Car Rental"){
+      const expectedISO = (data?.expected_dropoff_date || "").slice(0,10);
+      if (expectedISO){
+        setQ(prev => {
+          const next = structuredClone(prev);
+          ensureDropoffTripInfo(next, expectedISO);
+          return next;
+        });
+      }
+    }
   };
 
-  const findDayIdByDate = (iso) => {
-    const day = q.days.find(d => d.date === iso);
-    return day ? day.id : (q.days[0]?.id || null);
+  const findDayIdByISO = (iso) => {
+    if (!iso) return null;
+    const d = q.days.find(x => String(x.date).slice(0,10) === String(iso).slice(0,10));
+    return d ? d.id : null;
   };
 
   const openEditModal = useCallback((line) => {
@@ -714,6 +772,20 @@ export default function QuoteEditor(){
       const t = String(s || "").trim();
       return t.length > n ? t.slice(0, n - 1) + "…" : t;
     };
+    const clamp50 = (s) => (s || "").length > 50 ? (s.slice(0,50) + "…") : (s || "");
+    function excelServiceName(line){
+      const cat = (line.category || "").toLowerCase();
+      const d = line.data || line;
+      if (cat === "flight")  return clamp50(`Flight ${d.from || "?"}->${d.to || "?"}`);
+      if (cat === "train")   return clamp50(`Train ${d.from || "?"}->${d.to || "?"}`);
+      if (cat === "ferry")   return clamp50(`Ferry ${d.from || "?"}->${d.to || "?"}`);
+      if (cat === "new hotel" || cat === "hotel") return clamp50(d.hotel_name || line.hotel_name || "Hotel");
+      if (cat === "new service" || cat === "activity") return clamp50(d.title || line.title || "Service");
+      if (cat === "car rental") return "Car Rental";
+      if (cat === "cost") return clamp50(d.title || line.title || "Cost");
+      // Trip info / Internal info exclus
+      return clamp50(line.title || line.service_name || "—");
+    }
     const hotelLike = new Set(["hotel","new hotel"]);
     const destOf = (day, line) => {
       // Robust fallback chain
@@ -806,7 +878,7 @@ export default function QuoteEditor(){
 
         rows.push({
           dest: printedDest ? "" : destOf(day, line),
-          name: nameForGrid(line),
+          name: excelServiceName(line),
           eur, fx, usd, sell
         });
         printedDest = true;
@@ -827,21 +899,18 @@ export default function QuoteEditor(){
         const usd = (usdRaw===undefined || usdRaw===null || usdRaw==="") ? usdCalc : round2(parseLocaleFloat(usdRaw));
         const sell = round2(parseLocaleFloat(pricing.sale_usd || line.data?.sale_usd));
 
-        // Build a line-like object for nameForGrid helper
+        // Build a line-like object for excelServiceName helper
         const lineForName = { 
           category: line.category, 
-          raw_json: line.data || {},
-          hotel_name: line.data?.hotel_name, 
+          data: line.data || {},
           title: line.data?.title, 
-          service_name: line.data?.service_name,
-          from: line.data?.from,
-          to: line.data?.to
+          service_name: line.data?.service_name
         };
         // Build a line-like object for destOf helper (local lines don't have destination directly)
         const lineForDest = { destination: line.data?.destination, city: line.data?.city, data: line.data };
         rows.push({
           dest: destOf(day, lineForDest), // if needed we can wire active day destination later
-          name: nameForGrid(lineForName),
+          name: excelServiceName(lineForName),
           eur, fx, usd, sell
         });
       });
@@ -1171,25 +1240,15 @@ export default function QuoteEditor(){
                         title = `${longDate} : ${d.destination} for ${n} night${n>1?"s":""}`;
                       }
                     }
-                    return (
-                      <>
-                        <button
-                          className="day-pin btn-xxs icon-only"
-                          aria-label="Set destination for N nights"
-                          title="Set destination for N nights"
-                          onClick={() => {
-                            const qid = (q && q.id) || null;
-                            console.log("[dest] opening modal", { quoteId: qid, startDate: d.date });
-                            setDestModal({ open: true, quoteId: qid, startDate: d.date });
-                          }}
-                        >
-                          📍
-                        </button>
-                        <span>{title}</span>
-                      </>
-                    );
+                    return (<span>{title}</span>);
                   })()}
                 </div>
+                {/* head-of-day slot */}
+                <div
+                  className={`drop-slot ${hoverSlot.day===dayIdx && hoverSlot.index===0 ? 'over' : ''}`}
+                  onDragOver={(e)=>{allowDrop(e); setHoverSlot({day:dayIdx,index:0});}}
+                  onDrop={(e)=> dropBefore(e, dayIdx, 0)}
+                />
 
 
 
@@ -1199,7 +1258,12 @@ export default function QuoteEditor(){
                   {(() => {
                     const dayLocal = localLines.filter(l => l.dayId === d.id && !l.deleted);
                     const allLines = [...(d.lines||[]), ...dayLocal];
-                    return allLines.map((l, idx) => {
+                    const localCount = dayLocal.length;
+                    return allLines.map((l, dispIdx) => {
+                      // Skip legacy placeholders
+                      if ((l.category === "Trip info" || l.category === "Internal info") && (l.title || "").includes("edit me")) {
+                        return null; // hide legacy placeholders
+                      }
                       const isLocal = l.isLocal || dayLocal.some(ll => ll.id === l.id);
                       const lineIdx = isLocal ? -1 : d.lines.findIndex(line => line.id === l.id);
                       // Helper: update backend or local line seamlessly
@@ -1235,45 +1299,65 @@ export default function QuoteEditor(){
                         return l[field] ?? "";
                       };
                       return (
-                        <React.Fragment key={isLocal ? l.id : (l.id || `line-${idx}`)}>
-                          <ServiceCard
-                            line={lineData}
-                            onChangeLocalData={isLocal ? (newData)=>{
-                              setLocalLines(prev => prev.map(x => x.id===l.id ? { ...x, data:newData } : x));
-                            } : undefined}
-                            onEdit={() => {
-                              if (isLocal) {
-                                openEditModal(l);
-                              } else {
-                                // For backend lines, convert to local format for editing
-                                const editData = {
-                                  id: l.id,
-                                  category: l.category,
-                                  data: {
-                                    title: l.title || "",
-                                    body: l.raw_json?.body || "",
-                                    ...(l.raw_json || {})
-                                  }
-                                };
-                                openEditModal(editData);
-                              }
-                            }}
-                            onDuplicate={() => {
-                              if (isLocal) {
-                                addLocalLine(l.dayId, l.category, JSON.parse(JSON.stringify(l.data || {})));
-                              }
-                            }}
-                            onDelete={() => {
-                              if (isLocal) {
-                                setLocalLines(prev => prev.map(x => x.id===l.id ? {...x, deleted:true} : x));
-                                const victim = localLines.find(x => x.id === l.id);
-                                if (victim) setTrashLines(t => [victim, ...t]);
-                              } else {
-                                // For backend lines, we could mark for deletion or convert to local
-                                // For now, just remove from display (would need backend delete later)
-                              }
-                            }}
+                        <React.Fragment key={isLocal ? l.id : (l.id || `line-${dispIdx}`)}>
+                          <div
+                            className={`drop-slot ${hoverSlot.day===dayIdx && hoverSlot.index===dispIdx ? 'over':''}`}
+                            onDragOver={(e)=>{allowDrop(e); setHoverSlot({day:dayIdx,index:dispIdx});}}
+                            onDrop={(e)=> dropBefore(e, dayIdx, dispIdx)}
                           />
+                          {/* card wrapper */}
+                          <div className="draggable-wrap" onDragOver={allowDrop}>
+                            <ServiceCard
+                              line={lineData}
+                              onChangeLocalData={isLocal ? (newData)=>{
+                                setLocalLines(prev => prev.map(x => x.id===l.id ? { ...x, data:newData } : x));
+                              } : undefined}
+                              onDragFromHandle={(e)=>{
+                                const meta = {
+                                  fromDay: dayIdx,
+                                  fromBackendIndex: lineIdx,    // -1 if local
+                                  isLocal,
+                                  lineId: l.id,
+                                  fromDayId: d.id,
+                                };
+                                e.dataTransfer.effectAllowed = 'move';
+                                e.dataTransfer.setData('application/json', JSON.stringify(meta));
+                                e.dataTransfer.setData('text/plain', JSON.stringify(meta)); // fallback
+                                console.log('[dnd] dragstart', meta);
+                              }}
+                              onEdit={() => {
+                                if (isLocal) {
+                                  openEditModal(l);
+                                } else {
+                                  // For backend lines, convert to local format for editing
+                                  const editData = {
+                                    id: l.id,
+                                    category: l.category,
+                                    data: {
+                                      title: l.title || "",
+                                      body: l.raw_json?.body || "",
+                                      ...(l.raw_json || {})
+                                    }
+                                  };
+                                  openEditModal(editData);
+                                }
+                              }}
+                              onDuplicate={() => {
+                                if (isLocal) {
+                                  addLocalLine(l.dayId, l.category, JSON.parse(JSON.stringify(l.data || {})));
+                                }
+                              }}
+                              onDelete={() => {
+                                if (isLocal) {
+                                  setLocalLines(prev => prev.map(x => x.id===l.id ? {...x, deleted:true} : x));
+                                  const victim = localLines.find(x => x.id === l.id);
+                                  if (victim) setTrashLines(t => [victim, ...t]);
+                                } else {
+                                  // For backend lines, we could mark for deletion or convert to local
+                                  // For now, just remove from display (would need backend delete later)
+                                }
+                              }}
+                            />
                           {isPaidCategory(l.category) && (
                             <div className="price-row-one">
                               {/* Prix d'achat € */}
@@ -1369,9 +1453,23 @@ export default function QuoteEditor(){
                           {isPaidCategory(l.category) && !isLocal && lineIdx >= 0 && l.supplier_name && (
                             <div className="line-supplier">{l.supplier_name}</div>
                           )}
+                          </div>
                         </React.Fragment>
                       );
                     });
+                  })()}
+                  {/* end-of-day slot */}
+                  {(() => {
+                    const dayLocal = localLines.filter(l => l.dayId === d.id && !l.deleted);
+                    const allLines = [...(d.lines||[]), ...dayLocal];
+                    const endIndex = allLines.length;        // backend + locals
+                    return (
+                      <div
+                        className={`drop-slot ${hoverSlot.day===dayIdx && hoverSlot.index===endIndex ? 'over':''}`}
+                        onDragOver={(e)=>{allowDrop(e); setHoverSlot({day:dayIdx,index:endIndex});}}
+                        onDrop={(e)=> dropBefore(e, dayIdx, endIndex)}
+                      />
+                    );
                   })()}
                 </div>
 
@@ -1471,13 +1569,8 @@ export default function QuoteEditor(){
             const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
             const dayId = currentDay?.id;
             if (dayId) {
+              // quand on reçoit le payload Car Rental
               addLocalLine(dayId, "Car Rental", payload);
-              if (payload.expected_dropoff_date) {
-                const dropoffDayId = findDayIdByDate(payload.expected_dropoff_date);
-                if (dropoffDayId) {
-                  addLocalLine(dropoffDayId, "Trip info", { title: "Drop off the car", body: "" });
-                }
-              }
             }
             setCarModalOpen(false);
             setEditingLine(null);
