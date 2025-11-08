@@ -91,16 +91,17 @@ export default function FlightModal({
             />
           </div>
 
-          {/* Seat reservations toggle */}
-          <div className="field" style={{display:"flex", alignItems:"center", gap:"8px"}}>
+          {/* Seat reservations toggle — inline and compact */}
+          <div className="field flight-seats-row">
+            <label className="flight-seats-label" htmlFor="flight-seat-res">With seats reservation</label>
             <input
               id="flight-seat-res"
               type="checkbox"
               className="checkbox"
               checked={seat_res}
               onChange={e=>setSeatRes(e.target.checked)}
+              aria-label="With seats reservation"
             />
-            <label htmlFor="flight-seat-res" style={{margin:0}}>With seats reservation</label>
           </div>
 
           <TimeAmPmField
@@ -136,7 +137,12 @@ export default function FlightModal({
               onChange={(e) => setInternalNote(e.target.value)}
               placeholder=""
               rows={3}
+              maxLength={1000}
+              aria-describedby="flight-internalnote-counter"
             />
+            <div id="flight-internalnote-counter" className="char-counter">
+              {internal_note?.length || 0}/1000
+            </div>
           </div>
         </div>
 

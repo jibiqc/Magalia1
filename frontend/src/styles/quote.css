@@ -1171,6 +1171,23 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   color: var(--muted-foreground, #cbd5e1);
 }
 
+/* Flight modal small layout tweaks */
+.flight-seats-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.flight-seats-label {
+  margin: 0;
+}
+.char-counter {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.8;
+  text-align: right;
+}
+
 /* Insert grid */
 .insert-grid {
   display: grid;
