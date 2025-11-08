@@ -1163,6 +1163,14 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   color: #f5a524;
 }
 
+/* Time hint */
+.time-hint {
+  font-size: 12px;
+  opacity: 0.9;
+  margin-top: 4px;
+  color: var(--muted-foreground, #cbd5e1);
+}
+
 /* Insert grid */
 .insert-grid {
   display: grid;

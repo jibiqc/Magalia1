@@ -16,11 +16,21 @@ export default function FlightModal({
   const [arr_time, setArrTime] = useState(initialData?.arr_time || "");
   const [description, setDescription] = useState(initialData?.note || initialData?.description || "");
   const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
+  // New: seat reservations (default true)
+  const [seat_res, setSeatRes] = useState(
+    initialData?.seat_res !== undefined ? !!initialData.seat_res : true
+  );
 
   if (!open) return null;
 
   const handleSubmit = () => {
-    onSubmit({ from, to, airline, dep_time, arr_time, note: description, description, internal_note });
+    onSubmit({
+      from, to, airline,
+      dep_time, arr_time,
+      seat_res,
+      note: description, description,
+      internal_note
+    });
   };
 
   const backdrop = (
@@ -81,9 +91,31 @@ export default function FlightModal({
             />
           </div>
 
-          <TimeAmPmField label="Departure time" value24={dep_time} onChange={setDepTime} />
+          {/* Seat reservations toggle */}
+          <div className="field" style={{display:"flex", alignItems:"center", gap:"8px"}}>
+            <input
+              id="flight-seat-res"
+              type="checkbox"
+              className="checkbox"
+              checked={seat_res}
+              onChange={e=>setSeatRes(e.target.checked)}
+            />
+            <label htmlFor="flight-seat-res" style={{margin:0}}>With seats reservation</label>
+          </div>
 
-          <TimeAmPmField label="Arrival time" value24={arr_time} onChange={setArrTime} />
+          <TimeAmPmField
+            label="Departure time"
+            value24={dep_time}
+            onChange={setDepTime}
+            showHint
+          />
+
+          <TimeAmPmField
+            label="Arrival time"
+            value24={arr_time}
+            onChange={setArrTime}
+            showHint
+          />
 
           <div className="field">
             <label>Description</label>

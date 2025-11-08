@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { fmtAMPM } from "../utils/timeFmt";
-import PriceGrid from "./PriceGrid";
 
 // Helper to print duration as "3hrs 30mins"
 const humanDur = (d) => {
@@ -52,11 +51,13 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
       subtitle = "";
       note = data?.body || "";
       break;
-    case "Flight":
-      title = `${data?.airline||"Airline"} flight from ${data?.from||"?"} to ${data?.to||"?"}`;
+    case "Flight": {
+      const withSeats = data?.seat_res ? " with seats reservation" : "";
+      title = `${data?.airline||"Airline"} flight from ${data?.from||"?"} to ${data?.to||"?"}${withSeats}`;
       subtitle = `Departure at ${fmtAMPM(data?.dep_time)}; arrival at ${fmtAMPM(data?.arr_time)} – Schedule subject to change`;
       note = data?.note || "";
       break;
+    }
     case "Train": {
       const withSeats = data?.seat_res ? " with seat reservations" : "";
       title = `${data?.class_type || "First Class Train"} from ${data?.from||"?"} to ${data?.to||"?"}${withSeats}`;
@@ -171,17 +172,7 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
           </div>
         )}
         {category === "Cost" && <div className="badge-internal">Internal only</div>}
-        {category !== "Trip info" && category !== "Internal info" && (
-          <PriceGrid
-            value={data?.pricing}
-            onChange={(p)=>{
-              // persist into localLines
-              if (onChangeLocalData) {
-                onChangeLocalData({ ...data, pricing: p });
-              }
-            }}
-          />
-        )}
+        {/* Price inputs are now handled uniformly in QuoteEditor for all paying services */}
       </div>
     </div>
   );
