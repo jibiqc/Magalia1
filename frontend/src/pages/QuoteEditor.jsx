@@ -79,6 +79,38 @@ const parsePct = (s) => {
   return Number.isFinite(n) ? Math.max(0, n/100) : DEFAULT_MARGIN; // "16.27" -> 0.1627
 };
 
+// ---- Grid naming helpers ----
+const truncate50 = (s) => {
+  if (!s) return "—";
+  const t = String(s);
+  return t.length > 50 ? t.slice(0, 50) : t;
+};
+const nameForGrid = (line) => {
+  const cat = norm(line.category);
+  const r = line.raw_json || {};
+  // prefer raw_json fields, fall back to top-level keys if present
+  const from = r.from ?? line.from ?? "";
+  const to   = r.to   ?? line.to   ?? "";
+  switch (cat) {
+    case "flight":
+      return truncate50(`Flight ${from}->${to}`);
+    case "train":
+      return truncate50(`Train ${from}->${to}`);
+    case "ferry":
+      return truncate50(`Ferry ${from}->${to}`);
+    case "car rental":
+      return "Car Rental";
+    case "new hotel":
+      return truncate50(r.hotel_name ?? line.hotel_name ?? line.title ?? "Hotel");
+    case "new service":
+      return truncate50(r.title ?? line.title ?? "Service");
+    case "cost":
+      return truncate50(r.title ?? line.title ?? "Cost");
+    default:
+      return truncate50(line.title ?? line.service_name ?? "—");
+  }
+};
+
 // Helpers à placer en haut du fichier (hors composant)
 
 // --- Commission helpers (acceptent "16,27", "16.27%", "0,1627") ---
@@ -774,7 +806,7 @@ export default function QuoteEditor(){
 
         rows.push({
           dest: printedDest ? "" : destOf(day, line),
-          name: nameOf(line),
+          name: nameForGrid(line),
           eur, fx, usd, sell
         });
         printedDest = true;
@@ -795,13 +827,21 @@ export default function QuoteEditor(){
         const usd = (usdRaw===undefined || usdRaw===null || usdRaw==="") ? usdCalc : round2(parseLocaleFloat(usdRaw));
         const sell = round2(parseLocaleFloat(pricing.sale_usd || line.data?.sale_usd));
 
-        // Build a line-like object for nameOf helper
-        const lineForName = { category: line.category, hotel_name: line.data?.hotel_name, title: line.data?.title, service_name: line.data?.service_name };
+        // Build a line-like object for nameForGrid helper
+        const lineForName = { 
+          category: line.category, 
+          raw_json: line.data || {},
+          hotel_name: line.data?.hotel_name, 
+          title: line.data?.title, 
+          service_name: line.data?.service_name,
+          from: line.data?.from,
+          to: line.data?.to
+        };
         // Build a line-like object for destOf helper (local lines don't have destination directly)
         const lineForDest = { destination: line.data?.destination, city: line.data?.city, data: line.data };
         rows.push({
           dest: destOf(day, lineForDest), // if needed we can wire active day destination later
-          name: nameOf(lineForName),
+          name: nameForGrid(lineForName),
           eur, fx, usd, sell
         });
       });
