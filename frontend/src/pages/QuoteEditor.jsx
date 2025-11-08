@@ -31,6 +31,67 @@ const parseLocaleFloat = (s) => {
   return Number(String(s).trim().replace(/\s/g,"").replace(",", ".")) || 0;
 };
 
+// ---- Shared total computation used by Excel & left badge ----
+// Parité stricte avec l'Excel preview:
+// Total = Achats USD (incl. Onspot) + Commission% sur Achats + Ventes USD (incl. Hassle)
+function __isPaidCategoryLocal(cat) {
+  const c = String(cat || "").toLowerCase();
+  // même esprit que l'Excel preview: exclure Trip info / Internal*
+  if (c.startsWith("trip info")) return false;
+  if (c.startsWith("internal")) return false;
+  return true;
+}
+
+function computeTotalsUSD(q, localLines, { onspotUsed = 0, hassleUsed = 0, marginStr }) {
+  let achatsUsd = 0;
+  let ventesUsd = 0;
+
+  // Backend lines
+  (q?.days || []).forEach(d => {
+    (d?.lines || []).forEach(l => {
+      if (l?.deleted) return;
+      const cat = l?.category || "";
+      const isPaid = typeof isPaidCategory === "function"
+        ? isPaidCategory(cat)
+        : __isPaidCategoryLocal(cat);
+      if (!isPaid) return;
+
+      // backend fields
+      if (l?.achat_usd != null) achatsUsd += round2(parseLocaleFloat(l.achat_usd));
+      if (l?.vente_usd != null) ventesUsd += round2(parseLocaleFloat(l.vente_usd));
+    });
+  });
+
+  // Local lines
+  (localLines || []).forEach(ll => {
+    if (ll?.deleted) return;
+    const cat = ll?.category || "";
+    const isPaid = typeof isPaidCategory === "function"
+      ? isPaidCategory(cat)
+      : __isPaidCategoryLocal(cat);
+    if (!isPaid) return;
+
+    // local/temp pricing
+    const p = ll?.data?.pricing || ll?.data;
+    if (p) {
+      if (p.purchase_usd != null) achatsUsd += round2(parseLocaleFloat(p.purchase_usd));
+      if (p.sale_usd     != null) ventesUsd += round2(parseLocaleFloat(p.sale_usd));
+    }
+  });
+
+  // Agrégateurs
+  achatsUsd = round2(achatsUsd + round2(parseLocaleFloat(onspotUsed)));
+  ventesUsd = round2(ventesUsd + round2(parseLocaleFloat(hassleUsed)));
+
+  // Commission: même logique que l'Excel preview (pctStr → /100)
+  const pctStr = (marginStr ?? ((Number(q?.margin_pct || 0) * 100).toFixed(2)));
+  const commissionPct = round2(parseLocaleFloat(pctStr) / 100);
+  const commissionUsd = round2(achatsUsd * commissionPct);
+
+  const grandTotal = round2(achatsUsd + commissionUsd + ventesUsd);
+  return { achatsUsd: round2(achatsUsd), ventesUsd: round2(ventesUsd), commissionUsd, grandTotal };
+}
+
 const toStr = (v) => (v === undefined || v === null ? "" : String(v));
 
 const effectiveFx = (lineFx, globalFx) => {
@@ -614,7 +675,14 @@ export default function QuoteEditor(){
     return manual != null ? manual : round2(hassleDefault);
   }, [q.hassle_manual, hassleDefault]);
 
+  // Onspot/Hassle: use manual if set, else base/defaults; parse robustly (same as Excel preview)
+  const onspotUsed = round2(parseLocaleFloat(q?.onspot_manual ?? onspotBase ?? 0));
+  const hassleUsed = round2(parseLocaleFloat(q?.hassle_manual ?? hassleDefault ?? 0));
 
+  // Total mémoïsé pour le badge gauche, calqué sur l'Excel preview
+  const totalsForBadge = React.useMemo(() => {
+    return computeTotalsUSD(q, localLines, { onspotUsed, hassleUsed, marginStr });
+  }, [q, localLines, onspotUsed, hassleUsed, marginStr]);
 
   const calc = useMemo(()=>{
 
@@ -1207,7 +1275,7 @@ export default function QuoteEditor(){
               {/* Total row */}
 
               <button className="total-pill" onClick={totalScroll}>
-                <span>Total: <span className="total-amt">{money(calc.grandRounded,{digits:0})}</span></span>
+                <span>Total: <span className="total-amt">{money(totalsForBadge.grandTotal,{digits:2})}</span></span>
               </button>
 
             </div>
@@ -1362,90 +1430,73 @@ export default function QuoteEditor(){
                             <div className="price-row-one">
                               {/* Prix d'achat € */}
                               <input
-                                className="price-inp"
+                                className="price-inp price-eur"
                                 type="text" inputMode="decimal" placeholder="Prix d'achat €"
                                 value={toStr(isLocal ? getPrice("purchase_eur") : getPrice("achat_eur"))}
                                 onChange={(e)=> updateAnyLine(isLocal ? { purchase_eur: e.target.value } : { achat_eur: e.target.value })}
                                 onBlur={()=>{
                                   const eurVal = isLocal ? getPrice("purchase_eur") : getPrice("achat_eur");
-                                  const fxVal = isLocal ? getPrice("fx_eur_usd") : getPrice("fx_rate");
+                                  const fxVal  = isLocal ? getPrice("fx_eur_usd")   : getPrice("fx_rate");
                                   const eur = round2(parseLocaleFloat(eurVal));
                                   const fx  = effectiveFx(fxVal, fxEuroToUsd);
                                   const usd = round2(eur * fx);
                                   const usdVal = isLocal ? getPrice("purchase_usd") : getPrice("achat_usd");
                                   updateAnyLine(isLocal ? 
                                     { purchase_eur: eur, purchase_usd: eur>0 ? usd : usdVal } :
-                                    { achat_eur: eur, achat_usd: eur>0 ? usd : usdVal }
+                                    { achat_eur: eur,    achat_usd:   eur>0 ? usd : usdVal }
                                   );
                                 }}
                               />
 
                               {/* FX €→$ */}
                               <input
-                                className="price-inp"
+                                className="price-inp fx"
                                 type="text" inputMode="decimal" placeholder="€→$"
-                                value={
-                                  // display default FX if empty/zero
-                                  (() => {
-                                    const fxValRaw = isLocal ? getPrice("fx_eur_usd") : getPrice("fx_rate");
-                                    const fxVal = parseLocaleFloat(fxValRaw);
-                                    const displayFx = (!fxVal || fxVal <= 0) 
-                                      ? round4(parseLocaleFloat(fxEuroToUsd))
-                                      : round4(fxVal);
-                                    return toStr(displayFx);
-                                  })()
-                                }
+                                value={(() => {
+                                  const fxValRaw = isLocal ? getPrice("fx_eur_usd") : getPrice("fx_rate");
+                                  const fxVal = parseLocaleFloat(fxValRaw);
+                                  const displayFx = (!fxVal || fxVal <= 0) ? round4(parseLocaleFloat(fxEuroToUsd)) : round4(fxVal);
+                                  return toStr(displayFx);
+                                })()}
                                 onChange={(e)=> updateAnyLine(isLocal ? { fx_eur_usd: e.target.value } : { fx_rate: e.target.value })}
                                 onBlur={()=>{
-                                  // If empty or zero, commit default FX; always keep 4 decimals in state
-                                  const fxValRaw = isLocal ? getPrice("fx_eur_usd") : getPrice("fx_rate");
-                                  let fxVal = parseLocaleFloat(fxValRaw);
+                                  let fxVal = parseLocaleFloat(isLocal ? getPrice("fx_eur_usd") : getPrice("fx_rate"));
                                   if (!fxVal || fxVal <= 0) fxVal = parseLocaleFloat(fxEuroToUsd);
                                   const fx  = round4(fxVal);
-                                  const eurVal = isLocal ? getPrice("purchase_eur") : getPrice("achat_eur");
-                                  const eur = round2(parseLocaleFloat(eurVal));
+                                  const eur = round2(parseLocaleFloat(isLocal ? getPrice("purchase_eur") : getPrice("achat_eur")));
                                   const usd = eur>0 ? round2(eur * fx) : parseLocaleFloat(isLocal ? getPrice("purchase_usd") : getPrice("achat_usd"));
                                   const usdVal = isLocal ? getPrice("purchase_usd") : getPrice("achat_usd");
-                                  updateAnyLine(isLocal ?
-                                    { fx_eur_usd: fx, purchase_usd: eur>0 ? usd : usdVal } :
-                                    { fx_rate: fx, achat_usd: eur>0 ? usd : usdVal }
-                                  );
+                                  updateAnyLine(isLocal ? { fx_eur_usd: fx, purchase_usd: eur>0 ? usd : usdVal }
+                                                            : { fx_rate: fx,   achat_usd:    eur>0 ? usd : usdVal });
                                 }}
                               />
 
                               {/* Prix d'achat $ */}
                               <input
-                                className="price-inp"
+                                className="price-inp price-usd"
                                 type="text" inputMode="decimal" placeholder="Prix d'achat $"
                                 value={toStr(isLocal ? getPrice("purchase_usd") : getPrice("achat_usd"))}
                                 onChange={(e)=> updateAnyLine(isLocal ? { purchase_usd: e.target.value } : { achat_usd: e.target.value })}
                                 onBlur={()=>{
-                                  const usdVal = isLocal ? getPrice("purchase_usd") : getPrice("achat_usd");
-                                  const eurVal = isLocal ? getPrice("purchase_eur") : getPrice("achat_eur");
-                                  const usd = round2(parseLocaleFloat(usdVal));
-                                  const eur = round2(parseLocaleFloat(eurVal));
-                                  // Si € est saisi, on recalcule FX = $ / €
-                                  const fxVal = isLocal ? getPrice("fx_eur_usd") : getPrice("fx_rate");
-                                  const fx  = eur>0 ? round4(usd / eur) : round4(parseLocaleFloat(fxVal ?? fxEuroToUsd));
-                                  updateAnyLine(isLocal ?
-                                    { purchase_usd: usd, fx_eur_usd: fx } :
-                                    { achat_usd: usd, fx_rate: fx }
-                                  );
+                                  const usd = round2(parseLocaleFloat(isLocal ? getPrice("purchase_usd") : getPrice("achat_usd")));
+                                  const eur = round2(parseLocaleFloat(isLocal ? getPrice("purchase_eur") : getPrice("achat_eur")));
+                                  const fx  = eur>0 ? round4(usd / eur)
+                                                    : round4(parseLocaleFloat(isLocal ? getPrice("fx_eur_usd") : getPrice("fx_rate") ?? fxEuroToUsd));
+                                  updateAnyLine(isLocal ? { purchase_usd: usd, fx_eur_usd: fx }
+                                                            : { achat_usd: usd,   fx_rate:    fx });
                                 }}
                               />
 
-                              {/* Prix de vente $ (indépendant) */}
+                              {/* Prix de vente $ */}
                               <input
-                                className="price-inp"
+                                className="price-inp sell-usd"
                                 type="text" inputMode="decimal" placeholder="Prix de vente $"
                                 value={toStr(isLocal ? getPrice("sale_usd") : getPrice("vente_usd"))}
                                 onChange={(e)=> updateAnyLine(isLocal ? { sale_usd: e.target.value } : { vente_usd: e.target.value })}
-                                onBlur={()=> {
+                                onBlur={()=>{
                                   const sellVal = isLocal ? getPrice("sale_usd") : getPrice("vente_usd");
-                                  updateAnyLine(isLocal ? 
-                                    { sale_usd: round2(parseLocaleFloat(sellVal)) } :
-                                    { vente_usd: round2(parseLocaleFloat(sellVal)) }
-                                  );
+                                  updateAnyLine(isLocal ? { sale_usd: round2(parseLocaleFloat(sellVal)) }
+                                                            : { vente_usd: round2(parseLocaleFloat(sellVal)) });
                                 }}
                               />
                             </div>
