@@ -1331,13 +1331,6 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 
 /* ===== Price inputs: unified row layout ===== */
-.price-row-one {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  margin-top: 8px;
-}
-
 /* Base style for all price inputs in cards and summary */
 .price-inp,
 .money-cell {
@@ -1352,6 +1345,45 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   line-height: 1.2;
   outline: none;
   transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+/* Rangée des prix : compacte et alignée à droite */
+.price-row-one{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  width:100%;
+  justify-content:flex-end;
+  align-items:center;
+  margin:6px 0 2px;
+}
+
+/* Inputs compacts */
+.price-inp{
+  height:36px;
+  padding:6px 8px;
+  border-radius:10px;
+  font-size:14px;
+  text-align:right;           /* valeur alignée à droite */
+}
+.price-inp::placeholder{      /* laisser le libellé lisible */
+  color:#64748b;
+  text-align:left;
+  white-space:nowrap;
+}
+
+/* Largeurs minimales, juste pour lire le libellé */
+.price-eur{  width:150px; }
+.price-usd{  width:150px; }
+.price-sell{ width:160px; }
+.price-fx{   width:90px;  text-align:center; }
+
+/* Petits écrans laptop */
+@media (max-width: 1100px){
+  .price-row-one{ gap:6px; }
+  .price-eur, .price-usd{ width:140px; }
+  .price-sell{ width:150px; }
+  .price-fx{ width:84px; }
 }
 
 /* Dark card override for readability */
@@ -1421,12 +1453,6 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   color: #475569;
 }
 
-/* small screens: keep 4 columns but adjust gap */
-@media (max-width: 1280px) {
-  .price-row-one {
-    gap: 8px;
-  }
-}
 
 .service-head{display:flex;align-items:center;gap:8px}
 .service-title{flex:1 1 auto;min-width:0}
