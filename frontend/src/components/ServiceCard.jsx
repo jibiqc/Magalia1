@@ -1,6 +1,24 @@
 import React, { useState } from "react";
 import { fmtAMPM } from "../utils/timeFmt";
 
+// Small inline icon component used for actions and the info tip
+function Icon({ name, className = "", size = 18 }) {
+  const common = { width: size, height: size, className, fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round", role: "img" };
+  switch (name) {
+    case "move":
+      return (<svg viewBox="0 0 24 24" aria-label="Move" {...common}><path d="M12 3v6M12 15v6M3 12h6M15 12h6"/><path d="M12 3l-2 2m2-2l2 2M12 21l-2-2m2 2l2-2M3 12l2-2m-2 2l2 2M21 12l-2-2m2 2l-2 2"/><circle cx="12" cy="12" r="1.4"/></svg>);
+    case "delete":
+      return (<svg viewBox="0 0 24 24" aria-label="Delete" {...common}><path d="M4 7h16"/><path d="M10 3h4a2 2 0 0 1 2 2v2H8V5a2 2 0 0 1 2-2z"/><path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"/><path d="M10 11v6M14 11v6"/></svg>);
+    case "duplicate":
+      return (<svg viewBox="0 0 24 24" aria-label="Duplicate" {...common}><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M5 5h10a2 2 0 0 1 2 2v10"/></svg>);
+    case "edit":
+      return (<svg viewBox="0 0 24 24" aria-label="Edit" {...common}><path d="M4 20l4.6-1.2 8.9-8.9a2.2 2.2 0 0 0 0-3.1l-.2-.2a2.2 2.2 0 0 0-3.1 0L5.3 15.5 4 20z"/><path d="M13.5 6.5l4 4"/><path d="M4 20h6"/></svg>);
+    case "info":
+      return (<svg viewBox="0 0 24 24" aria-label="Internal note" {...common}><circle cx="12" cy="12" r="9"/><path d="M12 8h.01"/><path d="M11 11h2v6h-2"/></svg>);
+    default: return null;
+  }
+}
+
 // Helper to print duration as "3hrs 30mins"
 const humanDur = (d) => {
   if (!d) return "";
@@ -25,7 +43,7 @@ const displayUrl = (u) => {
   } catch { return u; }
 };
 
-export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onChangeLocalData }) {
+export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onChangeLocalData, onDragFromHandle }) {
   const { category } = line;
   // For backend lines, data might be in line directly; for local lines, it's in line.data
   const data = line.data || line;
@@ -52,24 +70,40 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
       note = data?.body || "";
       break;
     case "Flight": {
-      const withSeats = data?.seat_res ? " with seats reservation" : "";
-      title = `${data?.airline||"Airline"} flight from ${data?.from||"?"} to ${data?.to||"?"}${withSeats}`;
+      const withSeats =
+        data?.seat_res_opt === "with" ||            // new radio
+        data?.with_seats === true ||                // legacy checkbox if present
+        data?.seat_res === true;                    // parity with Train, just in case
+      title = `${data?.airline||"Airline"} flight from ${data?.from||"?"} to ${data?.to||"?"}${withSeats ? " with seat reservations" : ""}`;
       subtitle = `Departure at ${fmtAMPM(data?.dep_time)}; arrival at ${fmtAMPM(data?.arr_time)} – Schedule subject to change`;
       note = data?.note || "";
       break;
     }
     case "Train": {
-      const withSeats = data?.seat_res ? " with seat reservations" : "";
-      title = `${data?.class_type || "First Class Train"} from ${data?.from||"?"} to ${data?.to||"?"}${withSeats}`;
+      const base = `${data?.class_type || "First Class Train"} from ${data?.from||"?"} to ${data?.to||"?"}`;
+      const suffix = (data?.seat_res === false)
+        ? " without seat reservations (open seating)"
+        : " with seat reservations";
+      title = base + suffix;
       subtitle = `Departure at ${fmtAMPM(data?.dep_time)}; arrival at ${fmtAMPM(data?.arr_time)} – Schedule subject to change`;
       note = data?.note || "";
       break;
     }
-    case "Ferry":
-      title = `Ferry from ${data?.from||"?"} to ${data?.to||"?"}`;
+    case "Ferry": {
+      const cls = data?.class_type ? `${data.class_type} ` : "";
+      // Back-compat: legacy boolean seat_res
+      let suffix = "";
+      const choice = data?.seat_res_choice;
+      if (choice === "with")        suffix = " with seat reservations";
+      else if (choice === "without") suffix = " without seat reservations (open seating)";
+      else if (choice === "none")    suffix = "";
+      else if (data?.seat_res === true)  suffix = " with seat reservations";
+      else if (data?.seat_res === false) suffix = " without seat reservations (open seating)";
+      title = `${cls}Ferry from ${data?.from||"?"} to ${data?.to||"?"}${suffix}`;
       subtitle = `Departure ${fmtAMPM(data?.dep_time)}; Arrival ${fmtAMPM(data?.arr_time)} – Schedule subject to change`;
       note = data?.note || "";
       break;
+    }
     case "New Hotel": {
       const h = data;
       const stars = h?.stars && h.stars !== "NA" ? " " + "★".repeat(Math.min(5, Number(h.stars))) : " ****";
@@ -113,20 +147,38 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
   const internal = category==="Internal info" || category==="Cost";
   const isInternalOnly = category==="Internal info";
   const wrapperCls = `service-card ${internal ? "internal" : ""} ${category==="Trip info" ? "tripinfo":""}`;
+  const internalNote = (data && (data.internal_note || data.internalNote)) || line.internal_note || "";
 
   return (
     <div className={wrapperCls}>
-      <div className="svc-actions-col">
-        <button className="icon-vert" aria-label="Edit" onClick={onEdit}>✎</button>
-        <button className="icon-vert" aria-label="Duplicate" onClick={onDuplicate}>⧉</button>
-        <button className="icon-vert drag-handle" aria-label="Move" data-drag-handle="true">↕</button>
-        <button className="icon-vert" aria-label="Delete" onClick={onDelete}>🗑</button>
-      </div>
       <div className="svc-body">
         {/* Head row */}
         {title ? (
           <div className="service-head">
-            <div className="service-title">{title}</div>
+            <div className="service-title">
+              {title}
+              {internalNote ? (
+                <span className="svc-note-tip" tabIndex={0} aria-haspopup="dialog" aria-expanded="false" aria-label="Show internal note">
+                  <Icon name="info" className="svc-note-icon" />
+                  <span className="svc-note-tooltip" role="tooltip">{internalNote}</span>
+                </span>
+              ) : null}
+            </div>
+            <div className="svc-actions-inline" aria-label="Card actions">
+              {/* Order: Edit, Move, Duplicate, Delete */}
+              <button className="icon-vert" aria-label="Edit" onClick={onEdit}><Icon name="edit" /></button>
+              <button
+                className="icon-vert drag-handle"
+                aria-label="Move"
+                title="Drag to move"
+                draggable
+                onDragStart={(e)=> onDragFromHandle && onDragFromHandle(e)}
+              >
+                <Icon name="move" />
+              </button>
+              <button className="icon-vert" aria-label="Duplicate" onClick={onDuplicate}><Icon name="duplicate" /></button>
+              <button className="icon-vert" aria-label="Delete" onClick={onDelete}><Icon name="delete" /></button>
+            </div>
           </div>
         ) : null}
         {/* For internal info, show body directly */}

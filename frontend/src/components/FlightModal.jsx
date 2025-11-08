@@ -16,20 +16,20 @@ export default function FlightModal({
   const [arr_time, setArrTime] = useState(initialData?.arr_time || "");
   const [description, setDescription] = useState(initialData?.note || initialData?.description || "");
   const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
-  // New: seat reservations (default true)
-  const [seat_res, setSeatRes] = useState(
-    initialData?.seat_res !== undefined ? !!initialData.seat_res : true
+  // Seat reservation radio: "with" | "none" (default: with)
+  const [seat_res_opt, setSeatResOpt] = useState(
+    initialData?.seat_res_opt
+      ?? (initialData?.with_seats ? "with" : "none")
+      ?? "with"
   );
 
   if (!open) return null;
 
   const handleSubmit = () => {
     onSubmit({
-      from, to, airline,
-      dep_time, arr_time,
-      seat_res,
-      note: description, description,
-      internal_note
+      from, to, airline, dep_time, arr_time,
+      seat_res_opt,                    // persisted choice
+      note: description, description, internal_note
     });
   };
 
@@ -91,32 +91,28 @@ export default function FlightModal({
             />
           </div>
 
-          {/* Seat reservations toggle — inline and compact */}
-          <div className="field flight-seats-row">
-            <label className="flight-seats-label" htmlFor="flight-seat-res">With seats reservation</label>
-            <input
-              id="flight-seat-res"
-              type="checkbox"
-              className="checkbox"
-              checked={seat_res}
-              onChange={e=>setSeatRes(e.target.checked)}
-              aria-label="With seats reservation"
-            />
+          {/* Seat reservation (radio pills) */}
+          <div className="field">
+            <label>Seat reservation</label>
+            <div className="seat-radio">
+              <button
+                type="button"
+                className={`seat-pill ${seat_res_opt==="with" ? "active":""}`}
+                onClick={()=> setSeatResOpt("with")}
+              >With seat reservation</button>
+              <button
+                type="button"
+                className={`seat-pill ${seat_res_opt==="none" ? "active":""}`}
+                onClick={()=> setSeatResOpt("none")}
+              >Do not precise</button>
+            </div>
           </div>
 
-          <TimeAmPmField
-            label="Departure time"
-            value24={dep_time}
-            onChange={setDepTime}
-            showHint
-          />
-
-          <TimeAmPmField
-            label="Arrival time"
-            value24={arr_time}
-            onChange={setArrTime}
-            showHint
-          />
+          <div className="time-row">
+            <TimeAmPmField label="Departure time" value24={dep_time} onChange={setDepTime} />
+            <TimeAmPmField label="Arrival time" value24={arr_time} onChange={setArrTime} />
+          </div>
+          <div className="time-help">Enter time in AM/PM. Typing 13:30 will auto-convert to 1:30 PM.</div>
 
           <div className="field">
             <label>Description</label>

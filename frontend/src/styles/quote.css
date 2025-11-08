@@ -546,29 +546,40 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   font-variant-numeric: tabular-nums;
 }
 
-/* Modal styles */
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999; /* make sure it's above everything */
-  background: rgba(0,0,0,0.30); /* slightly lighter backdrop */
-}
 
-/* Wider modals for laptop */
-.modal-card {
-  width: 736px;
-  max-width: 920px;
-  background: #1b2436;        /* lighter than #0b1220 */
-  border: 1px solid rgba(255,255,255,0.14);
-  border-radius: 12px;
-  padding: 16px 16px 12px;
-  box-shadow: 0 12px 32px rgba(0,0,0,0.35);
-  max-height: 90vh;
-  overflow-y: auto;
+/* === Modals ============================================================ */
+.modal-backdrop{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9999;background:rgba(0,0,0,.30)}
+.modal-card{width:380px;max-width:92vw;background:#1b2436;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:16px 16px 12px;box-shadow:0 12px 32px rgba(0,0,0,.35);max-height:90vh;overflow-y:auto}
+
+/* Time fields row */
+.modal-card .time-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:720px){.modal-card .time-row{grid-template-columns:1fr}}
+.modal-card .time-help{font-size:12px;opacity:.8;margin-top:4px}
+
+/* A11y helper in case it's missing */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* Seat reservation segmented control (Train/Ferry) */
+.modal-card .seat-field{margin-top:8px}
+.modal-card .seatbox{display:flex;gap:12px;flex-wrap:wrap;align-items:stretch}
+.modal-card .seatopt{
+  display:flex;align-items:center;justify-content:center;
+  min-width:132px;height:46px;padding:10px 14px;border-radius:12px;
+  background:#EEF2F6;border:1px solid #E5EAF0;color:#0f172a;font-weight:600;
+  cursor:pointer;user-select:none;letter-spacing:.2px
 }
+.modal-card .seatopt:hover{background:#E9EFFB}
+.modal-card .seatopt.active{
+  background:#ffffff;border:2px solid #2563eb;
+  box-shadow:0 0 0 2px rgba(37,99,235,.12) inset
+}
+.modal-card .seatopt input{position:absolute;opacity:0;pointer-events:none}
+
+/* Seat reservation radio pills */
+.seat-radio{display:flex;gap:12px;flex-wrap:wrap}
+.seat-pill{border:1px solid #e5eaf0;background:#eef0f4;color:#0f172a;border-radius:14px;padding:10px 14px;font-weight:600}
+.seat-pill.active{outline:2px solid #2b65f5;background:#e9efff}
+.seat-pill:focus{outline:2px solid #7aa2ff}
 
 /* TrainModal — seat reservation radios (high-contrast "pills") */
 .field > fieldset{border:0;padding:0;margin:0}
