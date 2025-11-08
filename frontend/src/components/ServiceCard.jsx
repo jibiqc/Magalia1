@@ -82,6 +82,7 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
   const data = line.data || line;
   // Build a compact, read-only summary per category
   let title = category, subtitle = "", note = "", showMore = false;
+  const inlineBadges = [];
   const [expanded, setExpanded] = useState(false);
 
   switch(category){
@@ -97,11 +98,15 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
       // body in data.body
       note = data?.body || "";
       break;
-    case "Cost":
-      title = data?.title || "Cost";
-      subtitle = "";
-      note = data?.body || "";
+    case "Cost": {
+      const c = data; // {title, body}
+      title = c?.title || "Internal cost";
+      subtitle = ""; // rien sous le titre
+      // note visible sous le titre (avant la grille de prix)
+      note = c?.body || "";
+      inlineBadges.push(<span key="internal" className="internal-badge">Internal only</span>);
       break;
+    }
     case "Flight": {
       const withSeats = data?.seat_res === true ? " with seat reservations" : "";
       title = `${data?.airline||"Airline"} flight from ${data?.from||"?"} to ${data?.to||"?"}${withSeats}`;
@@ -203,6 +208,14 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
   const wrapperCls = `service-card ${internal ? "internal" : ""} ${category==="Trip info" ? "tripinfo":""}`;
   const internalNote = (data && (data.internal_note || data.internalNote)) || line.internal_note || "";
 
+  const meta = [];
+  if (category !== "Cost") {
+    if (data?.amount != null && data.amount !== "")
+      meta.push(`Amount: $${Number(data.amount||0).toFixed(2)}`);
+    if (data?.currency)
+      meta.push(`Currency: ${String(data.currency).toUpperCase()}`);
+  }
+
   return (
     <div className={wrapperCls}>
       <div className="svc-body">
@@ -217,6 +230,7 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
                   <span className="svc-note-tooltip" role="tooltip">{internalNote}</span>
                 </span>
               ) : null}
+              {inlineBadges?.length ? <span className="title-badges">{inlineBadges}</span> : null}
             </div>
             <div className="svc-actions-inline" aria-label="Card actions">
               {/* Order: Edit, Move, Duplicate, Delete */}
@@ -269,19 +283,11 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
             )}
           </>
         )}
-        {category === "Cost" && (
-          <div className="price-grid">
-            <div className="price-row">
-              <span className="price-label">Amount:</span>
-              <span className="price-value">{data?.amount ? `$${data.amount}` : "$0.00"}</span>
-            </div>
-            <div className="price-row">
-              <span className="price-label">Currency:</span>
-              <span className="price-value">{data?.currency || "USD"}</span>
-            </div>
+        {meta.length > 0 && (
+          <div className="svc-meta">
+            {meta.map((m,i)=><div key={i} className="meta-row">{m}</div>)}
           </div>
         )}
-        {category === "Cost" && <div className="badge-internal">Internal only</div>}
         {/* Price inputs are now handled uniformly in QuoteEditor for all paying services */}
       </div>
     </div>

@@ -1109,13 +1109,28 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   color: #9aa3b2;
 }
 
-/* Internal only card surface */
-/* Internal card — light gray variant for Cost / Internal info */
-/* Cartes Internal (Internal info + Cost) */
-.service-card.internal {
-  background: #D0D2D4;
-  border: 1px solid #c8ccd3;
-  color: #0f172a;
+/* Carte internal (Cost, Internal info) en gris clair */
+.service-card.internal{
+  background:#F5F7FA;
+  border:1px solid #E5EAF0;
+}
+
+/* Cache les lignes meta (Amount/Currency) pour les cartes internal (Cost, Internal info) */
+.service-card.internal .svc-meta { display: none; }
+
+/* Badge 'Internal only' à droite du titre */
+.title-badges{ margin-left:8px; display:inline-flex; gap:6px; vertical-align:middle; }
+.internal-badge{
+  display:inline-block;
+  padding:2px 6px;
+  font-size:11px;
+  line-height:1;
+  color:#334155;           /* foncé lisible */
+  background:#E8EEF6;      /* pastille douce */
+  border:1px solid #D7E2F0;
+  border-radius:6px;
+  text-transform:uppercase;
+  letter-spacing:.02em;
 }
 
 .badge-internal {
