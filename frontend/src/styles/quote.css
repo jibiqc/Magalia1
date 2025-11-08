@@ -570,6 +570,25 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   overflow-y: auto;
 }
 
+/* TrainModal — seat reservation radios (high-contrast "pills") */
+.field > fieldset{border:0;padding:0;margin:0}
+.radio-row{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px}
+.radio-option{position:relative;display:inline-block;cursor:pointer;user-select:none}
+.radio-option input{
+  position:absolute;inset:0;opacity:0;pointer-events:none;margin:0
+}
+.radio-option span{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:10px 14px;border:1px solid #E5EAF0;border-radius:12px;
+  background:#F5F7FA;color:#0F172A;line-height:1
+}
+.radio-option:hover span{background:#EEF1F6}
+.radio-option input:focus-visible + span{outline:2px solid #3B82F6;outline-offset:2px}
+.radio-option input:checked + span{
+  background:#EAF2FF;border-color:#3B82F6;font-weight:600;
+  box-shadow:0 0 0 2px rgba(59,130,246,.12) inset
+}
+
 /* Draggable wrapper to avoid text selection issues */
 .draggable-wrap {
   -webkit-user-drag: element;
