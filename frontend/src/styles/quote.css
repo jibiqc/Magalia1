@@ -1109,14 +1109,14 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   color: #9aa3b2;
 }
 
-/* Carte internal (Cost, Internal info) en gris clair */
-.service-card.internal{
-  background:#F5F7FA;
-  border:1px solid #E5EAF0;
-}
+/* Internal info card — fond clair + bordure */
+.service-card.internal { background: #F5F7FA; border: 1px solid #E5EAF0; }
 
-/* Cache les lignes meta (Amount/Currency) pour les cartes internal (Cost, Internal info) */
-.service-card.internal .svc-meta { display: none; }
+/* Badge Internal */
+.badge-internal{ background:#e8eef6; color:#0f172a; font-weight:600; padding:2px 8px; border-radius:8px; margin-left:8px; font-size:12px; }
+
+/* Masque meta si encore présent par héritage */
+.service-card.internal .svc-meta { display:none; }
 
 /* Badge 'Internal only' à droite du titre */
 .title-badges{ margin-left:8px; display:inline-flex; gap:6px; vertical-align:middle; }

@@ -82,22 +82,25 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
   const data = line.data || line;
   // Build a compact, read-only summary per category
   let title = category, subtitle = "", note = "", showMore = false;
+  let isInternal = false;
   const inlineBadges = [];
   const [expanded, setExpanded] = useState(false);
 
   switch(category){
-    case "Trip info":
-      title = data?.title || "Trip info";
-      const bodyText = data?.body || "";
-      subtitle = expanded ? bodyText : bodyText.slice(0, 80);
-      showMore = bodyText.length > 80;
+    case "Trip info": {
+      const s = data;
+      title = s?.title || "Trip info";
+      subtitle = "";
+      note = s?.body || "";
       break;
-    case "Internal info":
-      title = ""; // no title
-      subtitle = ""; // none
-      // body in data.body
+    }
+    case "Internal info": {
+      title = "Internal info";
+      subtitle = "";
       note = data?.body || "";
+      isInternal = true; // assure l'application du style fond clair + badge
       break;
+    }
     case "Cost": {
       const c = data; // {title, body}
       title = c?.title || "Internal cost";
@@ -203,13 +206,13 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
     }
   }
 
-  const internal = category==="Internal info" || category==="Cost";
+  const internal = category==="Internal info" || category==="Cost" || isInternal;
   const isInternalOnly = category==="Internal info";
   const wrapperCls = `service-card ${internal ? "internal" : ""} ${category==="Trip info" ? "tripinfo":""}`;
   const internalNote = (data && (data.internal_note || data.internalNote)) || line.internal_note || "";
 
   const meta = [];
-  if (category !== "Cost") {
+  if (category !== "Cost" && category !== "Trip info" && category !== "Internal info") {
     if (data?.amount != null && data.amount !== "")
       meta.push(`Amount: $${Number(data.amount||0).toFixed(2)}`);
     if (data?.currency)
@@ -231,6 +234,7 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
                 </span>
               ) : null}
               {inlineBadges?.length ? <span className="title-badges">{inlineBadges}</span> : null}
+              {isInternal && <span className="badge-internal">INTERNAL ONLY</span>}
             </div>
             <div className="svc-actions-inline" aria-label="Card actions">
               {/* Order: Edit, Move, Duplicate, Delete */}
@@ -253,7 +257,6 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
         {category === "Internal info" ? (
           <>
             {note && <div className="service-note svc-internal-note">{note}</div>}
-            <div className="badge-internal">Internal only</div>
           </>
         ) : (
           <>
