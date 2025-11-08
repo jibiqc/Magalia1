@@ -453,16 +453,9 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .page .et-input:focus { outline: none; border-color:#2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
 
 /* Cartes service sur la page blanche */
-.page .service-card{
-  display: grid;
-  grid-template-columns: 20px 1fr;
-  gap: 10px;
-  align-items: start;
-  padding: 10px 12px;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  margin: 10px 0;
+/* Remove any leftover 2-column grid for service cards */
+.page .service-card, .service-card {
+  display: block;
 }
 
 .service-body {
@@ -497,6 +490,9 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   border-color: #7c8cff;
   background: rgba(124,140,255,0.10);
 }
+
+/* Drop slots for insertion feedback */
+/* Drop slots */
 
 .service-head{
   display:flex;
@@ -561,9 +557,10 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   background: rgba(0,0,0,0.30); /* slightly lighter backdrop */
 }
 
+/* Wider modals for laptop */
 .modal-card {
-  width: 380px;               /* a bit wider */
-  max-width: 92vw;
+  width: 736px;
+  max-width: 920px;
   background: #1b2436;        /* lighter than #0b1220 */
   border: 1px solid rgba(255,255,255,0.14);
   border-radius: 12px;
@@ -571,6 +568,14 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   box-shadow: 0 12px 32px rgba(0,0,0,0.35);
   max-height: 90vh;
   overflow-y: auto;
+}
+
+/* Draggable wrapper to avoid text selection issues */
+.draggable-wrap {
+  -webkit-user-drag: element;
+  user-select: none;
+  margin-top: 2px;
+  margin-bottom: 2px;
 }
 
 .modal-overlay {
@@ -771,10 +776,6 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 
 /* ServiceCard styles */
-.service-card.internal {
-  background: #3a3000;
-}
-
 .badge-internal {
   font-size: 12px;
   opacity: 0.8;
@@ -908,8 +909,8 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   border-radius: 14px;
   padding: 18px 18px 14px;
   box-shadow: 0 14px 44px rgba(0,0,0,.35);
-  width: 420px;
-  maxWidth: 92vw;
+  width: 736px;
+  max-width: 920px;
 }
 
 .modal-title {
@@ -989,14 +990,15 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 
 /* ServiceCard - vertical action bar */
+/* Service card base */
 .service-card {
   display: grid;
-  grid-template-columns: 28px 1fr;
+  grid-template-columns: 1fr; /* no left gutter */
   gap: 10px;
   padding: 10px;
   border-radius: 10px;
-  border: 1px solid rgba(255,255,255,.14);
-  background: #0f1726;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 10pt;
 }
@@ -1063,53 +1065,82 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 
 /* Internal only card surface */
+/* Internal card — light gray variant for Cost / Internal info */
+/* Cartes Internal (Internal info + Cost) */
 .service-card.internal {
-  background: #2a2f3a;
-  border: 1px solid rgba(255,255,255,.12);
+  background: #D0D2D4;
+  border: 1px solid #c8ccd3;
+  color: #0f172a;
 }
 
-.svc-actions-col {
-  display: flex;
-  flex-direction: column;
+.badge-internal {
+  background: #ffffffa6;
+  color: #0f172a;
+  border: 1px solid #c8ccd3;
+}
+
+.svc-actions-inline {
+  display: inline-flex;
   gap: 6px;
-  align-items: center;
 }
 
 .icon-vert {
-  width: 24px;
-  height: 24px;
-  display: grid;
-  place-items: center;
-  border: 1px solid rgba(255,255,255,.18);
-  border-radius: 6px;
-  opacity: .9;
-  background: #192333;
-  color: var(--ink);
-  cursor: pointer;
-  font-size: 12px;
-}
-
-.icon-vert:hover {
-  opacity: 1;
-}
-
-.drag-handle {
-  cursor: grab;
-}
-
-.drag-handle:active {
-  cursor: grabbing;
-}
-
-.svc-body .service-head {
-  display: flex;
-  justify-content: space-between;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+}
+.icon-vert:hover, .icon-vert:focus-visible {
+  background: #f1f5f9;
+  outline: 2px solid transparent;
+}
+.drag-handle { cursor: grab; }
+.drag-handle:active { cursor: grabbing; }
+
+.service-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .service-title {
-  font-weight: 700;
-  font-size: 10pt;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-weight: 600;
+}
+
+/* Tooltip for internal note */
+.svc-note-tip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  color: #6b7280;
+}
+.svc-note-icon { width: 16px; height: 16px; }
+.svc-note-tip:focus-visible { outline: 2px solid #93c5fd; border-radius: 4px; }
+.svc-note-tooltip {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  min-width: 240px;
+  max-width: 420px;
+  background: #111827;
+  color: #f9fafb;
+  border-radius: 8px;
+  padding: 8px 10px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.25);
+  transform: translateY(6px);
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: normal;
+  display: none;
+}
+.svc-note-tip:hover .svc-note-tooltip,
+.svc-note-tip:focus-within .svc-note-tooltip {
+  display: block;
 }
 
 .badge-internal {
@@ -1237,8 +1268,8 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 /* Dark card override for readability */
 .service-card.internal .price-inp,
 .service-card.internal .money-cell {
-  background: rgba(255,255,255,0.06);
-  border-color: rgba(255,255,255,0.25);
+  background: #ffffff;
+  border-color: #d1d5db;
 }
 
 .price-inp::placeholder,
@@ -1247,7 +1278,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 .service-card.internal .price-inp::placeholder,
 .service-card.internal .money-cell::placeholder {
-  color: rgba(255,255,255,0.55);
+  color: #9ca3af;
 }
 
 .price-inp:focus,
@@ -1258,7 +1289,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 .service-card.internal .price-inp:focus,
 .service-card.internal .money-cell:focus {
-  background: rgba(255,255,255,0.1);
+  background: #ffffff;
 }
 
 /* Remove native number spinners across browsers */
@@ -1307,3 +1338,17 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
     gap: 8px;
   }
 }
+
+.service-head{display:flex;align-items:center;gap:8px}
+.service-title{flex:1 1 auto;min-width:0}
+
+/* Insertion bar between cards and at head/end of day */
+.drop-slot{height:14px; transition:all .12s ease}
+.drop-slot.over{
+  height:22px;               /* was 10px */
+  border-top:2px solid #E5EAF0;
+  background:#F5F7FA;        /* light hint behind the bar */
+  border-radius:2px;
+}
+
+.page .service-card{grid-template-columns:1fr !important}
