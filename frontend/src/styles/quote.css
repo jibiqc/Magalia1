@@ -589,6 +589,21 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   box-shadow:0 0 0 2px rgba(59,130,246,.12) inset
 }
 
+/* Row split: left Class type, right Seat reservation */
+.row-split{display:grid; grid-template-columns:minmax(240px,1fr) minmax(320px,1fr); gap:14px; align-items:end;}
+.modal-card .row-split{display:grid;}
+.row-split .seat-field label{display:block; margin-bottom:6px;}
+.row-split .seat-field{min-width:320px}
+@media (max-width: 880px){
+  .row-split{grid-template-columns:1fr;}
+}
+/* Seat radio pills */
+.seatbox{display:flex; gap:10px; flex-wrap:wrap; align-items:center}
+.seatopt{display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; background:#edf0f4; color:#475569; border:1px solid #e5eaf0; cursor:pointer; user-select:none; line-height:1.2}
+.seatopt span{white-space:normal}
+.seatopt.active{outline:2px solid #3b82f6; color:#0f172a; background:#eef6ff}
+.seatopt input.sr-only{position:absolute; opacity:0; width:1px; height:1px; overflow:hidden}
+
 /* Draggable wrapper to avoid text selection issues */
 .draggable-wrap {
   -webkit-user-drag: element;

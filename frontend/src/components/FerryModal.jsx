@@ -11,15 +11,25 @@ export default function FerryModal({
 }) {
   const [from, setFrom] = useState(initialData?.from || "");
   const [to, setTo] = useState(initialData?.to || "");
+  const [class_type, setClassType] = useState(initialData?.class_type || "");
   const [dep_time, setDepTime] = useState(initialData?.dep_time || "");
   const [arr_time, setArrTime] = useState(initialData?.arr_time || "");
   const [description, setDescription] = useState(initialData?.note || initialData?.description || "");
   const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
+  // Tri-state radio: "with" | "without" | "none"
+  const defaultSeat = initialData?.seat_res_choice || (initialData?.seat_res === true ? "with" : initialData?.seat_res === false ? "without" : "without");
+  const [seat_res_choice, setSeatChoice] = useState(defaultSeat);
 
   if (!open) return null;
 
   const handleSubmit = () => {
-    onSubmit({ from, to, dep_time, arr_time, note: description, description, internal_note });
+    onSubmit({
+      from, to,
+      class_type,
+      dep_time, arr_time,
+      seat_res_choice,
+      note: description, description, internal_note
+    });
   };
 
   const backdrop = (
@@ -69,9 +79,36 @@ export default function FerryModal({
             />
           </div>
 
+          {/* Row: Class type (left)  |  Seat reservation (right) */}
+          <div className="row-split">
+            <div className="field">
+              <label>Class type</label>
+              <input className="input" value={class_type} onChange={e=>setClassType(e.target.value)} placeholder="e.g., Economy, Business…" />
+            </div>
+            <div className="field seat-field">
+              <label>Seat reservation</label>
+              <div className="seatbox">
+                <label className={`seatopt ${seat_res_choice==="with"?"active":""}`}>
+                  <input type="radio" name="ferry-seat" className="sr-only" checked={seat_res_choice==="with"} onChange={()=>setSeatChoice("with")} />
+                  <span>with seat reservations</span>
+                </label>
+                <label className={`seatopt ${seat_res_choice==="without"?"active":""}`}>
+                  <input type="radio" name="ferry-seat" className="sr-only" checked={seat_res_choice==="without"} onChange={()=>setSeatChoice("without")} />
+                  <span>without seat reservations (open seating)</span>
+                </label>
+                <label className={`seatopt ${seat_res_choice==="none"?"active":""}`}>
+                  <input type="radio" name="ferry-seat" className="sr-only" checked={seat_res_choice==="none"} onChange={()=>setSeatChoice("none")} />
+                  <span>do not precise</span>
+                </label>
+              </div>
+            </div>
+          </div>
+
           <TimeAmPmField label="Departure time" value24={dep_time} onChange={setDepTime} />
 
           <TimeAmPmField label="Arrival time" value24={arr_time} onChange={setArrTime} />
+
+          <div className="help-line">Enter time in AM/PM. Typing 13:30 will auto-convert to 1:30 PM.</div>
 
           <div className="field">
             <label>Description</label>
