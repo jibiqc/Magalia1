@@ -716,8 +716,8 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 
 .modal-card .hint {
-  color: #aeb9d1;
-  font-size: 12px;
+  color: #94a3b8;
+  font-size: .8rem;
   margin-top: 4px;
 }
 
@@ -1129,6 +1129,11 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   gap: 6px;
 }
 
+/* Preserve explicit line breaks in secondary text */
+.service-card .service-subtitle,
+.service-card .svc-subtitle,
+.service-card .service-note { white-space: pre-line; }
+
 .icon-vert {
   display: inline-flex;
   align-items: center;
@@ -1234,9 +1239,9 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 
 /* Time warning */
 .time-warn {
-  margin-top: 4px;
-  font-size: 10pt;
-  color: #f5a524;
+  color: #d97706;
+  font-size: .85rem;
+  margin-top: 6px;
 }
 
 /* Time hint */
@@ -1397,3 +1402,8 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 
 .page .service-card{grid-template-columns:1fr !important}
+
+/* inline actions etc. */
+.inline-bools{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.inline-bools .checkbox{display:inline-flex;align-items:center;gap:8px;font-size:0.96rem}
+.inline-bools input[type="checkbox"]{width:16px;height:16px}

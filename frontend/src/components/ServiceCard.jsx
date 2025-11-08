@@ -19,14 +19,47 @@ function Icon({ name, className = "", size = 18 }) {
   }
 }
 
-// Helper to print duration as "3hrs 30mins"
-const humanDur = (d) => {
-  if (!d) return "";
-  const m = /(\d+)h(?:(\d{1,2}))?/.exec(d.trim());
-  if (!m) return d;
-  const H = parseInt(m[1]), M = parseInt(m[2]||"0");
-  return `Duration: ${H}hrs${M ? ` ${M}mins` : ""}`;
-};
+// Helper to print duration as "3h 30m" (from minutes)
+export function humanDur(d){
+  const n = Number(
+    typeof d === "string" ? d.trim() : d
+  );
+  if (!Number.isFinite(n) || n < 0) return "";
+  const mins = Math.round(n);
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h && m) return `${h}h ${m}m`;
+  if (h) return `${h}h`;
+  return `${m}m`;
+}
+
+// Parse duration strings like "3h30", "3h", "90m", "150"
+function prettyDur(v){
+  if (v == null) return "";
+  const t = String(v).trim();
+  if (!t) return "";
+  // 3h30 or 3:30 or "3 30"
+  let m = t.match(/^(\d+)\s*(?:h|:|\s)\s*(\d{1,2})$/i);
+  if (m) return humanDur(parseInt(m[1],10)*60 + parseInt(m[2],10));
+  // 3h
+  m = t.match(/^(\d+)\s*h$/i);
+  if (m) return humanDur(parseInt(m[1],10)*60);
+  // 90m / 90min
+  m = t.match(/^(\d+)\s*m(?:in)?$/i);
+  if (m) return humanDur(parseInt(m[1],10));
+  // plain minutes "150"
+  if (/^\d+$/.test(t)) return humanDur(parseInt(t,10));
+  // leave as-is if unknown format
+  return t;
+}
+
+function minsBetween24(a,b){
+  if (!a || !b) return null;
+  const [ah,am]=a.split(":").map(Number), [bh,bm]=b.split(":").map(Number);
+  if ([ah,am,bh,bm].some(x=>Number.isNaN(x))) return null;
+  const s=ah*60+am, e=bh*60+bm;
+  return e>=s ? (e-s) : -1;
+}
 
 // URL helpers for hotel links
 const normalizeUrl = (u) => {
@@ -70,11 +103,8 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
       note = data?.body || "";
       break;
     case "Flight": {
-      const withSeats =
-        data?.seat_res_opt === "with" ||            // new radio
-        data?.with_seats === true ||                // legacy checkbox if present
-        data?.seat_res === true;                    // parity with Train, just in case
-      title = `${data?.airline||"Airline"} flight from ${data?.from||"?"} to ${data?.to||"?"}${withSeats ? " with seat reservations" : ""}`;
+      const withSeats = data?.seat_res === true ? " with seat reservations" : "";
+      title = `${data?.airline||"Airline"} flight from ${data?.from||"?"} to ${data?.to||"?"}${withSeats}`;
       subtitle = `Departure at ${fmtAMPM(data?.dep_time)}; arrival at ${fmtAMPM(data?.arr_time)} – Schedule subject to change`;
       note = data?.note || "";
       break;
@@ -106,21 +136,38 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
     }
     case "New Hotel": {
       const h = data;
-      const stars = h?.stars && h.stars !== "NA" ? " " + "★".repeat(Math.min(5, Number(h.stars))) : " ****";
-      // Head line in bold color
-      title = `${h?.room_type || ""}${h?.breakfast ? ", breakfast & VAT taxes included" : ", VAT taxes included"} at ${h?.hotel_name || "Hotel"}${stars}`;
-      // Body long description (URL shown separately as link)
+      // Étoiles
+      const starCount = Number(h?.stars);
+      const stars =
+        h?.stars && h.stars !== "NA"
+          ? " " + "★".repeat(Math.min(5, isNaN(starCount) ? 0 : starCount))
+          : "";
+      // Bloc room
+      const room = h?.room_type ? `1 ${h.room_type}` : null;
+      // Options
+      const opts = [];
+      if (h?.early_checkin) opts.push("early check-in guaranteed");
+      opts.push(h?.breakfast ? "breakfast & VAT taxes included" : "VAT taxes included");
+      // Titre final
+      title = [room, opts.join(", "), `at ${h?.hotel_name || "Hotel"}${stars}`]
+        .filter(Boolean)
+        .join(", ");
       subtitle = "";
       note = h?.description || "";
       break;
     }
     case "New Service": {
-      const s = data;
-      title = s?.title || "Service";
-      const at = s?.start_time ? ` at ${fmtAMPM(s.start_time)}` : "";
-      const line2 = humanDur(s?.duration);
-      subtitle = [ (s?.start_time && s?.title) ? `${s.title}${at}` : "", line2 ].filter(Boolean).join("\n");
-      note = s?.description || "";
+      const s = data || {};
+      title = (s.title || "Service") + (s.start_time ? ` at ${fmtAMPM(s.start_time)}` : "");
+      const mins = minsBetween24(s.start_time, s.end_time);
+      let durationLine = "";
+      if (mins && mins > 0) durationLine = `Duration: ${humanDur(mins)}`;
+      else if (mins === -1) durationLine = "⚠ End time before start time";
+      else if (s.duration && String(s.duration).trim()!=="") {
+        durationLine = `Duration: ${prettyDur(s.duration)}`;
+      }
+      subtitle = [durationLine, s.description || ""].filter(Boolean).join("\n");
+      note = "";
       break;
     }
     case "Car Rental": {
@@ -189,7 +236,11 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
           </>
         ) : (
           <>
-            {subtitle && <div className="service-sub">{subtitle}</div>}
+            {subtitle ? (
+              <div className="service-subtitle" style={{ whiteSpace: "pre-line" }}>
+                {subtitle}
+              </div>
+            ) : null}
             {showMore && (
               <button className="show-more-btn" onClick={() => setExpanded(!expanded)}>
                 {expanded ? "Show less" : "Show more"}
