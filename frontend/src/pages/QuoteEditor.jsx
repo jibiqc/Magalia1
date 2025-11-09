@@ -612,6 +612,13 @@ export default function QuoteEditor(){
     return idx >= 0 ? idx : -1;
   }, [q, activeDayId]);
 
+  // Ensure we always have an active day when days exist
+  useEffect(() => {
+    if (!activeDayId && (q?.days?.length || 0) > 0) {
+      setActiveDayId(q.days[0].id);
+    }
+  }, [q?.days, activeDayId]);
+
   function makeNewDay(protoDest = "", dateISO) {
     return {
       id: (typeof crypto!=="undefined" && crypto.randomUUID) ? crypto.randomUUID() : uid(),
@@ -623,37 +630,29 @@ export default function QuoteEditor(){
   }
 
   const insertDayAt = useCallback((atIndex) => {
-    const days = [...(q?.days || [])];
-    if (days.length >= 90) { showNotice("Max 90 days", "info"); return; }
-    // Insert exactly at requested index (bounded to 0..length)
-    const clampIdx = Math.max(0, Math.min(atIndex, days.length));
-    const ref = days[Math.min(clampIdx, Math.max(0, days.length-1))];
-    // Compute tentative start_date (may be shifted if inserting at index 0)
-    let nextStart = q.start_date || null;
-    if (nextStart && clampIdx === 0) {
-      // Inserting before the first day: move the start one day earlier
-      nextStart = addDaysISO(nextStart, -1);
-    }
-    // Compute date for the new day from the effective start reference if available
-    const startRef = nextStart || q.start_date || null;
-    const dateISO = startRef
-      ? addDaysISO(startRef, clampIdx)
-      : (ref?.date || new Date().toISOString().slice(0,10));
-    const newDay = makeNewDay(ref?.destination || "", dateISO);
-    days.splice(clampIdx, 0, newDay);
-    const normalized = normalizeQuotePositions({ ...q, days });
-    // If we have a start reference, recompute the pair (start_date, end_date) atomically
-    let nextEnd = q.end_date || null;
-    if (startRef) {
-      const effStart = nextStart || q.start_date; // nextStart if we shifted, else current start
-      nextEnd = addDaysISO(effStart, Math.max(0, normalized.days.length - 1));
-      setQ(prev => ({ ...prev, days: normalized.days, start_date: effStart, end_date: nextEnd, dirty: true }));
-    } else {
-      // No start date set: only days change
-      setQ(prev => ({ ...prev, days: normalized.days, dirty: true }));
-    }
-    setActiveDayId(newDay.id);
-  }, [q, showNotice]);
+    setQ(prev => {
+      const prevDays = Array.isArray(prev?.days) ? [...prev.days] : [];
+      if (prevDays.length >= 90) { showNotice("Max 90 days", "info"); return prev; }
+      const clampIdx = Math.max(0, Math.min(atIndex, prevDays.length));
+      const ref = prevDays[Math.min(clampIdx, Math.max(0, prevDays.length - 1))];
+      // Shift start_date if inserting before the first day
+      const hadStart = !!prev.start_date;
+      const shiftedStart = hadStart && clampIdx === 0 ? addDaysISO(prev.start_date, -1) : prev.start_date;
+      const startRef = shiftedStart || prev.start_date || null;
+      const dateISO = startRef
+        ? addDaysISO(startRef, clampIdx)
+        : (ref?.date || new Date().toISOString().slice(0,10));
+      const newDay = makeNewDay(ref?.destination || "", dateISO);
+      prevDays.splice(clampIdx, 0, newDay);
+      const normalized = normalizeQuotePositions({ ...prev, days: prevDays });
+      // Recompute end if we have an effective start
+      const effStart = shiftedStart || prev.start_date || null;
+      const nextEnd = effStart ? addDaysISO(effStart, Math.max(0, normalized.days.length - 1)) : prev.end_date;
+      // Set new active to the inserted day
+      setActiveDayId(newDay.id);
+      return { ...prev, days: normalized.days, start_date: effStart || prev.start_date, end_date: nextEnd, dirty: true };
+    });
+  }, [showNotice]);
 
   const insertDayBefore = useCallback(() => {
     const idx = findActiveIndex();
@@ -666,6 +665,32 @@ export default function QuoteEditor(){
     if (idx < 0) { showNotice("Select a day first", "info"); return; }
     insertDayAt(idx + 1);
   }, [findActiveIndex, insertDayAt, showNotice]);
+
+  // --- Global shift of the whole date window by ±1 day ---
+  const shiftDates = useCallback((delta) => {
+    if (!q?.start_date || !q?.end_date) {
+      showNotice("Set start/end dates first", "info");
+      return;
+    }
+    const nextStart = addDaysISO(q.start_date, delta);
+    const nextEnd   = addDaysISO(q.end_date,   delta);
+    setQ(prev => ({ ...prev, start_date: nextStart, end_date: nextEnd, dirty: true }));
+    showNotice(delta < 0 ? "Dates shifted −1" : "Dates shifted +1", "success");
+  }, [q, showNotice]);
+
+  // Keyboard shortcuts: [ = −1, ] = +1 (disabled in inputs and with modifiers)
+  useEffect(() => {
+    const onKey = (e) => {
+      const tag = (e.target?.tagName || "").toUpperCase();
+      const isTyping = tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || e.isComposing;
+      const hasMods = e.altKey || e.ctrlKey || e.metaKey || e.shiftKey;
+      if (isTyping || hasMods) return;
+      if (e.key === "[") { e.preventDefault(); shiftDates(-1); }
+      if (e.key === "]") { e.preventDefault(); shiftDates(+1); }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [shiftDates]);
 
   // --- Delete active day with min=1 and contiguous dates ---
   const deleteActiveDay = useCallback(() => {
@@ -801,38 +826,37 @@ export default function QuoteEditor(){
 
 
 
-  // rebuild between start/end if needed
-
-  useEffect(()=>{
-
-    const d0 = new Date(q.start_date+"T00:00:00");
-
-    const d1 = new Date(q.end_date+"T00:00:00");
-
+  // Rebuild between start/end if and only if current days do not already match
+  useEffect(() => {
+    const d0 = new Date(q.start_date + "T00:00:00");
+    const d1 = new Date(q.end_date + "T00:00:00");
     if (isNaN(d0) || isNaN(d1)) return;
+    const n = Math.max(1, Math.round((d1 - d0) / 86400000) + 1);
+    const isoAt = (i) => new Date(d0.getTime() + i * 86400000).toISOString().slice(0, 10);
 
-    const n = Math.max(1, Math.round((d1 - d0)/(24*3600*1000))+1);
+    // Guard: if length and all dates already match, no-op
+    const sameLen = (q.days || []).length === n;
+    const datesMatch = sameLen && (q.days || []).every((d, i) => d?.date === isoAt(i));
+    if (datesMatch) return;
 
-    const days = Array.from({length:n}, (_,i)=>{
-
-      const iso = new Date(d0.getTime()+i*86400000).toISOString().slice(0,10);
-
-      const existing = q.days[i];
-
-      return existing
-        ? { ...existing, date: iso }
-        : { id: crypto.randomUUID(), date: iso, destination: q.days[0]?.destination ?? "", lines:[] };
-
-    });
-
-    const normalized = normalizeQuotePositions({ ...q, days });
-
-    setQ(prev => ({ ...prev, days: normalized.days, dirty: prev.dirty }));
-
-    if (!activeDayId && days.length) setActiveDayId(days[0].id);
-
+    // Rebuild from current order, preserving positions; adjust dates by index
+    const cur = Array.isArray(q.days) ? [...q.days] : [];
+    // Extend or truncate at the end only
+    if (cur.length < n) {
+      const protoDest = cur[0]?.destination ?? "";
+      for (let i = cur.length; i < n; i += 1) {
+        cur.push({ id: crypto.randomUUID(), date: isoAt(i), destination: protoDest, lines: [] });
+      }
+    } else if (cur.length > n) {
+      cur.length = n;
+    }
+    for (let i = 0; i < n; i += 1) {
+      if (cur[i]) cur[i] = { ...cur[i], date: isoAt(i) };
+    }
+    const normalized = normalizeQuotePositions({ ...q, days: cur });
+    setQ((prev) => ({ ...prev, days: normalized.days, dirty: prev.dirty }));
+    if (!activeDayId && n > 0) setActiveDayId(cur[0].id);
   // eslint-disable-next-line
-
   }, [q.start_date, q.end_date]);
 
 
@@ -1459,12 +1483,32 @@ export default function QuoteEditor(){
           <div className="left-list">
 
             <div className="left-group">
+              {/* Global date shift controls */}
+              <div style={{display:"flex", gap:8, marginBottom:8}}>
+                <button
+                  className="day-pill"
+                  onClick={() => shiftDates(-1)}
+                  title="Shift all dates −1 day ([)"
+                  disabled={!q?.start_date || !q?.end_date}
+                >
+                  Shift −1
+                </button>
+                <button
+                  className="day-pill"
+                  onClick={() => shiftDates(+1)}
+                  title="Shift all dates +1 day (])"
+                  disabled={!q?.start_date || !q?.end_date}
+                >
+                  Shift +1
+                </button>
+              </div>
+
               {/* Insert/Delete controls ABOVE the day list */}
               <button
                 className="day-pill"
                 onClick={insertDayBefore}
                 title="Insert day before active"
-                disabled={!activeDayId}
+                disabled={!activeDayId || findActiveIndex() < 0}
               >
                 + Before
               </button>
@@ -1510,7 +1554,7 @@ export default function QuoteEditor(){
                 className="day-pill"
                 onClick={insertDayAfter}
                 title="Insert day after active"
-                disabled={!activeDayId}
+                disabled={!activeDayId || findActiveIndex() < 0}
               >
                 + After
               </button>
