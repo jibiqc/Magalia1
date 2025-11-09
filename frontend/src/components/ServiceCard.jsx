@@ -81,7 +81,7 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
   // For backend lines, data might be in line directly; for local lines, it's in line.data
   const data = line.data || line;
   // Build a compact, read-only summary per category
-  let title = category, subtitle = "", note = "", showMore = false;
+  let title = line.title || category, subtitle = "", note = "", showMore = false;
   let isInternal = false;
   const inlineBadges = [];
   const [expanded, setExpanded] = useState(false);
@@ -227,6 +227,7 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
           <div className="service-head">
             <div className="service-title">
               {title}
+              {category && category !== title && <span className="chip">{category}</span>}
               {internalNote ? (
                 <span className="svc-note-tip" tabIndex={0} aria-haspopup="dialog" aria-expanded="false" aria-label="Show internal note">
                   <Icon name="info" className="svc-note-icon" />

@@ -366,6 +366,7 @@ export default function QuoteEditor(){
   const [svcSLoading, setSvcSLoading] = useState(false);
   const [svcSError, setSvcSError] = useState(null);
   const [svcResults, setSvcResults] = useState([]);
+  const [addBusy, setAddBusy] = useState(false);
 
   // Compute safe currentQuoteId
   const currentQuoteId = (q && q.id) || null;
@@ -826,6 +827,43 @@ export default function QuoteEditor(){
     }, 300);
     return () => { abort.v = true; clearTimeout(t); };
   }, [svcQuery, activeDest]);
+
+  const lineFromCatalog = (svc) => ({
+    service_id: svc?.id ?? null,
+    category: "Activity",                 // group chosen in the rail
+    title: svc?.name ?? "",               // <-- real service name
+    supplier_name: svc?.supplier_name
+      ?? svc?.supplier?.name
+      ?? svc?.company
+      ?? "",
+    visibility: "client",
+    achat_eur: null,
+    achat_usd: null,
+    vente_usd: null,
+    fx_rate: null,
+    currency: null,
+    base_net_amount: null,
+    raw_json: {
+      source: "catalog",
+      catalog_id: svc?.id ?? null,
+      start_destination: svc?.start_destination ?? svc?.destination ?? null,
+      snapshot: svc ?? {}
+    }
+  });
+
+  const insertCatalogService = (svc) => {
+    if (!svc) return;
+    setQ(prev => {
+      const days = Array.isArray(prev?.days) ? [...prev.days] : [];
+      const idx = days.findIndex(d => d.id === activeDayId);
+      if (idx < 0) { showNotice("Select a day first", "info"); return prev; }
+      const line = lineFromCatalog(svc);
+      const day = { ...days[idx], lines: [ ...(days[idx].lines || []), line ] };
+      days[idx] = day;
+      const normalized = normalizeQuotePositions({ ...prev, days });
+      return { ...normalized, dirty: true };
+    });
+  };
 
   // Load "Popular" for Activity when destination changes
   useEffect(() => {
@@ -2181,7 +2219,8 @@ export default function QuoteEditor(){
                               className="btn"
                               style={{justifyContent:"start", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}
                               title={`${s.name} — ${s.supplier_name || "Supplier"} (${s.category || "Activity"})`}
-                              onClick={()=>console.info("[search] click", s.id, s.name)}>
+                              onClick={()=>{ console.info("[search→add]", s.id, s.name); insertCatalogService(s); }}
+                              disabled={addBusy}>
                         <span style={{fontWeight:600, marginRight:6}}>{s.category || "Activity"}</span>
                         <span>{s.name}</span>
                       </button>
@@ -2203,7 +2242,9 @@ export default function QuoteEditor(){
                     <button key={s.id}
                             className="btn"
                             style={{justifyContent:"start", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}
-                            title={`${s.name} — ${s.supplier_name || "Supplier"} (${s.category || "Activity"})`}>
+                            title={`${s.name} — ${s.supplier_name || "Supplier"} (${s.category || "Activity"})`}
+                            onClick={()=>{ console.info("[popular→add]", s.id, s.name); insertCatalogService(s); }}
+                            disabled={addBusy}>
                       <span style={{fontWeight:600, marginRight:6}}>{s.category || "Activity"}</span>
                       <span>{s.name}</span>
                     </button>
