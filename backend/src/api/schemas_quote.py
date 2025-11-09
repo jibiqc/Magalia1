@@ -78,6 +78,8 @@ class QuoteIn(BaseModel):
 
 class QuoteLineOut(BaseModel):
 
+    id: Optional[int] = None
+
     position: Optional[int] = None
 
     service_id: Optional[int] = None
@@ -111,6 +113,8 @@ class QuoteLineOut(BaseModel):
 
 
 class QuoteDayOut(BaseModel):
+
+    id: Optional[int] = None
 
     position: Optional[int] = None
 

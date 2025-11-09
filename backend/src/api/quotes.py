@@ -78,7 +78,7 @@ def _to_out(q: Quote) -> QuoteOut:
 
             lines.append(dict(
 
-                position=l.position, service_id=l.service_id, category=l.category,
+                id=l.id, position=l.position, service_id=l.service_id, category=l.category,
 
                 title=l.title, supplier_name=l.supplier_name, visibility=l.visibility,
 
@@ -98,7 +98,7 @@ def _to_out(q: Quote) -> QuoteOut:
 
         days.append(dict(
 
-            position=d.position, date=_date_str(d.date), destination=d.destination,
+            id=d.id, position=d.position, date=_date_str(d.date), destination=d.destination,
 
             decorative_images=(d.decorative_images or []), lines=lines
 
@@ -412,7 +412,7 @@ def patch_days_by_range(
         lines = []
         for l in sorted(day.lines, key=lambda x: x.position or 0):
             lines.append(dict(
-                position=l.position, service_id=l.service_id, category=l.category,
+                id=l.id, position=l.position, service_id=l.service_id, category=l.category,
                 title=l.title, supplier_name=l.supplier_name, visibility=l.visibility,
                 achat_eur=float(l.achat_eur) if l.achat_eur is not None else None,
                 achat_usd=float(l.achat_usd) if l.achat_usd is not None else None,
@@ -422,6 +422,7 @@ def patch_days_by_range(
                 raw_json=l.raw_json
             ))
         result.append(QuoteDayOut(
+            id=day.id,
             position=day.position,
             date=_date_str(day.date),
             destination=day.destination,

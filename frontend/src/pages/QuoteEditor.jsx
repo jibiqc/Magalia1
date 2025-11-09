@@ -249,17 +249,17 @@ const emptyQuote = () => ({
 
   pax: 2,
 
-  start_date: "2025-04-07",
+  start_date: null,
 
-  end_date: "2025-04-09",
+  end_date: null,
 
   days: [
 
-    { id: crypto.randomUUID(), date:"2025-04-07", destination:"Paris", lines:[] },
+    { id: (crypto.randomUUID ? crypto.randomUUID() : uid()), date: null, destination: "", lines: [] },
 
-    { id: crypto.randomUUID(), date:"2025-04-08", destination:"Paris", lines:[] },
+    { id: (crypto.randomUUID ? crypto.randomUUID() : uid()), date: null, destination: "", lines: [] },
 
-    { id: crypto.randomUUID(), date:"2025-04-09", destination:"Paris", lines:[] },
+    { id: (crypto.randomUUID ? crypto.randomUUID() : uid()), date: null, destination: "", lines: [] },
 
   ],
 
@@ -507,7 +507,28 @@ export default function QuoteEditor(){
 
   // Handlers
 
-  const handleNew = () => { setQ(emptyQuote()); setOpenId(""); };
+  const handleNew = () => {
+    const q0 = emptyQuote(); // 3 days with date:null, destination:""
+    // Today in UTC ISO
+    const todayISO = new Date().toISOString().slice(0,10);
+    const d1 = addDaysISO(todayISO, 1);
+    const d2 = addDaysISO(todayISO, 2);
+    const daysPrefilled = (q0.days || []).slice(0,3).map((d, i) => ({
+      ...d,
+      date: i === 0 ? todayISO : (i === 1 ? d1 : d2),
+      destination: "", // ensure empty destination on fresh quotes
+    }));
+    const q1 = {
+      ...q0,
+      start_date: todayISO,
+      end_date: d2,
+      days: daysPrefilled,
+    };
+    setQ(q1);
+    setOpenId("");
+    if (q1.days && q1.days.length > 0) setActiveDayId(q1.days[0].id);
+    showNotice("New quote created", "success");
+  };
 
   const saveQuote = async () => {
     if (!q) {
@@ -622,7 +643,8 @@ export default function QuoteEditor(){
   function makeNewDay(protoDest = "", dateISO) {
     return {
       id: (typeof crypto!=="undefined" && crypto.randomUUID) ? crypto.randomUUID() : uid(),
-      date: dateISO || new Date().toISOString().slice(0,10),
+      // Do not force "today" if no reference date is available
+      date: (dateISO ?? null),
       destination: protoDest || "",
       decorative_images: [],
       lines: []
@@ -639,9 +661,10 @@ export default function QuoteEditor(){
       const hadStart = !!prev.start_date;
       const shiftedStart = hadStart && clampIdx === 0 ? addDaysISO(prev.start_date, -1) : prev.start_date;
       const startRef = shiftedStart || prev.start_date || null;
+      // If no startRef and no ref date, keep date null (no implicit "today")
       const dateISO = startRef
         ? addDaysISO(startRef, clampIdx)
-        : (ref?.date || new Date().toISOString().slice(0,10));
+        : (ref?.date ?? null);
       const newDay = makeNewDay(ref?.destination || "", dateISO);
       prevDays.splice(clampIdx, 0, newDay);
       const normalized = normalizeQuotePositions({ ...prev, days: prevDays });
