@@ -263,7 +263,45 @@ const emptyQuote = () => ({
 
 });
 
-
+// --- Position normalizers: single source of ordering truth is `position` ---
+function normalizeQuotePositions(qIn) {
+  if (!qIn) return qIn;
+  try {
+    const q = structuredClone(qIn);
+    const days = Array.isArray(q.days) ? q.days : [];
+    for (let i = 0; i < days.length; i += 1) {
+      if (days[i]) {
+        days[i].position = i;
+        const lines = Array.isArray(days[i].lines) ? days[i].lines : [];
+        for (let j = 0; j < lines.length; j += 1) {
+          if (lines[j]) {
+            lines[j].position = j;
+          }
+        }
+        days[i].lines = lines;
+      }
+    }
+    q.days = days;
+    return q;
+  } catch (err) {
+    console.error("normalizeQuotePositions error:", err);
+    // Fallback: normalize in place without cloning
+    const days = Array.isArray(qIn.days) ? qIn.days : [];
+    for (let i = 0; i < days.length; i += 1) {
+      if (days[i]) {
+        days[i].position = i;
+        const lines = Array.isArray(days[i].lines) ? days[i].lines : [];
+        for (let j = 0; j < lines.length; j += 1) {
+          if (lines[j]) {
+            lines[j].position = j;
+          }
+        }
+        days[i].lines = lines;
+      }
+    }
+    return qIn;
+  }
+}
 
 export default function QuoteEditor(){
 
@@ -273,6 +311,11 @@ export default function QuoteEditor(){
 
   const totalsRef = useRef(null);
 
+  // --- Open control / feedback ---
+  const [openId, setOpenId] = useState("");
+  const [notice, setNotice] = useState({ msg: "", kind: "info" }); // kind: info|error|success
+  const showNotice = (msg, kind="info") => { setNotice({ msg, kind }); setTimeout(()=>setNotice({ msg:"", kind:"info"}), 3000); };
+
 
 
   // FX global (par défaut 0.75)
@@ -281,9 +324,7 @@ export default function QuoteEditor(){
 
 
 
-  // États pour la topbar
-
-  const [openId, setOpenId] = useState("");
+  // (moved openId above)
 
   // Destination modal state
 
@@ -363,7 +404,8 @@ export default function QuoteEditor(){
 
       next.days[toDay].lines = dst;
 
-      return next;
+      // normalize positions after mutation
+      return normalizeQuotePositions({ ...next, dirty: true });
 
     });
 
@@ -405,7 +447,7 @@ export default function QuoteEditor(){
         next.days[toDay].lines = dstBack;
         next.dirty = true;
         console.log('[dnd] drop backend', {fromIdx, insertBackIdx, toDispIndex});
-        return next;
+        return normalizeQuotePositions(next);
       }
 
       // local → update via localLines using absolute anchor
@@ -435,7 +477,7 @@ export default function QuoteEditor(){
       }, 0);
 
       next.dirty = true;
-      return next;
+      return normalizeQuotePositions(next);
     });
 
     setHoverSlot({ day:-1, index:-1 });
@@ -460,17 +502,26 @@ export default function QuoteEditor(){
   const handleNew = () => { setQ(emptyQuote()); setOpenId(""); };
 
   const saveQuote = async () => {
-    if (!q.id) return;
+    if (!q) {
+      console.warn("Save: no quote");
+      return;
+    }
     try {
+      // ensure positions reflect current visual order before serializing
+      const qNorm = normalizeQuotePositions(q);
+      if (!qNorm || !qNorm.days) {
+        console.error("Save: normalized quote is invalid", qNorm);
+        return;
+      }
       const payload = {
-        title: q.title,
-        pax: q.pax,
-        start_date: q.start_date,
-        end_date: q.end_date,
-        margin_pct: q.margin_pct,
-        onspot_manual: q.onspot_manual,
-        hassle_manual: q.hassle_manual,
-        days: q.days.map((d, idx) => ({
+        title: qNorm.title,
+        pax: qNorm.pax,
+        start_date: qNorm.start_date,
+        end_date: qNorm.end_date,
+        margin_pct: qNorm.margin_pct,
+        onspot_manual: qNorm.onspot_manual,
+        hassle_manual: qNorm.hassle_manual,
+        days: qNorm.days.map((d, idx) => ({
           position: idx,
           date: d.date,
           destination: d.destination,
@@ -492,25 +543,60 @@ export default function QuoteEditor(){
           })),
         })),
       };
-      const updated = await api.saveQuote(q.id, payload);
-      setQ(updated);
+      
+      // If no ID, create the quote first
+      let quoteId = q.id;
+      if (!quoteId) {
+        const created = await api.createOrSaveQuote(payload);
+        if (created && created.id) {
+          quoteId = created.id;
+          setQ(normalizeQuotePositions(created));
+          setOpenId(String(created.id));
+          return;
+        } else {
+          console.error("Save: failed to create quote");
+          return;
+        }
+      }
+      
+      // Update existing quote
+      const updated = await api.saveQuote(quoteId, payload);
+      setQ(normalizeQuotePositions(updated));
+      showNotice("Saved", "success");
     } catch (err) {
       console.error("Save error:", err);
+      showNotice("Save failed", "error");
     }
   };
 
   const fetchQuote = async (quoteId) => {
     if (!quoteId) return;
     try {
-      const quote = await api.getQuote(quoteId);
+      const quoteRaw = await api.getQuote(quoteId);
+      const quote = normalizeQuotePositions(quoteRaw); // trust backend order, ensure positions are consistent client-side
       // Assurer que margin_pct a une valeur par défaut
       if (quote.margin_pct == null) quote.margin_pct = DEFAULT_MARGIN;
       setQ(quote);
       setOpenId(String(quoteId));
+      // Set activeDayId to first day if available
+      if (quote.days && quote.days.length > 0) {
+        setActiveDayId(quote.days[0].id);
+      }
+      showNotice(`Opened #${quoteId}`, "success");
     } catch (err) {
       console.error("Fetch error:", err);
+      showNotice("Open failed (check ID)", "error");
     }
   };
+
+  // Auto-open if ?quoteId= is present in URL
+  useEffect(() => {
+    try {
+      const qp = new URLSearchParams(window.location.search);
+      const qid = qp.get("quoteId");
+      if (qid) fetchQuote(qid);
+    } catch {}
+  }, []);
 
   const ensureQuoteId = async () => {
     // If already have an id, return it
@@ -637,11 +723,15 @@ export default function QuoteEditor(){
 
       const existing = q.days[i];
 
-      return existing ? {...existing, date: iso} : { id: crypto.randomUUID(), date: iso, destination: q.days[0]?.destination ?? "", lines:[] };
+      return existing
+        ? { ...existing, date: iso }
+        : { id: crypto.randomUUID(), date: iso, destination: q.days[0]?.destination ?? "", lines:[] };
 
     });
 
-    setQ(prev=>({...prev, days}));
+    const normalized = normalizeQuotePositions({ ...q, days });
+
+    setQ(prev => ({ ...prev, days: normalized.days, dirty: prev.dirty }));
 
     if (!activeDayId && days.length) setActiveDayId(days[0].id);
 
@@ -1193,7 +1283,20 @@ export default function QuoteEditor(){
 
 
 
-        <input className="id-input" placeholder="id…" value={openId} onChange={e=>setOpenId(e.target.value)} />
+        <input
+          className="id-input"
+          placeholder="id…"
+          value={openId}
+          onChange={e=>setOpenId(e.target.value)}
+          onKeyDown={(e)=>{ if(e.key==="Enter" && openId.trim()) fetchQuote(openId.trim()); }}
+        />
+        <button
+          className="btn"
+          onClick={()=> openId.trim() ? fetchQuote(openId.trim()) : showNotice("Enter an ID", "info")}
+          title="Open by ID"
+        >
+          Open
+        </button>
 
 
 
@@ -1232,6 +1335,22 @@ export default function QuoteEditor(){
         </button>
 
       </div>
+      {/* Non-modal notice, top-left, auto-hides */}
+      {notice.msg && (
+        <div
+          style={{
+            position:"fixed", top:10, left:10, zIndex:9999,
+            padding:"8px 12px", borderRadius:8, fontSize:12,
+            background: notice.kind==="error" ? "#5b100f"
+                     : notice.kind==="success" ? "#0f3d1e"
+                     : "#0b1830",
+            border:"1px solid rgba(255,255,255,.12)", color:"#e6edf7"
+          }}
+          aria-live="polite"
+        >
+          {notice.msg}
+        </div>
+      )}
 
 
 
@@ -1327,13 +1446,18 @@ export default function QuoteEditor(){
                     const dayLocal = localLines.filter(l => l.dayId === d.id && !l.deleted);
                     const allLines = [...(d.lines||[]), ...dayLocal];
                     const localCount = dayLocal.length;
-                    return allLines.map((l, dispIdx) => {
-                      // Skip legacy placeholders
-                      if ((l.category === "Trip info" || l.category === "Internal info") && (l.title || "").includes("edit me")) {
-                        return null; // hide legacy placeholders
-                      }
+                    // Filter out legacy placeholders before mapping
+                    const visibleLines = allLines.filter(l => {
+                      return !((l.category === "Trip info" || l.category === "Internal info") && (l.title || "").includes("edit me"));
+                    });
+                    return visibleLines.length > 0 ? visibleLines.map((l, dispIdx) => {
+                      // Find original index in allLines for correct positioning
+                      const originalIdx = allLines.findIndex(line => line.id === l.id && line === l);
+                      const actualDispIdx = originalIdx >= 0 ? originalIdx : dispIdx;
                       const isLocal = l.isLocal || dayLocal.some(ll => ll.id === l.id);
                       const lineIdx = isLocal ? -1 : d.lines.findIndex(line => line.id === l.id);
+                      // Use actualDispIdx for hover slot and drop positioning
+                      const displayIndex = actualDispIdx;
                       // Helper: update backend or local line seamlessly
                       const updateAnyLine = (patch) => {
                         if (isLocal) {
@@ -1366,12 +1490,16 @@ export default function QuoteEditor(){
                         }
                         return l[field] ?? "";
                       };
+                      // Ensure unique key: use id if available, otherwise use combination of day and index
+                      const uniqueKey = isLocal 
+                        ? (l.id || `local-${d.id}-${displayIndex}`)
+                        : (l.id || `backend-${d.id}-${displayIndex}`);
                       return (
-                        <React.Fragment key={isLocal ? l.id : (l.id || `line-${dispIdx}`)}>
+                        <React.Fragment key={uniqueKey}>
                           <div
-                            className={`drop-slot ${hoverSlot.day===dayIdx && hoverSlot.index===dispIdx ? 'over':''}`}
-                            onDragOver={(e)=>{allowDrop(e); setHoverSlot({day:dayIdx,index:dispIdx});}}
-                            onDrop={(e)=> dropBefore(e, dayIdx, dispIdx)}
+                            className={`drop-slot ${hoverSlot.day===dayIdx && hoverSlot.index===displayIndex ? 'over':''}`}
+                            onDragOver={(e)=>{allowDrop(e); setHoverSlot({day:dayIdx,index:displayIndex});}}
+                            onDrop={(e)=> dropBefore(e, dayIdx, displayIndex)}
                           />
                           {/* card wrapper */}
                           <div className="draggable-wrap" onDragOver={allowDrop}>
@@ -1507,7 +1635,7 @@ export default function QuoteEditor(){
                           </div>
                         </React.Fragment>
                       );
-                    });
+                    }) : null;
                   })()}
                   {/* end-of-day slot */}
                   {(() => {
