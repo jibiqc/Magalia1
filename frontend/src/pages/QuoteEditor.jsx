@@ -361,6 +361,12 @@ export default function QuoteEditor(){
   const [svcLoading, setSvcLoading] = useState(false);
   const [svcError, setSvcError] = useState(null);
 
+  // ---- Services Search (Activity only)
+  const [svcQuery, setSvcQuery] = useState("");
+  const [svcSLoading, setSvcSLoading] = useState(false);
+  const [svcSError, setSvcSError] = useState(null);
+  const [svcResults, setSvcResults] = useState([]);
+
   // Compute safe currentQuoteId
   const currentQuoteId = (q && q.id) || null;
 
@@ -795,6 +801,31 @@ export default function QuoteEditor(){
       setActiveDayId(q.days[0].id);
     }
   }, [q?.days, activeDayId]);
+
+  // Debounced search whenever query or destination changes
+  useEffect(() => {
+    const qstr = (svcQuery || "").trim();
+    if (!qstr) { setSvcResults([]); setSvcSError(null); return; }
+    let abort = { v:false };
+    setSvcSLoading(true);
+    setSvcSError(null);
+    const t = setTimeout(async () => {
+      try{
+        const res = await api.searchServices({
+          q: qstr,
+          dest: (activeDest || "").trim(),
+          category: "Activity",
+          limit: 20
+        });
+        if (!abort.v) setSvcResults(Array.isArray(res) ? res : []);
+      }catch(e){
+        if (!abort.v) setSvcSError(e?.message || "Search failed");
+      }finally{
+        if (!abort.v) setSvcSLoading(false);
+      }
+    }, 300);
+    return () => { abort.v = true; clearTimeout(t); };
+  }, [svcQuery, activeDest]);
 
   // Load "Popular" for Activity when destination changes
   useEffect(() => {
@@ -2130,23 +2161,57 @@ export default function QuoteEditor(){
 
 
 
-            <h4>Popular (Activity)</h4>
-            {svcLoading && <div style={{opacity:.8}}>Loading…</div>}
-            {svcError && <div style={{color:"#f88"}}>Error: {String(svcError)}</div>}
-            {!svcLoading && !svcError && (
-              <div style={{display:"grid", gridTemplateColumns:"1fr", gap:8}}>
-                {svcPopular.map(s => (
-                  <button key={s.id}
-                          className="btn"
-                          style={{justifyContent:"start", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}
-                          title={`${s.name} — ${s.supplier_name || "Supplier"} (${s.category || "Activity"})`}>
-                    <span style={{fontWeight:600, marginRight:6}}>{s.category || "Activity"}</span>
-                    <span>{s.name}</span>
-                  </button>
-                ))}
-                {svcPopular.length === 0 && <div style={{opacity:.7}}>No popular items for this destination.</div>}
+            {/* Search (Activity) */}
+            <div style={{padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,.06)"}}>
+              <div style={{fontWeight:700, opacity:.9, marginBottom:6}}>Search (Activity)</div>
+              <input
+                value={svcQuery}
+                onChange={e=>setSvcQuery(e.target.value)}
+                onKeyDown={e=>{ if(e.key==="Escape"){ setSvcQuery(""); setSvcResults([]); } }}
+                placeholder="Type to search…"
+                style={{width:"100%", height:36, padding:"0 10px", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, background:"#0f1c33", color:"#e6edf7"}}
+              />
+              <div style={{marginTop:8}}>
+                {svcSLoading && <div style={{opacity:.8}}>Searching…</div>}
+                {svcSError && <div style={{color:"#f88"}}>Error: {String(svcSError)}</div>}
+                {!svcSLoading && !svcSError && svcQuery.trim() && (
+                  <div style={{display:"grid", gridTemplateColumns:"1fr", gap:6}}>
+                    {svcResults.map(s => (
+                      <button key={s.id}
+                              className="btn"
+                              style={{justifyContent:"start", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}
+                              title={`${s.name} — ${s.supplier_name || "Supplier"} (${s.category || "Activity"})`}
+                              onClick={()=>console.info("[search] click", s.id, s.name)}>
+                        <span style={{fontWeight:600, marginRight:6}}>{s.category || "Activity"}</span>
+                        <span>{s.name}</span>
+                      </button>
+                    ))}
+                    {svcResults.length===0 && <div style={{opacity:.7}}>No results.</div>}
+                  </div>
+                )}
               </div>
-            )}
+            </div>
+
+            {/* Popular (Activity) */}
+            <div style={{padding:"10px 12px"}}>
+              <div style={{fontWeight:700, opacity:.9, marginBottom:6}}>Popular (Activity)</div>
+              {svcLoading && <div style={{opacity:.8}}>Loading…</div>}
+              {svcError && <div style={{color:"#f88"}}>Error: {String(svcError)}</div>}
+              {!svcLoading && !svcError && (
+                <div style={{display:"grid", gridTemplateColumns:"1fr", gap:8}}>
+                  {svcPopular.map(s => (
+                    <button key={s.id}
+                            className="btn"
+                            style={{justifyContent:"start", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}
+                            title={`${s.name} — ${s.supplier_name || "Supplier"} (${s.category || "Activity"})`}>
+                      <span style={{fontWeight:600, marginRight:6}}>{s.category || "Activity"}</span>
+                      <span>{s.name}</span>
+                    </button>
+                  ))}
+                  {svcPopular.length === 0 && <div style={{opacity:.7}}>No popular items for this destination.</div>}
+                </div>
+              )}
+            </div>
 
 
 
