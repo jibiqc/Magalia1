@@ -1,6 +1,14 @@
 import React, { useState } from "react";
 import { fmtAMPM } from "../utils/timeFmt";
 
+const isNonEmpty = v => v !== undefined && v !== null && String(v).trim() !== "";
+const clamp = (s, n=200) => !s ? "" : (s.length > n ? s.slice(0, n).trim() + "…" : s);
+function breakfastIncluded(meal1) {
+  if (!meal1) return false;
+  const s = String(meal1).toLowerCase();
+  return s.includes("breakfast") || s.includes("b&b");
+}
+
 // Small inline icon component used for actions and the info tip
 function Icon({ name, className = "", size = 18 }) {
   const common = { width: size, height: size, className, fill: "none", stroke: "currentColor", strokeWidth: 1.6, strokeLinecap: "round", strokeLinejoin: "round", role: "img" };
@@ -85,6 +93,11 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
   let isInternal = false;
   const inlineBadges = [];
   const [expanded, setExpanded] = useState(false);
+
+  // Get fields from snapshot
+  const fields = line?.raw_json?.snapshot?.fields || {};
+  const isActivity = line?.category && ["Small Group","Private","Private Chauffeur","Tickets"].includes(line.category);
+  const looksHotel = !!(fields.hotel_stars || fields.hotel_check_in_time || fields.hotel_check_out_time || fields.hotel_url);
 
   switch(category){
     case "Trip info": {
@@ -290,6 +303,36 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
         {meta.length > 0 && (
           <div className="svc-meta">
             {meta.map((m,i)=><div key={i} className="meta-row">{m}</div>)}
+          </div>
+        )}
+        {line.supplier_name && (
+          <div className="supplier">{line.supplier_name}</div>
+        )}
+        {isNonEmpty(fields.full_description) && (
+          <div className="meta muted" style={{marginTop:6}} title={fields.full_description}>
+            {clamp(fields.full_description, 220)}
+          </div>
+        )}
+        {(isActivity || looksHotel) && (
+          <div className="meta chips" style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
+            {isActivity && (
+              <>
+                {isNonEmpty(fields.activity_duration) && <span className="chip">⏱ {fields.activity_duration}</span>}
+                {isNonEmpty(fields.activity_meeting_point) && <span className="chip">📍 {clamp(fields.activity_meeting_point, 100)}</span>}
+                {isNonEmpty(fields.start_time) && <span className="chip">🕒 {fields.start_time}</span>}
+              </>
+            )}
+            {looksHotel && (
+              <>
+                {isNonEmpty(fields.hotel_stars) && <span className="chip">{String(fields.hotel_stars).trim()}★</span>}
+                {isNonEmpty(fields.hotel_check_in_time) && <span className="chip">Check-in {fields.hotel_check_in_time}</span>}
+                {isNonEmpty(fields.hotel_check_out_time) && <span className="chip">Check-out {fields.hotel_check_out_time}</span>}
+                {isNonEmpty(fields.hotel_url) && (
+                  <a className="chip" href={fields.hotel_url} target="_blank" rel="noreferrer">Website ↗</a>
+                )}
+                {breakfastIncluded(fields.meal_1) && <span className="chip">Breakfast included</span>}
+              </>
+            )}
           </div>
         )}
         {/* Price inputs are now handled uniformly in QuoteEditor for all paying services */}

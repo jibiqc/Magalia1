@@ -12,6 +12,48 @@ from typing import List, Optional
 router = APIRouter(prefix="/services", tags=["services"])
 
 
+# --- Excel extras → normalized fields ----------------------------------------
+CANON = {
+    # Common
+    "URL (Image) (File)": "image_url",
+    "Image": "image_url",
+    "Important Quote": "important_quote",
+    "Provider Service URL": "provider_service_url",
+    "Full Description": "full_description",
+    "Brief Description": "brief_description",
+    "Client Black Notes": "client_black_notes",
+    "Client Red Notes": "client_red_notes",
+    "NoteDoc": "note_doc",
+    "NoteResa": "note_resa",
+    "Operational Comments": "operational_comments",
+    # Activities
+    "Activity Contact Info": "activity_contact_info",
+    "Activity Duration": "activity_duration",
+    "Activity Meeting Point": "activity_meeting_point",
+    "Start Time": "start_time",
+    "End Time": "end_time",
+    # Hotels
+    "Hotel Stars": "hotel_stars",
+    "Hotel URL": "hotel_url",
+    "Hotel Check-out time (Company) (Company)": "hotel_check_out_time",
+    "Hotel Check-in time (Company) (Company)": "hotel_check_in_time",
+    "Meal 1": "meal_1",
+    "Email (Company) (Company)": "email_company",
+    "Website (Company) (Company)": "website_company",
+    "Address 1 (Company) (Company)": "address1_company",
+}
+
+
+def extract_excel_fields(extras: dict) -> dict:
+    if not isinstance(extras, dict):
+        return {}
+    out = {}
+    for k, v in extras.items():
+        if k in CANON:
+            out[CANON[k]] = v
+    return out
+
+
 def serialize_sa_row(row):
     """Serialize SQLAlchemy row to dict with best-effort normalization."""
     if row is None:
@@ -189,6 +231,14 @@ def get_service_by_id(service_id: int, db: Session = Depends(get_db)):
     if not svc:
         raise HTTPException(status_code=404, detail="Service not found")
     out = serialize_sa_row(svc)
+    # Prefer already-serialized extras if present
+    extras = out.get("extras") or getattr(svc, "extras", None) or {}
+    # Debug: ensure extras is a dict
+    if extras and not isinstance(extras, dict):
+        extras = {}
+    # Extract normalized fields from extras
+    fields = extract_excel_fields(extras) if extras else {}
+    out["fields"] = fields
     if getattr(svc, "supplier", None) is not None:
         out["supplier"] = serialize_sa_row(svc.supplier)
     # Popularity if model exists

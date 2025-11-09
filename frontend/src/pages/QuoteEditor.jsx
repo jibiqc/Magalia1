@@ -20,12 +20,44 @@ import { uid } from "../utils/localId";
 window.__ET_DEBUG = window.__ET_DEBUG ?? false;
 const dbg = (...args) => { if (window.__ET_DEBUG) console.log(...args); };
 
+// ---- Catalog grouping helpers ----
+const norm = (s) => (s || "").toString().trim().toLowerCase();
+const HOTEL_CATS = new Set(["hotel room","apartment","villa"]);
+const isHotelSvc = (s) => {
+  const cat = norm(s?.category);
+  if (HOTEL_CATS.has(cat)) return true;
+  const t = norm(`${s?.name||""} ${s?.supplier_name||""}`);
+  return /\b(hotel|apartment|appartment|villa)\b/.test(t);
+};
+const isTransportSvc = (s) => norm(s?.category) === "private transfer";
+const inTab = (s, tab) => tab === "Hotels" ? isHotelSvc(s) : tab === "Transport" ? isTransportSvc(s) : true;
+
 // Défaut global pour la marge
 const DEFAULT_MARGIN = 0.1627; // 16.27 %
 const DEFAULT_FX = 0.75;
 
 const round2 = (v) => Math.round((Number(v)||0)*100)/100;
 const round4 = (v) => Math.round((Number(v)||0)*10000)/10000;
+
+// --- Excel extras → normalized fields (fallback for frontend) ---
+const CANON_MIN = {
+  "Full Description": "full_description",
+  "Activity Duration": "activity_duration",
+  "Activity Meeting Point": "activity_meeting_point",
+  "Start Time": "start_time",
+  "Hotel Stars": "hotel_stars",
+  "Hotel Check-in time (Company) (Company)": "hotel_check_in_time",
+  "Hotel Check-out time (Company) (Company)": "hotel_check_out_time",
+  "Hotel URL": "hotel_url",
+  "Meal 1": "meal_1",
+};
+
+function fieldsFromExtras(extras) {
+  if (!extras || typeof extras !== "object") return {};
+  const out = {};
+  for (const [k,v] of Object.entries(extras)) if (CANON_MIN[k]) out[CANON_MIN[k]] = v;
+  return out;
+}
 
 const parseLocaleFloat = (s) => {
   if (s == null) return 0;
@@ -109,9 +141,6 @@ const effectiveFx = (lineFx, globalFx) => {
   const g  = parseLocaleFloat(globalFx);
   return fx > 0 ? fx : (g > 0 ? g : DEFAULT_FX);
 };
-
-// Normaliseur pour les catégories (insensible à la casse et aux espaces)
-const norm = (s) => (s || "").trim().toLowerCase();
 
 // Source unique de vérité pour les catégories payantes
 const PAID_CATS = new Set([
@@ -369,6 +398,19 @@ export default function QuoteEditor(){
   const [svcSError, setSvcSError] = useState(null);
   const [svcResults, setSvcResults] = useState([]);
   const [addBusy, setAddBusy] = useState(false);
+
+  // ---- Service tabs (Activities | Hotels | Transport)
+  const [svcTab, setSvcTab] = useState("Activities"); // "Activities" | "Hotels" | "Transport"
+  const CATEGORY_GROUPS = {
+    Activities: ["small group","private","private chauffeur","tickets"],
+    Hotels: ["hotel room","hotel","apartment","appartment","villa"],
+    Transport: ["private transfer"]
+  };
+  const inGroup = (cat, group) => {
+    if (!cat) return false;
+    const c = String(cat).toLowerCase();
+    return CATEGORY_GROUPS[group].some(k => c.includes(k));
+  };
 
   // Compute safe currentQuoteId
   const currentQuoteId = (q && q.id) || null;
@@ -822,22 +864,27 @@ export default function QuoteEditor(){
         const res = await api.searchServices({
           q: qstr,
           dest: (activeDest || "").trim(),
-          category: "Activity",
-          limit: 20
+          limit: 50
         });
-        if (!abort.v) setSvcResults(Array.isArray(res) ? res : []);
-      }catch(e){
-        if (!abort.v) setSvcSError(e?.message || "Search failed");
+        if (!abort.v) {
+          const filtered = (Array.isArray(res) ? res : []).filter(r => inTab(r, svcTab));
+          setSvcResults(filtered);
+        }
+      }catch{
+        if (!abort.v) setSvcResults([]);
       }finally{
         if (!abort.v) setSvcSLoading(false);
       }
     }, 300);
     return () => { abort.v = true; clearTimeout(t); };
-  }, [svcQuery, activeDest]);
+  }, [svcQuery, activeDest, svcTab]);
 
   function lineFromCatalog(svc) {
     const supplier_name =
       svc.supplier_name ?? svc.supplier?.name ?? svc.company ?? null;
+
+    const snap = { ...(svc || {}) };
+    snap.fields = svc?.fields || fieldsFromExtras(svc?.extras || {});
 
     return {
       id: (typeof crypto!=="undefined" && crypto.randomUUID) ? crypto.randomUUID() : uid(),
@@ -859,50 +906,78 @@ export default function QuoteEditor(){
         start_destination: svc.start_destination ?? null,
         supplier_id: svc.supplier_id ?? null,
         supplier_ref: supplier_name,
-        snapshot: svc                       // full record for future use
+        snapshot: snap,                       // full record with fields for future use
+        hydrated: false
       }
     };
   }
 
-  const insertCatalogService = (svc) => {
-    if (!svc) return;
-    const supplier_name = svc.supplier_name ?? svc.supplier?.name ?? svc.company ?? null;
-    if (window.__ET_DEBUG) console.table([
-      { k: 'id', v: svc.id },
-      { k: 'name', v: svc.name },
-      { k: 'start_destination', v: svc.start_destination },
-      { k: 'supplier', v: supplier_name }
-    ]);
+  async function insertCatalogService(svcLite) {
+    // fetch full service to get .fields/.extras
+    let svc = svcLite;
+    try {
+      if (!svcLite.fields && !svcLite.extras) {
+        svc = await api.getServiceById(svcLite.id);
+      }
+    } catch {}
+    
+    // Helper pour trouver l'index du jour actif dans un quote donné
+    const findActiveIndexInQuote = (quote) => {
+      const idx = (quote?.days || []).findIndex(d => d.id === activeDayId);
+      return idx >= 0 ? idx : -1;
+    };
+
+    const line = lineFromCatalog(svc);
     setQ(prev => {
-      const days = Array.isArray(prev?.days) ? [...prev.days] : [];
-      const idx = days.findIndex(d => d.id === activeDayId);
+      const q1 = {...prev, dirty:true};
+      const idx = findActiveIndexInQuote(q1);
       if (idx < 0) { showNotice("Select a day first", "info"); return prev; }
-      const line = lineFromCatalog(svc);
-      const day = { ...days[idx], lines: [ ...(days[idx].lines || []), line ] };
-      days[idx] = day;
-      const normalized = normalizeQuotePositions({ ...prev, days });
-      return { ...normalized, dirty: true };
+      const day = {...q1.days[idx]};
+      day.lines = [...(day.lines||[]), line];
+      q1.days = q1.days.slice();
+      q1.days[idx] = day;
+      return q1;
     });
-  };
+    dbg?.("inserted", { id: svc.id, name: svc.name, hasFields: !!(svc.fields) });
+  }
 
   // Load "Popular" for Activity when destination changes
   useEffect(() => {
-    let abort = false;
+    if (!activeDest) return;
+    let cancelled = false;
     (async () => {
+      setSvcLoading(true); setSvcError(null);
       try {
-        setSvcLoading(true);
-        setSvcError(null);
-        const dest = (activeDest || "").trim();
-        const res = await api.getPopularServices({ dest, category: "Activity", limit: 12 });
-        if (!abort) setSvcPopular(Array.isArray(res) ? res : []);
-      } catch (e) {
-        if (!abort) setSvcError(e?.message || "Failed to load popular services");
+        const base = await api.getPopularServices({ dest: activeDest, limit: 50 });
+        let out = (base || []).filter(r => inTab(r, svcTab));
+
+        // Fallback si peu d'items: seed via search
+        if (out.length < 6) {
+          const seeds = svcTab === "Hotels" ? ["hotel","apartment","villa"] :
+                        svcTab === "Transport" ? ["transfer","chauffeur"] : [""];
+          const extra = [];
+
+          for (const q of seeds) {
+            const r = await api.searchServices({ q, dest: activeDest, limit: 50 });
+            extra.push(...(r||[]));
+          }
+
+          const merged = [...out, ...extra.filter(x => inTab(x, svcTab))];
+          // dédup par id
+          const seen = new Set(); out = [];
+          for (const x of merged) if (!seen.has(x.id)) { seen.add(x.id); out.push(x); }
+        }
+
+        out = out.slice(0,12);
+        if (!cancelled) setSvcPopular(out);
+      } catch {
+        if (!cancelled) setSvcError("Load failed");
       } finally {
-        if (!abort) setSvcLoading(false);
+        if (!cancelled) setSvcLoading(false);
       }
     })();
-    return () => { abort = true; };
-  }, [activeDest]);
+    return () => { cancelled = true; };
+  }, [activeDest, svcTab]);
 
   function makeNewDay(protoDest = "", dateISO) {
     return {
@@ -2203,25 +2278,30 @@ export default function QuoteEditor(){
             <input className="cat-button" placeholder="Search name / company" readOnly />
 
             <div className="chipbar">
-
-              <span className="chip">Hotels</span>
-
-              <span className="chip">Activities</span>
-
-              <span className="chip">Transport</span>
-
+              {["Hotels","Activities","Transport"].map(tab => (
+                <button
+                  key={tab}
+                  type="button"
+                  className={`chip ${svcTab===tab ? "active" : ""}`}
+                  onClick={()=> setSvcTab(tab)}
+                  onKeyDown={(e)=> (e.key==="Enter"||e.key===" ") && setSvcTab(tab)}
+                  aria-pressed={svcTab===tab}
+                >
+                  {tab}
+                </button>
+              ))}
             </div>
 
 
 
             {/* Search (Activity) */}
             <div style={{padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,.06)"}}>
-              <div style={{fontWeight:700, opacity:.9, marginBottom:6}}>Search (Activity)</div>
+              <div style={{fontWeight:700, opacity:.9, marginBottom:6}}>Search ({svcTab})</div>
               <input
                 value={svcQuery}
                 onChange={e=>setSvcQuery(e.target.value)}
                 onKeyDown={e=>{ if(e.key==="Escape"){ setSvcQuery(""); setSvcResults([]); } }}
-                placeholder="Type to search…"
+                placeholder={`Type to search ${svcTab.toLowerCase()}…`}
                 style={{width:"100%", height:36, padding:"0 10px", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, background:"#0f1c33", color:"#e6edf7"}}
               />
               <div style={{marginTop:8}}>
@@ -2248,7 +2328,7 @@ export default function QuoteEditor(){
 
             {/* Popular (Activity) */}
             <div style={{padding:"10px 12px"}}>
-              <div style={{fontWeight:700, opacity:.9, marginBottom:6}}>Popular (Activity)</div>
+              <div style={{fontWeight:700, opacity:.9, marginBottom:6}}>Popular ({svcTab})</div>
               {svcLoading && <div style={{opacity:.8}}>Loading…</div>}
               {svcError && <div style={{color:"#f88"}}>Error: {String(svcError)}</div>}
               {!svcLoading && !svcError && (
