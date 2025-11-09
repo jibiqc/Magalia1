@@ -16,7 +16,9 @@ import { api } from "../lib/api";
 import { fmtDateShortISO, fmtDateLongISO } from "../utils/dateFmt";
 import { uid } from "../utils/localId";
 
-
+// Debug helper (gated by window.__ET_DEBUG)
+window.__ET_DEBUG = window.__ET_DEBUG ?? false;
+const dbg = (...args) => { if (window.__ET_DEBUG) console.log(...args); };
 
 // Défaut global pour la marge
 const DEFAULT_MARGIN = 0.1627; // 16.27 %
@@ -702,6 +704,11 @@ export default function QuoteEditor(){
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
   }, [q?.dirty]);
 
+  // Expose quote state for testing (can be removed after verification)
+  useEffect(() => {
+    window.__lastQuote = q;
+  }, [q]);
+
   // Navigation requests with dirty-check
   const requestNew = () => {
     if (q?.dirty) {
@@ -828,31 +835,44 @@ export default function QuoteEditor(){
     return () => { abort.v = true; clearTimeout(t); };
   }, [svcQuery, activeDest]);
 
-  const lineFromCatalog = (svc) => ({
-    service_id: svc?.id ?? null,
-    category: "Activity",                 // group chosen in the rail
-    title: svc?.name ?? "",               // <-- real service name
-    supplier_name: svc?.supplier_name
-      ?? svc?.supplier?.name
-      ?? svc?.company
-      ?? "",
-    visibility: "client",
-    achat_eur: null,
-    achat_usd: null,
-    vente_usd: null,
-    fx_rate: null,
-    currency: null,
-    base_net_amount: null,
-    raw_json: {
-      source: "catalog",
-      catalog_id: svc?.id ?? null,
-      start_destination: svc?.start_destination ?? svc?.destination ?? null,
-      snapshot: svc ?? {}
-    }
-  });
+  function lineFromCatalog(svc) {
+    const supplier_name =
+      svc.supplier_name ?? svc.supplier?.name ?? svc.company ?? null;
+
+    return {
+      id: (typeof crypto!=="undefined" && crypto.randomUUID) ? crypto.randomUUID() : uid(),
+      service_id: svc.id,
+      category: "Activity",              // keep your current logic for grouping
+      title: svc.name ?? "Untitled",
+      supplier_name,
+      visibility: "client",
+      // leave price fields empty now (no pricing in catalog yet)
+      achat_eur: null,
+      achat_usd: null,
+      vente_usd: null,
+      fx_rate: null,
+      currency: null,
+      base_net_amount: null,
+      raw_json: {
+        source: "catalog",
+        catalog_id: svc.id,
+        start_destination: svc.start_destination ?? null,
+        supplier_id: svc.supplier_id ?? null,
+        supplier_ref: supplier_name,
+        snapshot: svc                       // full record for future use
+      }
+    };
+  }
 
   const insertCatalogService = (svc) => {
     if (!svc) return;
+    const supplier_name = svc.supplier_name ?? svc.supplier?.name ?? svc.company ?? null;
+    if (window.__ET_DEBUG) console.table([
+      { k: 'id', v: svc.id },
+      { k: 'name', v: svc.name },
+      { k: 'start_destination', v: svc.start_destination },
+      { k: 'supplier', v: supplier_name }
+    ]);
     setQ(prev => {
       const days = Array.isArray(prev?.days) ? [...prev.days] : [];
       const idx = days.findIndex(d => d.id === activeDayId);
@@ -1653,12 +1673,7 @@ export default function QuoteEditor(){
     }
 
   // DEBUG: Log state before render
-  console.log("[STATE]", {
-    dirty: q?.dirty ?? null,
-    id: q?.id ?? null,
-    openId,
-    confirmNav
-  });
+  // dbg('[STATE]', q);
 
   return (
 
