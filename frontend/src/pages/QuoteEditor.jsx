@@ -356,6 +356,11 @@ export default function QuoteEditor(){
   const [localLines, setLocalLines] = useState([]);      // LocalLine[]
   const [trashLines, setTrashLines] = useState([]);    // LocalLine[]
 
+  // ---- Services (right rail): Popular (Activity only)
+  const [svcPopular, setSvcPopular] = useState([]);
+  const [svcLoading, setSvcLoading] = useState(false);
+  const [svcError, setSvcError] = useState(null);
+
   // Compute safe currentQuoteId
   const currentQuoteId = (q && q.id) || null;
 
@@ -778,12 +783,37 @@ export default function QuoteEditor(){
     return idx >= 0 ? idx : -1;
   }, [q, activeDayId]);
 
+  // Active destination for services filtering
+  const activeDest = useMemo(() => {
+    const i = findActiveIndex();
+    return i >= 0 ? (q?.days?.[i]?.destination || "") : "";
+  }, [q, findActiveIndex]);
+
   // Ensure we always have an active day when days exist
   useEffect(() => {
     if (!activeDayId && (q?.days?.length || 0) > 0) {
       setActiveDayId(q.days[0].id);
     }
   }, [q?.days, activeDayId]);
+
+  // Load "Popular" for Activity when destination changes
+  useEffect(() => {
+    let abort = false;
+    (async () => {
+      try {
+        setSvcLoading(true);
+        setSvcError(null);
+        const dest = (activeDest || "").trim();
+        const res = await api.getPopularServices({ dest, category: "Activity", limit: 12 });
+        if (!abort) setSvcPopular(Array.isArray(res) ? res : []);
+      } catch (e) {
+        if (!abort) setSvcError(e?.message || "Failed to load popular services");
+      } finally {
+        if (!abort) setSvcLoading(false);
+      }
+    })();
+    return () => { abort = true; };
+  }, [activeDest]);
 
   function makeNewDay(protoDest = "", dateISO) {
     return {
@@ -2100,11 +2130,23 @@ export default function QuoteEditor(){
 
 
 
-            <h4>Popular</h4>
-
-            <button className="cat-button">Louvre ticket — Tiqets <span className="chip">Activity</span> <span className="chip">Tiqets</span></button>
-
-            <button className="cat-button">Seine dinner cruise <span className="chip">Activity</span> <span className="chip">Bateaux</span></button>
+            <h4>Popular (Activity)</h4>
+            {svcLoading && <div style={{opacity:.8}}>Loading…</div>}
+            {svcError && <div style={{color:"#f88"}}>Error: {String(svcError)}</div>}
+            {!svcLoading && !svcError && (
+              <div style={{display:"grid", gridTemplateColumns:"1fr", gap:8}}>
+                {svcPopular.map(s => (
+                  <button key={s.id}
+                          className="btn"
+                          style={{justifyContent:"start", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}
+                          title={`${s.name} — ${s.supplier_name || "Supplier"} (${s.category || "Activity"})`}>
+                    <span style={{fontWeight:600, marginRight:6}}>{s.category || "Activity"}</span>
+                    <span>{s.name}</span>
+                  </button>
+                ))}
+                {svcPopular.length === 0 && <div style={{opacity:.7}}>No popular items for this destination.</div>}
+              </div>
+            )}
 
 
 
