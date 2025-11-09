@@ -2,6 +2,31 @@ import React, { useState } from "react";
 import { fmtAMPM } from "../utils/timeFmt";
 
 const isNonEmpty = v => v !== undefined && v !== null && String(v).trim() !== "";
+
+const isCatalog = (l) => !!l?.raw_json?.catalog_id;
+const isFromCatalog = (l) => !!(l?.raw_json?.catalog_id || l?.raw_json?.source === "catalog" || l?.raw_json?.snapshot);
+const shouldShowSupplier = (l) => !isFromCatalog(l) && !!l?.supplier_name;
+const getF = (l) => l?.raw_json?.fields || {};
+const getS = (l) => l?.raw_json?.snapshot || {};
+const normYes = (v) => {
+  const s = String(v ?? '').toLowerCase();
+  return s === '1' || s === 'yes' || s.includes('breakfast');
+};
+const normStars = (v) => {
+  const s = String(v ?? '').trim();
+  if (!s) return '';
+  const n = Number.parseFloat(s.replace(/[^\d.]/g, ''));
+  if (!isFinite(n) || n <= 0) return '';
+  return ' ' + '★'.repeat(Math.max(1, Math.min(5, Math.round(n))));
+};
+const inferRoom = (t) =>
+  (t || '').replace(/\bat\b.*$/i, '').replace(/^(hotel\s*)?room\b[:\-]?\s*/i, '').trim() || 'Room';
+const isHotel = (line) => {
+  const f = getF(line), s = getS(line);
+  return ['Hotel room', 'Apartment', 'Villa'].includes(line?.category)
+      || !!(f.hotel_stars || f.hotel_url || s['Hotel Stars'] || s['Hotel URL']);
+};
+const isTransfer = (line) => line?.category === 'Private Transfer';
 const clamp = (s, n=200) => !s ? "" : (s.length > n ? s.slice(0, n).trim() + "…" : s);
 function breakfastIncluded(meal1) {
   if (!meal1) return false;
@@ -84,20 +109,62 @@ const displayUrl = (u) => {
   } catch { return u; }
 };
 
+// Utilitaires locaux pour le rendu
+const _n = s => (s||"").toString().trim().toLowerCase();
+const HOTEL_CATS = new Set(["hotel room","apartment","villa"]);
+const isHotelLine = L => HOTEL_CATS.has(_n(L?.category));
+const isTransportLine = L => _n(L?.category) === "private transfer";
+const repeatStar = n => (Number(n)>0 ? " " + "★".repeat(Math.min(5, Number(n))) : "");
+const breakfastYes = v => {
+  const s = _n(v);
+  return s==="1" || s.includes("breakfast") || s.includes("petit déjeuner") || s.includes("petit dejeuner");
+};
+const cleanRoom = title => {
+  const t = (title||"").replace(/^hotel\s*room\s*/i,"").trim();
+  return t || title || "Room";
+};
+
 export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onChangeLocalData, onDragFromHandle }) {
   const { category } = line;
   // For backend lines, data might be in line directly; for local lines, it's in line.data
   const data = line.data || line;
   // Build a compact, read-only summary per category
-  let title = line.title || category, subtitle = "", note = "", showMore = false;
+  let subtitle = "", note = "", showMore = false;
   let isInternal = false;
   const inlineBadges = [];
   const [expanded, setExpanded] = useState(false);
 
-  // Get fields from snapshot
-  const fields = line?.raw_json?.snapshot?.fields || {};
-  const isActivity = line?.category && ["Small Group","Private","Private Chauffeur","Tickets"].includes(line.category);
-  const looksHotel = !!(fields.hotel_stars || fields.hotel_check_in_time || fields.hotel_check_out_time || fields.hotel_url);
+  const f = getF(line);
+  const s = getS(line);
+
+  let title = line.title || line.category || 'Service';
+
+  // HÔTEL
+  if (isHotel(line)) {
+    const room = f.room_name || s['Room Name'] || inferRoom(line.title);
+    const company = line.provider_name || s['Company'] || line.supplier_name || '';
+    const stars = normStars(f.hotel_stars || s['Hotel Stars']);
+    const bf = normYes(f.meal_1 || s['Meal 1']) ? 'breakfast & VAT included' : 'VAT included';
+    title = `${room}, ${bf} at ${company}${stars}`;
+  } else if (!isTransfer(line)) {
+    // ACTIVITÉ
+    const st = f.start_time || s['Start Time'];
+    if (st) title = `${title} at ${st}`;
+  }
+
+  // DESCRIPTION + URL
+  const fullDesc = f.full_description || s['Full Description'] || '';
+  const hotelUrl = f.hotel_url || s['Hotel URL'] || f.website || s['Website'] || '';
+
+  // TEXT LINK for hotel URL
+  const hotelUrlText = (hotelUrl || '').trim();
+
+  // Badge catégorie masqué pour le catalogue
+  const showChip = !isCatalog(line) && !!line.category;
+  
+  // Legacy compatibility for chips section
+  const isActivity = !isHotel(line) && !isTransfer(line) && (line?.category && ["Small Group","Private","Private Chauffeur","Tickets"].includes(line.category));
+  const looksHotel = !!(f.hotel_stars || f.hotel_check_in_time || f.hotel_check_out_time || f.hotel_url);
 
   switch(category){
     case "Trip info": {
@@ -240,7 +307,7 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
           <div className="service-head">
             <div className="service-title">
               {title}
-              {category && category !== title && <span className="chip">{category}</span>}
+              {showChip && <span className="chip">{category}</span>}
               {internalNote ? (
                 <span className="svc-note-tip" tabIndex={0} aria-haspopup="dialog" aria-expanded="false" aria-label="Show internal note">
                   <Icon name="info" className="svc-note-icon" />
@@ -305,36 +372,40 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
             {meta.map((m,i)=><div key={i} className="meta-row">{m}</div>)}
           </div>
         )}
-        {line.supplier_name && (
+        {shouldShowSupplier(line) && (
           <div className="supplier">{line.supplier_name}</div>
         )}
-        {isNonEmpty(fields.full_description) && (
-          <div className="meta muted" style={{marginTop:6}} title={fields.full_description}>
-            {clamp(fields.full_description, 220)}
+        {/* Description */}
+        {fullDesc ? <p className="desc">{fullDesc}</p> : null}
+        {/* Hotel: plain URL text, no pills */}
+        {isHotel(line) && hotelUrlText ? (
+          <div className="hotel-url">
+            <a href={hotelUrlText} target="_blank" rel="noreferrer">{hotelUrlText}</a>
           </div>
-        )}
-        {(isActivity || looksHotel) && (
+        ) : null}
+        {/* NON-hotel: keep existing pills */}
+        {!isHotel(line) && (isActivity || looksHotel) ? (
           <div className="meta chips" style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:6}}>
             {isActivity && (
               <>
-                {isNonEmpty(fields.activity_duration) && <span className="chip">⏱ {fields.activity_duration}</span>}
-                {isNonEmpty(fields.activity_meeting_point) && <span className="chip">📍 {clamp(fields.activity_meeting_point, 100)}</span>}
-                {isNonEmpty(fields.start_time) && <span className="chip">🕒 {fields.start_time}</span>}
+                {isNonEmpty(f.activity_duration) && <span className="chip">⏱ {f.activity_duration}</span>}
+                {isNonEmpty(f.activity_meeting_point) && <span className="chip">📍 {clamp(f.activity_meeting_point, 100)}</span>}
+                {isNonEmpty(f.start_time) && <span className="chip">🕒 {f.start_time}</span>}
               </>
             )}
             {looksHotel && (
               <>
-                {isNonEmpty(fields.hotel_stars) && <span className="chip">{String(fields.hotel_stars).trim()}★</span>}
-                {isNonEmpty(fields.hotel_check_in_time) && <span className="chip">Check-in {fields.hotel_check_in_time}</span>}
-                {isNonEmpty(fields.hotel_check_out_time) && <span className="chip">Check-out {fields.hotel_check_out_time}</span>}
-                {isNonEmpty(fields.hotel_url) && (
-                  <a className="chip" href={fields.hotel_url} target="_blank" rel="noreferrer">Website ↗</a>
+                {isNonEmpty(f.hotel_stars) && <span className="chip">{String(f.hotel_stars).trim()}★</span>}
+                {isNonEmpty(f.hotel_check_in_time) && <span className="chip">Check-in {f.hotel_check_in_time}</span>}
+                {isNonEmpty(f.hotel_check_out_time) && <span className="chip">Check-out {f.hotel_check_out_time}</span>}
+                {isNonEmpty(f.hotel_url) && (
+                  <a className="chip" href={f.hotel_url} target="_blank" rel="noreferrer">Website ↗</a>
                 )}
-                {breakfastIncluded(fields.meal_1) && <span className="chip">Breakfast included</span>}
+                {breakfastIncluded(f.meal_1) && <span className="chip">Breakfast included</span>}
               </>
             )}
           </div>
-        )}
+        ) : null}
         {/* Price inputs are now handled uniformly in QuoteEditor for all paying services */}
       </div>
     </div>

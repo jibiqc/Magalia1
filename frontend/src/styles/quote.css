@@ -232,6 +232,9 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .chip.active {
   outline: 2px solid var(--accent);
 }
+.svc-meta{ margin:6px 0 2px; font-weight:500; }
+.svc-desc{ margin:2px 0 4px; white-space:pre-wrap; opacity:.9 }
+.svc-link a{ text-decoration:underline; }
 /* Insert grid - overridden below */
 .cat-button{
   width:100%;background:#0f203a;border:1px solid rgba(255,255,255,.10);
@@ -1167,6 +1170,15 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .service-card .service-subtitle,
 .service-card .svc-subtitle,
 .service-card .service-note { white-space: pre-line; }
+.service-card .desc { white-space: pre-wrap; margin-top: .25rem; }
+.service-card .title { margin-bottom: .25rem; }
+.service-card .hotel-url {
+  margin: .5rem 0 0.25rem;
+}
+.service-card .hotel-url a {
+  word-break: break-all;   /* long URLs wrap */
+  text-decoration: underline;
+}
 
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}

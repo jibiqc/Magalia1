@@ -20,6 +20,8 @@ import { uid } from "../utils/localId";
 window.__ET_DEBUG = window.__ET_DEBUG ?? false;
 const dbg = (...args) => { if (window.__ET_DEBUG) console.log(...args); };
 
+
+
 // ---- Catalog grouping helpers ----
 const norm = (s) => (s || "").toString().trim().toLowerCase();
 const HOTEL_CATS = new Set(["hotel room","apartment","villa"]);
@@ -31,6 +33,41 @@ const isHotelSvc = (s) => {
 };
 const isTransportSvc = (s) => norm(s?.category) === "private transfer";
 const inTab = (s, tab) => tab === "Hotels" ? isHotelSvc(s) : tab === "Transport" ? isTransportSvc(s) : true;
+
+// Utilitaires pour le rendu ServiceCard (utilisent norm et HOTEL_CATS déjà définis)
+const isHotelLine = L => HOTEL_CATS.has(norm(L?.category));
+const isTransportLine = L => norm(L?.category) === "private transfer";
+const repeatStar = n => (Number(n)>0 ? " " + "★".repeat(Math.min(5, Number(n))) : "");
+const isFromCatalog = (l) => !!(l?.raw_json?.catalog_id || l?.raw_json?.source === "catalog" || l?.raw_json?.snapshot);
+const shouldShowSupplier = (l) => !isFromCatalog(l) && !!l?.supplier_name;
+const breakfastYes = v => {
+  const s = norm(v);
+  return s==="1" || s.includes("breakfast") || s.includes("petit déjeuner") || s.includes("petit dejeuner");
+};
+const cleanRoom = title => {
+  const t = (title||"").replace(/^hotel\s*room\s*/i,"").trim();
+  return t || title || "Room";
+};
+
+async function enrichLineFromCatalog(lineId, catalogId, setQ) {
+  try {
+    const full = await api.getServiceById(catalogId);
+    setQ(prev => {
+      const q = { ...prev, days: prev.days.map(d => {
+        if (!Array.isArray(d.lines)) return d;
+        const lines = d.lines.map(L => {
+          if (L.id !== lineId) return L;
+          const raw = { ...(L.raw_json||{}) };
+          raw.fields = full?.fields || raw.fields || {};
+          raw.snapshot = raw.snapshot || full || {};
+          return { ...L, raw_json: raw };
+        });
+        return { ...d, lines };
+      })};
+      return q;
+    });
+  } catch {}
+}
 
 // Défaut global pour la marge
 const DEFAULT_MARGIN = 0.1627; // 16.27 %
@@ -349,6 +386,15 @@ export default function QuoteEditor(){
   const [activeDayId,setActiveDayId] = useState(null);
 
   const totalsRef = useRef(null);
+
+  // --- add: click guard for catalog insertions
+  const lastAddAtRef = useRef(0);
+  const safeInsertFromCatalog = (svc) => {
+    const now = (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now();
+    if (now - lastAddAtRef.current < 500) return; // ignore double click / double fire
+    lastAddAtRef.current = now;
+    insertCatalogService(svc);
+  };
 
   // --- Open control / feedback ---
   const [openId, setOpenId] = useState("");
@@ -912,33 +958,29 @@ export default function QuoteEditor(){
     };
   }
 
-  async function insertCatalogService(svcLite) {
-    // fetch full service to get .fields/.extras
-    let svc = svcLite;
-    try {
-      if (!svcLite.fields && !svcLite.extras) {
-        svc = await api.getServiceById(svcLite.id);
-      }
-    } catch {}
+  function insertCatalogService(svc) {
+    const idx = findActiveIndex();
+    if (idx < 0) { showNotice("Select a day first", "info"); return; }
+    const d = q.days[idx];
+    // do not insert the same catalog service twice on the same day
+    const exists = Array.isArray(d?.lines) && d.lines.some(
+      (l) => l?.raw_json?.catalog_id === svc.id
+    );
+    if (exists) return;
     
-    // Helper pour trouver l'index du jour actif dans un quote donné
-    const findActiveIndexInQuote = (quote) => {
-      const idx = (quote?.days || []).findIndex(d => d.id === activeDayId);
-      return idx >= 0 ? idx : -1;
-    };
-
     const line = lineFromCatalog(svc);
     setQ(prev => {
-      const q1 = {...prev, dirty:true};
-      const idx = findActiveIndexInQuote(q1);
+      const q = { ...prev };
+      const idx = (q?.days || []).findIndex(d => d.id === activeDayId);
       if (idx < 0) { showNotice("Select a day first", "info"); return prev; }
-      const day = {...q1.days[idx]};
-      day.lines = [...(day.lines||[]), line];
-      q1.days = q1.days.slice();
-      q1.days[idx] = day;
-      return q1;
+      const day = { ...q.days[idx] };
+      day.lines = Array.isArray(day.lines) ? [...day.lines, line] : [line];
+      const normalized = normalizeQuotePositions({ ...q, days: q.days.map((d, i) => i === idx ? day : d) });
+      normalized.dirty = true;
+      return normalized;
     });
-    dbg?.("inserted", { id: svc.id, name: svc.name, hasFields: !!(svc.fields) });
+    // enrichir en asynchrone
+    enrichLineFromCatalog(line.id, svc.id, setQ);
   }
 
   // Load "Popular" for Activity when destination changes
@@ -2091,10 +2133,8 @@ export default function QuoteEditor(){
                         }
                         return l[field] ?? "";
                       };
-                      // Ensure unique key: use id if available, otherwise use combination of day and index
-                      const uniqueKey = isLocal 
-                        ? (l.id || `local-${d.id}-${displayIndex}`)
-                        : (l.id || `backend-${d.id}-${displayIndex}`);
+                      // Ensure unique key: combine day id, line id, and index to guarantee uniqueness
+                      const uniqueKey = `${d.id}-${l.id || 'no-id'}-${displayIndex}`;
                       return (
                         <React.Fragment key={uniqueKey}>
                           <div
@@ -2230,7 +2270,7 @@ export default function QuoteEditor(){
                               />
                             </div>
                           )}
-                          {isPaidCategory(l.category) && !isLocal && lineIdx >= 0 && l.supplier_name && (
+                          {isPaidCategory(l.category) && !isLocal && lineIdx >= 0 && shouldShowSupplier(l) && (
                             <div className="line-supplier">{l.supplier_name}</div>
                           )}
                           </div>
@@ -2314,7 +2354,7 @@ export default function QuoteEditor(){
                               className="btn"
                               style={{justifyContent:"start", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}
                               title={`${s.name} — ${s.supplier_name || "Supplier"} (${s.category || "Activity"})`}
-                              onClick={()=>{ console.info("[search→add]", s.id, s.name); insertCatalogService(s); }}
+                              onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); safeInsertFromCatalog(s); }}
                               disabled={addBusy}>
                         <span style={{fontWeight:600, marginRight:6}}>{s.category || "Activity"}</span>
                         <span>{s.name}</span>
@@ -2338,7 +2378,7 @@ export default function QuoteEditor(){
                             className="btn"
                             style={{justifyContent:"start", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}
                             title={`${s.name} — ${s.supplier_name || "Supplier"} (${s.category || "Activity"})`}
-                            onClick={()=>{ console.info("[popular→add]", s.id, s.name); insertCatalogService(s); }}
+                            onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); safeInsertFromCatalog(s); }}
                             disabled={addBusy}>
                       <span style={{fontWeight:600, marginRight:6}}>{s.category || "Activity"}</span>
                       <span>{s.name}</span>
