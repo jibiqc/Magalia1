@@ -667,6 +667,33 @@ export default function QuoteEditor(){
     insertDayAt(idx + 1);
   }, [findActiveIndex, insertDayAt, showNotice]);
 
+  // --- Delete active day with min=1 and contiguous dates ---
+  const deleteActiveDay = useCallback(() => {
+    const days = [...(q?.days || [])];
+    if (days.length <= 1) { showNotice("At least 1 day required", "info"); return; }
+    const idx = (q?.days || []).findIndex(d => d.id === activeDayId);
+    if (idx < 0) { showNotice("Select a day first", "info"); return; }
+    // Remove
+    days.splice(idx, 1);
+    const normalized = normalizeQuotePositions({ ...q, days });
+    // Adjust start/end if start_date is defined
+    let nextStart = q.start_date || null;
+    if (nextStart && idx === 0) {
+      nextStart = addDaysISO(nextStart, 1); // first day removed → shift start forward
+    }
+    let nextEnd = q.end_date || null;
+    if (nextStart) {
+      nextEnd = addDaysISO(nextStart, Math.max(0, normalized.days.length - 1));
+      setQ(prev => ({ ...prev, days: normalized.days, start_date: nextStart, end_date: nextEnd, dirty: true }));
+    } else {
+      setQ(prev => ({ ...prev, days: normalized.days, dirty: true }));
+    }
+    // Select new active day
+    const pick = normalized.days[Math.min(idx, normalized.days.length - 1)];
+    if (pick) setActiveDayId(pick.id);
+    showNotice("Day deleted", "success");
+  }, [q, activeDayId, showNotice]);
+
   const ensureQuoteId = async () => {
     // If already have an id, return it
     const existing = (q && q.id) || null;
@@ -1432,7 +1459,7 @@ export default function QuoteEditor(){
           <div className="left-list">
 
             <div className="left-group">
-              {/* Insert control ABOVE the day list */}
+              {/* Insert/Delete controls ABOVE the day list */}
               <button
                 className="day-pill"
                 onClick={insertDayBefore}
@@ -1440,6 +1467,15 @@ export default function QuoteEditor(){
                 disabled={!activeDayId}
               >
                 + Before
+              </button>
+              <button
+                className="day-pill"
+                onClick={deleteActiveDay}
+                title="Delete active day"
+                disabled={!activeDayId || (q?.days?.length||0) <= 1}
+                style={{background:"#2a0f13"}}
+              >
+                Delete day
               </button>
 
               {q.days.map((d,i)=>{
