@@ -115,6 +115,10 @@ def _to_out(q: Quote) -> QuoteOut:
 
         margin_pct=margin_pct,
 
+        onspot_manual=float(q.onspot_manual) if q.onspot_manual is not None else None,
+
+        hassle_manual=float(q.hassle_manual) if q.hassle_manual is not None else None,
+
         onspot_total=float(q.onspot_total) if q.onspot_total is not None else None,
 
         hassle_total=float(q.hassle_total) if q.hassle_total is not None else None,

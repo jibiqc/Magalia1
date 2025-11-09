@@ -144,9 +144,15 @@ class QuoteOut(BaseModel):
 
 
 
-    # computed / stored totals (optional for UI now)
+    # quote-level cost controls
 
     margin_pct: Optional[float] = None
+
+    onspot_manual: Optional[float] = None
+
+    hassle_manual: Optional[float] = None
+
+    # computed / stored totals (optional for UI now)
 
     onspot_total: Optional[float] = None
 

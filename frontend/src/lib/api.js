@@ -53,5 +53,37 @@ export const api = {
     // Create new quote with POST
     return apiCall("POST", "/quotes", payload);
   },
+
+  // --- Services catalog API ---
+  searchServices,
+  getPopularServices,
+  getServiceById,
 };
+
+// Named exports for services API
+export async function searchServices({ q, dest, category, limit = 20 }) {
+  const p = new URLSearchParams();
+  if (!q) throw new Error("q is required");
+  p.set("q", q);
+  if (dest) p.set("dest", dest);
+  if (category) p.set("category", category);
+  p.set("limit", String(limit));
+  return apiCall("GET", `/services/search?${p.toString()}`);
+}
+
+export async function getPopularServices({ dest, category = "Activity", limit = 12 }) {
+  const p = new URLSearchParams();
+  if (dest) p.set("dest", dest);
+  if (category) p.set("category", category);
+  p.set("limit", String(limit));
+  return apiCall("GET", `/services/popular?${p.toString()}`);
+}
+
+export async function getServiceById(id) {
+  if (!id) throw new Error("id is required");
+  return apiCall("GET", `/services/${id}`);
+}
+
+// DEBUG facultatif pour tests dans la console:
+if (typeof window !== "undefined") window.api = api;
 
