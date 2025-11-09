@@ -1,22 +1,24 @@
-const API_BASE = import.meta.env.VITE_API_BASE || "http://localhost:8000";
+const API_BASE =
+  (window.__API_BASE ?? import.meta?.env?.VITE_API_BASE ?? "http://127.0.0.1:8000")
+    .replace(/\/$/, "");
 
-async function apiCall(method, path, body = null) {
+async function apiCall(method, path, body) {
   const url = `${API_BASE}${path}`;
-  const options = {
-    method,
-    headers: {
-      "Content-Type": "application/json",
-    },
-  };
-  if (body) {
-    options.body = JSON.stringify(body);
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort("timeout"), 10000); // 10s hard timeout
+  try {
+    const res = await fetch(url, {
+      method,
+      headers: { "Content-Type": "application/json" },
+      body: body ? JSON.stringify(body) : undefined,
+      signal: ctrl.signal,
+      credentials: "omit",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} on ${url}`);
+    return res.status === 204 ? null : await res.json();
+  } finally {
+    clearTimeout(timer);
   }
-  const response = await fetch(url, options);
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: response.statusText }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
-  }
-  return response.json();
 }
 
 export const api = {

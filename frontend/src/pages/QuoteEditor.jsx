@@ -323,6 +323,7 @@ export default function QuoteEditor(){
   const [openId, setOpenId] = useState("");
   const [notice, setNotice] = useState({ msg: "", kind: "info" }); // kind: info|error|success
   const showNotice = (msg, kind="info") => { setNotice({ msg, kind }); setTimeout(()=>setNotice({ msg:"", kind:"info"}), 3000); };
+  const [confirmNav, setConfirmNav] = useState({ visible:false, busy:false, action:null }); // action: {type:'new'|'open', id?:string}
 
 
 
@@ -530,17 +531,21 @@ export default function QuoteEditor(){
     showNotice("New quote created", "success");
   };
 
+  // Returns boolean: true on success, false on failure
   const saveQuote = async () => {
     if (!q) {
       console.warn("Save: no quote");
-      return;
+      showNotice("Nothing to save", "info");
+      return false;
     }
     try {
+      console.info("[saveQuote] start", { hasId: !!q.id });
       // ensure positions reflect current visual order before serializing
       const qNorm = normalizeQuotePositions(q);
       if (!qNorm || !qNorm.days) {
         console.error("Save: normalized quote is invalid", qNorm);
-        return;
+        showNotice("Save failed", "error");
+        return false;
       }
       const payload = {
         title: qNorm.title,
@@ -576,25 +581,54 @@ export default function QuoteEditor(){
       // If no ID, create the quote first
       let quoteId = q.id;
       if (!quoteId) {
-        const created = await api.createOrSaveQuote(payload);
+        const created = await api.createOrSaveQuote(payload).catch(e => {
+          console.error("[saveQuote] create error", e);
+          return null;
+        });
         if (created && created.id) {
           quoteId = created.id;
-          setQ(normalizeQuotePositions(created));
+          const createdNorm = normalizeQuotePositions(created);
+          setQ({ ...createdNorm, dirty: false });
           setOpenId(String(created.id));
-          return;
+          try {
+            const u = new URL(window.location.href);
+            u.searchParams.set("quoteId", String(created.id));
+            window.history.replaceState(null, "", u.toString());
+          } catch {}
+          showNotice("Saved", "success");
+          console.info("[saveQuote] created ok", { id: created.id });
+          return true;
         } else {
           console.error("Save: failed to create quote");
-          return;
+          showNotice("Save failed", "error");
+          return false;
         }
       }
       
       // Update existing quote
-      const updated = await api.saveQuote(quoteId, payload);
-      setQ(normalizeQuotePositions(updated));
+      const updated = await api.saveQuote(quoteId, payload).catch(e => {
+        console.error("[saveQuote] update error", e);
+        return null;
+      });
+      if (!updated) {
+        showNotice("Save failed", "error");
+        return false;
+      }
+      const updatedNorm = normalizeQuotePositions(updated);
+      setQ({ ...updatedNorm, dirty: false });
+      try {
+        const u = new URL(window.location.href);
+        u.searchParams.set("quoteId", String(quoteId));
+        window.history.replaceState(null, "", u.toString());
+      } catch {}
       showNotice("Saved", "success");
+      console.info("[saveQuote] updated ok", { id: quoteId });
+      return true;
     } catch (err) {
       console.error("Save error:", err);
-      showNotice("Save failed", "error");
+      const msg = String(err?.name||err||"");
+      showNotice(msg.includes("Abort") ? "Network timeout" : "Save failed", "error");
+      return false;
     }
   };
 
@@ -607,6 +641,14 @@ export default function QuoteEditor(){
       if (quote.margin_pct == null) quote.margin_pct = DEFAULT_MARGIN;
       setQ(quote);
       setOpenId(String(quoteId));
+      // keep URL in sync
+      try {
+        const u = new URL(window.location.href);
+        if (u.searchParams.get("quoteId") !== String(quoteId)) {
+          u.searchParams.set("quoteId", String(quoteId));
+          window.history.replaceState(null, "", u.toString());
+        }
+      } catch {}
       // Set activeDayId to first day if available
       if (quote.days && quote.days.length > 0) {
         setActiveDayId(quote.days[0].id);
@@ -618,6 +660,16 @@ export default function QuoteEditor(){
     }
   };
 
+  // Update document title with ID and title
+  useEffect(()=>{
+    const base = "Magal'IA";
+    if (q?.id) {
+      document.title = `${base} — #${q.id}${q?.title ? " "+q.title : ""}`;
+    } else {
+      document.title = base;
+    }
+  }, [q?.id, q?.title]);
+
   // Auto-open if ?quoteId= is present in URL
   useEffect(() => {
     try {
@@ -626,6 +678,99 @@ export default function QuoteEditor(){
       if (qid) fetchQuote(qid);
     } catch {}
   }, []);
+
+  // --- Leave guard on tab close/reload when dirty ---
+  useEffect(() => {
+    const onBeforeUnload = (e) => {
+      if (!q?.dirty) return;
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [q?.dirty]);
+
+  // Navigation requests with dirty-check
+  const requestNew = () => {
+    if (q?.dirty) {
+      setConfirmNav({ visible:true, busy:false, action:{ type:"new" } });
+    } else {
+      handleNew();
+    }
+  };
+  const requestOpen = (id) => {
+    const qid = String(id || "").trim();
+    if (!qid) return;
+    if (q?.dirty) {
+      setConfirmNav({ visible:true, busy:false, action:{ type:"open", id: qid } });
+    } else {
+      fetchQuote(qid);
+    }
+  };
+  const cancelProceed = () => {
+    console.info("[nav] cancel");
+    console.log("[RIBBON BEFORE CLICK]", { confirmNav });
+    setConfirmNav({ visible:false, busy:false, action:null });
+    console.log("[RIBBON AFTER SET]", { confirmNav: { visible:false, busy:false, action:null } });
+  };
+  const discardAndProceed = () => {
+    const a = confirmNav.action;
+    console.info("[nav] discard", a);
+    console.log("[RIBBON BEFORE CLICK]", { confirmNav });
+    setConfirmNav({ visible:false, busy:false, action:null }); // close ribbon first
+    console.log("[RIBBON AFTER SET]", { confirmNav: { visible:false, busy:false, action:null } });
+    if (!a) return;
+    if (a.type === "new") handleNew();
+    if (a.type === "open" && a.id) fetchQuote(a.id);
+  };
+  const inflightRef = useRef(false);
+  const saveAndProceed = async () => {
+    const a = confirmNav.action;
+    if (!a) return;
+    console.log("[RIBBON BEFORE CLICK]", { confirmNav });
+    if (inflightRef.current) { console.warn("[nav] saveAndProceed ignored, inflight"); return; }
+    try {
+      inflightRef.current = true;
+      console.info("[nav] saveAndProceed", a);
+      setConfirmNav(s => {
+        const next = { ...s, busy:true };
+        console.log("[RIBBON AFTER SET]", { confirmNav: next });
+        return next;
+      });
+      const ok = await saveQuote();
+      if (!ok) {
+        console.warn("[nav] saveAndProceed: save failed");
+        return;
+      }
+      // Success: hide ribbon then proceed
+      setConfirmNav({ visible:false, busy:false, action:null });
+      console.log("[RIBBON AFTER SET]", { confirmNav: { visible:false, busy:false, action:null } });
+      console.info("[nav] proceeding after save", a);
+      if (a.type === "new") handleNew();
+      if (a.type === "open" && a.id) fetchQuote(a.id);
+    } catch (e) {
+      console.error("[nav] saveAndProceed error", e);
+      setConfirmNav(s => ({ ...s, busy:false }));
+      showNotice("Save failed", "error");
+    } finally {
+      // Always clear busy; if ribbon is already hidden, this is a no-op
+      setConfirmNav(s => ({ ...s, busy:false }));
+      inflightRef.current = false;
+    }
+  };
+
+  // Close ribbon with Escape
+  useEffect(() => {
+    if (!confirmNav.visible) return;
+    const onKey = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        cancelProceed();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [confirmNav.visible, cancelProceed]);
 
   // --- Insert day helpers ---
   const findActiveIndex = useCallback(() => {
@@ -1408,7 +1553,13 @@ export default function QuoteEditor(){
 
     }
 
-
+  // DEBUG: Log state before render
+  console.log("[STATE]", {
+    dirty: q?.dirty ?? null,
+    id: q?.id ?? null,
+    openId,
+    confirmNav
+  });
 
   return (
 
@@ -1422,7 +1573,7 @@ export default function QuoteEditor(){
 
 
 
-        <button onClick={handleNew} className="btn">New</button>
+        <button onClick={requestNew} className="btn">New</button>
 
 
 
@@ -1431,11 +1582,35 @@ export default function QuoteEditor(){
           placeholder="id…"
           value={openId}
           onChange={e=>setOpenId(e.target.value)}
-          onKeyDown={(e)=>{ if(e.key==="Enter" && openId.trim()) fetchQuote(openId.trim()); }}
+          onKeyDown={(e)=>{ if(e.key==="Enter" && openId.trim()) { e.preventDefault(); requestOpen(openId.trim()); } }}
         />
+        <div style={{display:"flex",gap:8}}>
+          <button
+            className={`id-badge ${q?.id ? "" : "ghost"}`}
+            title={q?.id ? "Copy quote ID" : "Draft: save to get an ID"}
+            disabled={!q?.id}
+            onClick={()=>{
+              const v = String(q.id);
+              navigator.clipboard?.writeText(v).then(()=>showNotice(`Copied #${v}`, "success"));
+            }}
+          >
+            {q?.id ? `#${String(q.id)}` : "Draft"}
+          </button>
+          <button
+            className="id-badge"
+            title="Copy open link"
+            onClick={()=>{
+              const u = new URL(window.location.href);
+              if (q?.id) u.searchParams.set("quoteId", String(q.id));
+              navigator.clipboard?.writeText(u.toString()).then(()=>showNotice("Link copied", "success"));
+            }}
+          >
+            Copy link
+          </button>
+        </div>
         <button
           className="btn"
-          onClick={()=> openId.trim() ? fetchQuote(openId.trim()) : showNotice("Enter an ID", "info")}
+          onClick={()=> openId.trim() ? requestOpen(openId.trim()) : showNotice("Enter an ID", "info")}
           title="Open by ID"
         >
           Open
@@ -1471,18 +1646,61 @@ export default function QuoteEditor(){
 
 
 
-        <button className="btn primary" onClick={saveQuote}>Save</button>
+        <button className="btn primary" onClick={() => { console.info("[topbar] Save clicked"); void saveQuote(); }}>Save</button>
 
         <button className="btn secondary" onClick={() => setTrashOpen(!trashOpen)} title="Trash">
           🗑 {trashLines.length > 0 && <span>({trashLines.length})</span>}
         </button>
 
       </div>
+      {/* Dirty navigation ribbon: fixed wrapper (non-blocking) + inner (clickable) */}
+      {confirmNav.visible && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 10001,
+            pointerEvents: "none",
+          }}
+          aria-live="polite"
+        >
+          <div
+            style={{
+              maxWidth: "100%",
+              background: "#26334d",
+              borderBottom: "1px solid rgba(255,255,255,.12)",
+              color: "#e6edf7",
+              padding: "8px 12px",
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              pointerEvents: "auto",
+              outline: "2px solid #9cf",
+            }}
+          >
+            <span style={{ fontWeight: 600 }}>Unsaved changes</span>
+            <span style={{ opacity: 0.85 }}>
+              You have unsaved edits. What do you want to do?
+            </span>
+            <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+              <button className="btn primary" onClick={saveAndProceed} disabled={confirmNav.busy}>
+                {confirmNav.busy ? "Saving…" : "Save & proceed"}
+              </button>
+              <button className="btn" onClick={discardAndProceed} disabled={confirmNav.busy}>
+                Discard & proceed
+              </button>
+              <button className="btn" onClick={cancelProceed} disabled={confirmNav.busy} title="Cancel (Esc)">
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Non-modal notice, top-left, auto-hides */}
       {notice.msg && (
         <div
           style={{
-            position:"fixed", top:10, left:10, zIndex:9999,
+            position:"fixed", top:10, left:10, zIndex:9990, pointerEvents:"none",
             padding:"8px 12px", borderRadius:8, fontSize:12,
             background: notice.kind==="error" ? "#5b100f"
                      : notice.kind==="success" ? "#0f3d1e"
@@ -1587,6 +1805,9 @@ export default function QuoteEditor(){
               <button className="total-pill" onClick={totalScroll}>
                 <span>Total: <span className="total-amt">{money(totalsForBadge.grandTotal,{digits:2})}</span></span>
               </button>
+              <div style={{marginTop:6, fontSize:12, opacity:.8}}>
+                {q?.id ? `Quote #${q.id}` : "Draft (no ID yet)"}
+              </div>
 
             </div>
 
