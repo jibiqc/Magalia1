@@ -42,6 +42,14 @@ function __isPaidCategoryLocal(cat) {
   return true;
 }
 
+// --- Date helpers (UTC-only sequencing) ---
+function addDaysISO(iso, delta) {
+  if (!iso) return iso;
+  const d = new Date(iso + "T00:00:00Z"); // force UTC
+  d.setUTCDate(d.getUTCDate() + Number(delta||0));
+  return d.toISOString().slice(0,10);
+}
+
 function computeTotalsUSD(q, localLines, { onspotUsed = 0, hassleUsed = 0, marginStr }) {
   let achatsUsd = 0;
   let ventesUsd = 0;
@@ -597,6 +605,67 @@ export default function QuoteEditor(){
       if (qid) fetchQuote(qid);
     } catch {}
   }, []);
+
+  // --- Insert day helpers ---
+  const findActiveIndex = useCallback(() => {
+    const idx = (q?.days || []).findIndex(d => d.id === activeDayId);
+    return idx >= 0 ? idx : -1;
+  }, [q, activeDayId]);
+
+  function makeNewDay(protoDest = "", dateISO) {
+    return {
+      id: (typeof crypto!=="undefined" && crypto.randomUUID) ? crypto.randomUUID() : uid(),
+      date: dateISO || new Date().toISOString().slice(0,10),
+      destination: protoDest || "",
+      decorative_images: [],
+      lines: []
+    };
+  }
+
+  const insertDayAt = useCallback((atIndex) => {
+    const days = [...(q?.days || [])];
+    if (days.length >= 90) { showNotice("Max 90 days", "info"); return; }
+    // Insert exactly at requested index (bounded to 0..length)
+    const clampIdx = Math.max(0, Math.min(atIndex, days.length));
+    const ref = days[Math.min(clampIdx, Math.max(0, days.length-1))];
+    // Compute tentative start_date (may be shifted if inserting at index 0)
+    let nextStart = q.start_date || null;
+    if (nextStart && clampIdx === 0) {
+      // Inserting before the first day: move the start one day earlier
+      nextStart = addDaysISO(nextStart, -1);
+    }
+    // Compute date for the new day from the effective start reference if available
+    const startRef = nextStart || q.start_date || null;
+    const dateISO = startRef
+      ? addDaysISO(startRef, clampIdx)
+      : (ref?.date || new Date().toISOString().slice(0,10));
+    const newDay = makeNewDay(ref?.destination || "", dateISO);
+    days.splice(clampIdx, 0, newDay);
+    const normalized = normalizeQuotePositions({ ...q, days });
+    // If we have a start reference, recompute the pair (start_date, end_date) atomically
+    let nextEnd = q.end_date || null;
+    if (startRef) {
+      const effStart = nextStart || q.start_date; // nextStart if we shifted, else current start
+      nextEnd = addDaysISO(effStart, Math.max(0, normalized.days.length - 1));
+      setQ(prev => ({ ...prev, days: normalized.days, start_date: effStart, end_date: nextEnd, dirty: true }));
+    } else {
+      // No start date set: only days change
+      setQ(prev => ({ ...prev, days: normalized.days, dirty: true }));
+    }
+    setActiveDayId(newDay.id);
+  }, [q, showNotice]);
+
+  const insertDayBefore = useCallback(() => {
+    const idx = findActiveIndex();
+    if (idx < 0) { showNotice("Select a day first", "info"); return; }
+    insertDayAt(idx);
+  }, [findActiveIndex, insertDayAt, showNotice]);
+
+  const insertDayAfter = useCallback(() => {
+    const idx = findActiveIndex();
+    if (idx < 0) { showNotice("Select a day first", "info"); return; }
+    insertDayAt(idx + 1);
+  }, [findActiveIndex, insertDayAt, showNotice]);
 
   const ensureQuoteId = async () => {
     // If already have an id, return it
@@ -1363,6 +1432,15 @@ export default function QuoteEditor(){
           <div className="left-list">
 
             <div className="left-group">
+              {/* Insert control ABOVE the day list */}
+              <button
+                className="day-pill"
+                onClick={insertDayBefore}
+                title="Insert day before active"
+                disabled={!activeDayId}
+              >
+                + Before
+              </button>
 
               {q.days.map((d,i)=>{
                 return (
@@ -1390,6 +1468,16 @@ export default function QuoteEditor(){
                   </div>
                 );
               })}
+
+              {/* Place + After above the Total row */}
+              <button
+                className="day-pill"
+                onClick={insertDayAfter}
+                title="Insert day after active"
+                disabled={!activeDayId}
+              >
+                + After
+              </button>
 
               {/* Total row */}
 
@@ -1503,11 +1591,11 @@ export default function QuoteEditor(){
                           />
                           {/* card wrapper */}
                           <div className="draggable-wrap" onDragOver={allowDrop}>
-                            <ServiceCard
-                              line={lineData}
-                              onChangeLocalData={isLocal ? (newData)=>{
-                                setLocalLines(prev => prev.map(x => x.id===l.id ? { ...x, data:newData } : x));
-                              } : undefined}
+                          <ServiceCard
+                            line={lineData}
+                            onChangeLocalData={isLocal ? (newData)=>{
+                              setLocalLines(prev => prev.map(x => x.id===l.id ? { ...x, data:newData } : x));
+                            } : undefined}
                               onDragFromHandle={(e)=>{
                                 const meta = {
                                   fromDay: dayIdx,
@@ -1521,39 +1609,39 @@ export default function QuoteEditor(){
                                 e.dataTransfer.setData('text/plain', JSON.stringify(meta)); // fallback
                                 console.log('[dnd] dragstart', meta);
                               }}
-                              onEdit={() => {
-                                if (isLocal) {
-                                  openEditModal(l);
-                                } else {
-                                  // For backend lines, convert to local format for editing
-                                  const editData = {
-                                    id: l.id,
-                                    category: l.category,
-                                    data: {
-                                      title: l.title || "",
-                                      body: l.raw_json?.body || "",
-                                      ...(l.raw_json || {})
-                                    }
-                                  };
-                                  openEditModal(editData);
-                                }
-                              }}
-                              onDuplicate={() => {
-                                if (isLocal) {
-                                  addLocalLine(l.dayId, l.category, JSON.parse(JSON.stringify(l.data || {})));
-                                }
-                              }}
-                              onDelete={() => {
-                                if (isLocal) {
-                                  setLocalLines(prev => prev.map(x => x.id===l.id ? {...x, deleted:true} : x));
-                                  const victim = localLines.find(x => x.id === l.id);
-                                  if (victim) setTrashLines(t => [victim, ...t]);
-                                } else {
-                                  // For backend lines, we could mark for deletion or convert to local
-                                  // For now, just remove from display (would need backend delete later)
-                                }
-                              }}
-                            />
+                            onEdit={() => {
+                              if (isLocal) {
+                                openEditModal(l);
+                              } else {
+                                // For backend lines, convert to local format for editing
+                                const editData = {
+                                  id: l.id,
+                                  category: l.category,
+                                  data: {
+                                    title: l.title || "",
+                                    body: l.raw_json?.body || "",
+                                    ...(l.raw_json || {})
+                                  }
+                                };
+                                openEditModal(editData);
+                              }
+                            }}
+                            onDuplicate={() => {
+                              if (isLocal) {
+                                addLocalLine(l.dayId, l.category, JSON.parse(JSON.stringify(l.data || {})));
+                              }
+                            }}
+                            onDelete={() => {
+                              if (isLocal) {
+                                setLocalLines(prev => prev.map(x => x.id===l.id ? {...x, deleted:true} : x));
+                                const victim = localLines.find(x => x.id === l.id);
+                                if (victim) setTrashLines(t => [victim, ...t]);
+                              } else {
+                                // For backend lines, we could mark for deletion or convert to local
+                                // For now, just remove from display (would need backend delete later)
+                              }
+                            }}
+                          />
                           {isPaidCategory(l.category) && (
                             <div className="price-row-one">
                               {/* Prix d'achat € */}
