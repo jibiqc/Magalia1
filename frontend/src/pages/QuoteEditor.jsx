@@ -475,6 +475,12 @@ export default function QuoteEditor(){
     if (!isFinite(n) || n <= 0) return '';
     return '★'.repeat(Math.max(1, Math.min(5, Math.round(n))));
   }
+  function starsAbbrFrom(v) {
+    if (!v) return '';
+    const n = typeof v === 'string' ? parseFloat(v) : v;
+    if (!isFinite(n) || n <= 0) return '';
+    return `${Math.max(1, Math.min(5, Math.round(n)))}*`;
+  }
   
   // Right rail item component
   function RightItem({ s }) {
@@ -491,11 +497,20 @@ export default function QuoteEditor(){
     const onMove = (e) => setHoverPos({ x: e.clientX, y: e.clientY });
     const onLeave = () => setSvcHoverId(null);
 
-    let title, sub = null;
+    let title = '', sub = null;
+    
     if (tab === 'Hotels') {
       const supplier = s.supplier_name || s.company || s.name || '';
-      const stars = starsFrom(fields.hotel_stars || fields['Hotel Stars'] || s.hotel_stars);
-      title = `${supplier}${stars ? ' ' + stars : ''}`;   // étoiles sur la 1re ligne
+      const starsAbbr = starsAbbrFrom(
+        fields.hotel_stars || fields['Hotel Stars'] || s.hotel_stars
+      );
+      // Nom - 3* (collé, aligné à gauche)
+      title = (
+        <div className="svc-title">
+          {supplier}{starsAbbr ? <span className="svc-stars"> - {starsAbbr}</span> : null}
+        </div>
+      );
+      sub = null;   // pas de deuxième ligne pour l'hôtel
     } else if (tab === 'Transport') {
       title = normTransportTitle(s.name || '');
       sub = s.supplier_name || s.company || null;
@@ -515,11 +530,14 @@ export default function QuoteEditor(){
         onMouseMove={onMove}
         onMouseLeave={onLeave}
       >
-        <div className="svc-title">{title}</div>
+        {typeof title === 'string' ? <div className="svc-title">{title}</div> : title}
         {sub ? <div className="svc-sub">{sub}</div> : null}
         {svcHoverId === s.id && hoverText && createPortal(
-          <div className="svc-hover" style={{ left: hoverPos.x + 16, top: hoverPos.y + 16 }}>
-            <div style={{fontWeight:600, marginBottom:6}}>{title}</div>
+          <div className="svc-hover"
+               style={{ left: hoverPos.x - 16, top: hoverPos.y + 16, transform: 'translateX(-100%)' }}>
+            <div style={{fontWeight:600, marginBottom:6}}>
+              {(typeof title==='string') ? title : (s.supplier_name || s.company || s.name)}
+            </div>
             <div>{hoverText}</div>
           </div>,
           document.body

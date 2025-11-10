@@ -1209,22 +1209,29 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 .svc-item + .svc-item { margin-top: .5rem; }
 .svc-item:hover { background: #14213a; border-color: #5fa8ff; }
-.svc-title { font-weight: 600; line-height: 1.25; white-space: normal; color: #e7ecf5; }
+/* item dans le right rail */
+.svc-title {
+  display: block;               /* aligné à gauche */
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: normal;
+  color: #e7ecf5;
+}
 .svc-sub { opacity: .9; font-size: .9rem; line-height: 1.2; white-space: normal; color: #b9c0d4; }
-.svc-stars { letter-spacing: .05em; }
-/* Carte de survol ancrée à l'écran (pas au conteneur) */
+.svc-stars { letter-spacing: .02em; font-weight: 600; opacity: .95; white-space: nowrap; }
+/* carte de survol */
 .svc-hover {
   position: fixed; 
-  z-index: 10000;
-  max-width: 32rem; 
-  padding: .8rem .95rem; 
-  border-radius: 12px;
-  background: #0b1220; 
+  z-index: 99999;
+  width: 520px;                      /* ~x2 plus large */
+  max-width: 56vw;
+  padding: 12px 14px;
+  background: #0f172a; 
   color: #e7ecf5;
-  border: 1px solid rgba(255,255,255,.18);
-  box-shadow: 0 12px 36px rgba(0,0,0,.45);
-  white-space: pre-wrap; 
-  line-height: 1.35;
+  border: 1px solid rgba(255,255,255,.08);
+  box-shadow: 0 12px 30px rgba(0,0,0,.35);
+  border-radius: 10px;
+  text-align: left;                   /* contenu aligné à gauche */
 }
 
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
