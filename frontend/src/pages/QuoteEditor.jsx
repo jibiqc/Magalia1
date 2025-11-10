@@ -14,6 +14,7 @@ import HotelModal from "../components/HotelModal";
 import NewServiceModal from "../components/NewServiceModal";
 import CatalogActivityModal from "../components/modals/CatalogActivityModal";
 import ServiceCard from "../components/ServiceCard";
+import HotelFromCatalogModal from "../components/HotelFromCatalogModal";
 import { api } from "../lib/api";
 import { fmtDateShortISO, fmtDateLongISO } from "../utils/dateFmt";
 import { uid } from "../utils/localId";
@@ -381,9 +382,52 @@ function normalizeQuotePositions(qIn) {
   }
 }
 
+// Hook edit interception: if you already have an edit handler, adapt there instead.
+// Example helper to call from your existing "Edit" action:
+export function openEditCatalogHotelModal(line, dayIdx, enable, setDraft) {
+  if (!enable) return false;
+  const cat = (line?.category || '').toLowerCase();
+  const isCatalogHotel = cat.includes('hotel')
+    && (line?.raw_json?.source === 'catalog' || !!line?.raw_json?.catalog_id);
+  if (!isCatalogHotel) return false;
+  const r = line.raw_json || {};
+  setDraft({
+    mode: 'edit',
+    svcFull: { id: line.service_id, fields: r.fields || {}, supplier: { name: line.supplier_name } },
+    dayIdx,
+    lineId: line.id,
+    defaults: {
+      hotel_name: r.hotel_name || line.supplier_name || '',
+      hotel_stars: r.hotel_stars || '',
+      hotel_url: r.hotel_url || '',
+      room_type: r.room_type || line.title || '',
+      breakfast: !!r.breakfast,
+      early_check_in: !!r.early_check_in,
+      check_in_date: r.check_in_date || '',
+      check_out_date: r.check_out_date || '',
+      description: r.description || '',
+      internal_note: r.internal_note || ''
+    }
+  });
+  return true;
+}
+
 export default function QuoteEditor(){
 
   const [q,setQ] = useState(emptyQuote);
+
+  // Feature flag: enable the dedicated hotel-from-catalog modal
+  const enableCatalogHotelModal = useMemo(() => {
+    try {
+      const qs = new URLSearchParams(window.location.search);
+      return qs.get('enableCatalogHotelModal') === '1';
+    } catch {
+      return false;
+    }
+  }, []);
+  // Draft data for the catalog hotel modal
+  // { mode: 'create'|'edit', svcFull?, dayIdx, lineId?, defaults }
+  const [catalogHotelDraft, setCatalogHotelDraft] = useState(null);
 
   const [activeDayId,setActiveDayId] = useState(null);
 
@@ -1061,24 +1105,81 @@ export default function QuoteEditor(){
     const idx = findActiveIndex();
     if (idx < 0) { showNotice("Select a day first", "info"); return; }
     const d = q.days[idx];
+    // If flag on and the item looks like a Hotel, open the dedicated modal instead of inserting directly.
+    // Be robust: rely on current tab, category, or name heuristic.
+    const looksHotel =
+      enableCatalogHotelModal && (
+        (svcTab === 'Hotels') ||
+        ((svc?.category || '').toLowerCase() === 'hotel') ||
+        ((svc?.name || '').toLowerCase().includes('hotel'))
+      );
+    if (looksHotel) {
+      // Fetch full service to hydrate fields before opening the modal
+      (async () => {
+        try {
+          const full = await api.getServiceById(svc.id);
+          // Compute defaults
+          const fields = full?.fields || {};
+          const dayDate = d?.date ? new Date(d.date) : new Date();
+          // Find last day in same destination, else last day of itinerary
+          const dest = d?.destination || null;
+          const sameDestDays = (q?.days || []).filter(x => (x?.destination || null) === dest && x?.date);
+          const lastDay = sameDestDays.length > 0 ? sameDestDays[sameDestDays.length - 1] : (q?.days || [])[q.days.length - 1];
+          const coDate = lastDay?.date ? new Date(lastDay.date) : new Date(dayDate);
+          // checkout = day after lastDay
+          const checkInISO = dayDate.toISOString().slice(0,10);
+          const checkOutBase = new Date(coDate); checkOutBase.setDate(checkOutBase.getDate() + 1);
+          const checkOutISO = checkOutBase.toISOString().slice(0,10);
+          const meal1 = String(fields?.meal_1 || '').toLowerCase();
+          const breakfastDefault = meal1.includes('breakfast');
+          setCatalogHotelDraft({
+            mode: 'create',
+            svcFull: full,
+            dayIdx: idx,
+            defaults: {
+              hotel_name: (full?.company || full?.supplier?.name || full?.name || '') || '',
+              hotel_stars: (fields?.hotel_stars ?? full?.hotel_stars ?? '') || '',   // avoid null → ''
+              hotel_url: (fields?.hotel_url || '') || '',
+              room_type: '', // mandatory, left empty by design
+              breakfast: !!breakfastDefault,
+              early_check_in: false,
+              check_in_date: checkInISO,
+              check_out_date: checkOutISO,
+              description: (fields?.full_description || full?.full_description || '') || '',
+              internal_note: ''
+            }
+          });
+        } catch (e) {
+          console.error(e);
+          showNotice("Unable to open hotel modal. Falling back to direct insert.", "warn");
+          // fallback to previous behavior
+          directInsertCatalogLine(svc, d);
+        }
+      })();
+      return;
+    }
     // do not insert the same catalog service twice on the same day
     const exists = Array.isArray(d?.lines) && d.lines.some(
       (l) => l?.raw_json?.catalog_id === svc.id
     );
     if (exists) return;
-    
+    // Default direct insert behavior (non-hotel or flag off)
+    directInsertCatalogLine(svc, d);
+  }
+
+  // Extracted previous direct insert logic to allow fallback
+  function directInsertCatalogLine(svc, dayObj) {
     const line = lineFromCatalog(svc);
     setQ(prev => {
-      const q = { ...prev };
-      const idx = (q?.days || []).findIndex(d => d.id === activeDayId);
-      if (idx < 0) { showNotice("Select a day first", "info"); return prev; }
-      const day = { ...q.days[idx] };
+      const qn = { ...prev };
+      const idx2 = (qn?.days || []).findIndex(dd => dd.id === dayObj.id);
+      if (idx2 < 0) { showNotice("Select a day first", "info"); return prev; }
+      const day = { ...qn.days[idx2] };
       day.lines = Array.isArray(day.lines) ? [...day.lines, line] : [line];
-      const normalized = normalizeQuotePositions({ ...q, days: q.days.map((d, i) => i === idx ? day : d) });
+      const normalized = normalizeQuotePositions({ ...qn, days: qn.days.map((d3, i3) => i3 === idx2 ? day : d3) });
       normalized.dirty = true;
       return normalized;
     });
-    // enrichir en asynchrone
     enrichLineFromCatalog(line.id, svc.id, setQ);
   }
 
@@ -1505,9 +1606,25 @@ export default function QuoteEditor(){
     setEditingLine(line);
     
     const cat = (line.category || '').toLowerCase();
-    const fromCatalog = line?.raw_json?.source === 'catalog';
+    // Check both root level and data.raw_json for catalog detection
+    const rawJson = line?.raw_json || line?.data?.raw_json || {};
+    const fromCatalog = rawJson?.source === 'catalog' || !!rawJson?.catalog_id;
     
-    // Detect catalog line first
+    // PRIORITY: Check for catalog hotels FIRST (before general hotel handling)
+    if (cat.includes('hotel') && fromCatalog && enableCatalogHotelModal) {
+      // Find the day index for this line
+      const dayIdx = q.days.findIndex(d => d.lines?.some(l => l.id === line.id));
+      if (dayIdx >= 0) {
+        // Ensure raw_json is at root level for openEditCatalogHotelModal
+        const lineWithRawJson = line.raw_json ? line : { ...line, raw_json: rawJson };
+        // Use the catalog hotel modal
+        if (openEditCatalogHotelModal(lineWithRawJson, dayIdx, enableCatalogHotelModal, setCatalogHotelDraft)) {
+          return; // Successfully opened catalog hotel modal
+        }
+      }
+    }
+    
+    // Detect catalog line (for activities and transfers)
     if (fromCatalog) {
       // decide type: Activity if NOT hotel (room/suite) and NOT pure transfer
       const t = (line.title || "").toLowerCase();
@@ -1522,6 +1639,7 @@ export default function QuoteEditor(){
     
     // Handle by category (including catalog lines that are hotels/transfers)
     if (cat.includes('hotel')) {
+      // Fallback to standard hotel modal (for non-catalog hotels)
       setEditingLine(line);
       setHotelOpen(true);
       return;
@@ -1546,7 +1664,7 @@ export default function QuoteEditor(){
       case "New Service": setNewServiceOpen(true); break;
       default: setNewServiceOpen(true); break; // Activities & fallback
     }
-  }, []);
+  }, [q, enableCatalogHotelModal, setCatalogHotelDraft]);
 
   const restoreLine = (id) => {
     setTrashLines(t => t.filter(x=>x.id!==id));
@@ -2296,10 +2414,14 @@ export default function QuoteEditor(){
                               if (isLocal) {
                                 openEditModal(l);
                               } else {
-                                // For backend lines, convert to local format for editing
+                                // For backend lines, preserve raw_json at root level for catalog detection
                                 const editData = {
                                   id: l.id,
                                   category: l.category,
+                                  title: l.title,
+                                  supplier_name: l.supplier_name,
+                                  service_id: l.service_id,
+                                  raw_json: l.raw_json, // Keep raw_json at root for catalog detection
                                   data: {
                                     title: l.title || "",
                                     body: l.raw_json?.body || "",
@@ -2761,6 +2883,71 @@ export default function QuoteEditor(){
           setEditingLine(null);
         }}
       />
+
+      {/* Hotel-from-catalog modal placeholder. Implemented next block. */}
+      {enableCatalogHotelModal && catalogHotelDraft && (
+        <HotelFromCatalogModal
+          open={true}
+          data={catalogHotelDraft}
+          onClose={() => setCatalogHotelDraft(null)}
+          onSubmit={(payload) => {
+            // payload: { room_type, breakfast, early_check_in, check_in_date, check_out_date, description, internal_note }
+            const { mode, svcFull, dayIdx, defaults, lineId } = catalogHotelDraft;
+            const hotelName = (defaults?.hotel_name || svcFull?.company || svcFull?.supplier?.name || svcFull?.name || "");
+            const supplier_name = hotelName;
+            const title = payload.room_type; // mandatory per spec
+            const baseRaw = {
+              source: "catalog",
+              catalog_id: svcFull.id,
+              start_destination: svcFull.start_destination ?? null,
+              supplier_id: svcFull.supplier_id ?? null,
+              supplier_ref: supplier_name,
+              hotel_name: hotelName,
+              hotel_stars: (defaults?.hotel_stars ?? svcFull?.hotel_stars ?? "") || "",
+              hotel_url: (defaults?.hotel_url || ""),
+              room_type: payload.room_type || "",
+              breakfast: !!payload.breakfast,
+              early_check_in: !!payload.early_check_in,
+              check_in_date: payload.check_in_date,
+              check_out_date: payload.check_out_date,
+              description: payload.description || "",
+              internal_note: payload.internal_note || "",
+              fields: (svcFull?.fields || defaults?.fields || {}),
+              snapshot: (svcFull || defaults?.snapshot || {}),
+              hydrated: true
+            };
+            const newLine = {
+              id: (typeof crypto!=="undefined" && crypto.randomUUID) ? crypto.randomUUID() : uid(),
+              service_id: svcFull.id,
+              category: "Hotel",
+              title,
+              supplier_name,
+              visibility: "client",
+              achat_eur: null, achat_usd: null, vente_usd: null, fx_rate: null,
+              currency: null, base_net_amount: null,
+              raw_json: baseRaw
+            };
+            setQ(prev => {
+              const qn = { ...prev };
+              const d = { ...qn.days[dayIdx] };
+              if (mode === 'edit' && lineId) {
+                d.lines = (d.lines || []).map(L => L.id === lineId ? {
+                  ...L,
+                  title,
+                  supplier_name,
+                  raw_json: { ...(L.raw_json||{}), ...baseRaw }
+                } : L);
+              } else {
+                d.lines = Array.isArray(d.lines) ? [...d.lines, newLine] : [newLine];
+              }
+              const normalized = normalizeQuotePositions({ ...qn, days: qn.days.map((x,i)=> i===dayIdx? d : x) });
+              normalized.dirty = true;
+              return normalized;
+            });
+            setCatalogHotelDraft(null);
+          }}
+        />
+      )}
 
       {/* Trash Drawer */}
       {trashOpen && (

@@ -144,8 +144,13 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
     const room = f.room_name || s['Room Name'] || inferRoom(line.title);
     const company = line.provider_name || s['Company'] || line.supplier_name || '';
     const stars = normStars(f.hotel_stars || s['Hotel Stars']);
-    const bf = normYes(f.meal_1 || s['Meal 1']) ? 'breakfast & VAT included' : 'VAT included';
-    title = `${room}, ${bf} at ${company}${stars}`;
+    // Prefer explicit user choice saved in raw_json.breakfast over inferred fields
+    const bfFromJson = (line?.raw_json?.breakfast === true) ? 'breakfast & VAT included'
+                      : (line?.raw_json?.breakfast === false) ? 'VAT included'
+                      : null;
+    const bf = bfFromJson ?? (normYes(f.meal_1 || s['Meal 1']) ? 'breakfast & VAT included' : 'VAT included');
+    const eci = line?.raw_json?.early_check_in ? ', early check-in guaranteed' : '';
+    title = `${room}${eci}, ${bf} at ${company}${stars}`;
   } else if (!isTransfer(line)) {
     // ACTIVITÉ
     const st = f.start_time || s['Start Time'];
@@ -153,7 +158,10 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
   }
 
   // DESCRIPTION + URL
-  const fullDesc = f.full_description || s['Full Description'] || '';
+  // For catalog hotels, prefer raw_json.description (user-edited) over fields
+  const fullDesc = isHotel(line) && line?.raw_json?.source === 'catalog' && line?.raw_json?.description
+    ? line.raw_json.description
+    : (f.full_description || s['Full Description'] || '');
   const hotelUrl = f.hotel_url || s['Hotel URL'] || f.website || s['Website'] || '';
 
   // TEXT LINK for hotel URL
@@ -241,7 +249,8 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
         .filter(Boolean)
         .join(", ");
       subtitle = "";
-      note = h?.description || "";
+      // Prefer description from raw_json when present
+      note = line?.raw_json?.description || h?.description || "";
       break;
     }
     case "New Service": {
@@ -289,7 +298,8 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
   const internal = category==="Internal info" || category==="Cost" || isInternal;
   const isInternalOnly = category==="Internal info";
   const wrapperCls = `service-card ${internal ? "internal" : ""} ${category==="Trip info" ? "tripinfo":""}`;
-  const internalNote = (data && (data.internal_note || data.internalNote)) || line.internal_note || "";
+  // Prefer internal_note from raw_json when present (for catalog hotels)
+  const internalNote = line?.raw_json?.internal_note || (data && (data.internal_note || data.internalNote)) || line.internal_note || "";
 
   const meta = [];
   if (category !== "Cost" && category !== "Trip info" && category !== "Internal info") {
