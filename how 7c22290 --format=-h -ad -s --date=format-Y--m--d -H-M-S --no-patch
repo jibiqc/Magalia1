@@ -1,0 +1,180 @@
+[1mdiff --git a/frontend/src/components/HotelModal.jsx b/frontend/src/components/HotelModal.jsx[m
+[1mindex 46e6ed7..ad5f93e 100644[m
+[1m--- a/frontend/src/components/HotelModal.jsx[m
+[1m+++ b/frontend/src/components/HotelModal.jsx[m
+[36m@@ -1,160 +1,53 @@[m
+ import React, { useState } from "react";[m
+ import { createPortal } from "react-dom";[m
+[31m-import "../styles/quote.css";[m
+ [m
+[31m-export default function HotelModal({[m
+[31m-  open = true,[m
+[31m-  onClose,[m
+[31m-  onSubmit,[m
+[31m-  initialData = null,[m
+[31m-}) {[m
+[32m+[m[32mexport default function HotelModal({ open, onClose, onSubmit, initialData }) {[m
+   const [hotel_name, setHotelName] = useState(initialData?.hotel_name || "");[m
+[31m-  const [stars, setStars] = useState(initialData?.stars || "NA");[m
+[32m+[m[32m  const [stars, setStars] = useState(initialData?.stars || 0);[m
+   const [room_type, setRoomType] = useState(initialData?.room_type || "");[m
+[31m-  const [breakfast, setBreakfast] = useState(initialData?.breakfast !== undefined ? initialData.breakfast : true);[m
+[32m+[m[32m  const [breakfast, setBreakfast] = useState(!!initialData?.breakfast);[m
+   const [hotel_url, setHotelUrl] = useState(initialData?.hotel_url || "");[m
+   const [description, setDescription] = useState(initialData?.description || "");[m
+   const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");[m
+ [m
+   if (!open) return null;[m
+ [m
+[31m-  const handleSubmit = () => {[m
+[31m-    onSubmit({ hotel_name, stars, room_type, breakfast, hotel_url, description, internal_note });[m
+[31m-  };[m
+[32m+[m[32m  return createPortal([m
+[32m+[m[32m    <div className="modal-backdrop">[m
+[32m+[m[32m      <div className="modal-card dest-modal">[m
+[32m+[m[32m        <h2>New Hotel</h2>[m
+ [m
+[31m-  const backdrop = ([m
+[31m-    <div[m
+[31m-      className="dest-modal-backdrop"[m
+[31m-      style={{[m
+[31m-        position: "fixed",[m
+[31m-        inset: 0,[m
+[31m-        display: "flex",[m
+[31m-        alignItems: "center",[m
+[31m-        justifyContent: "center",[m
+[31m-        zIndex: 99999,[m
+[31m-        background: "rgba(0,0,0,0.30)"[m
+[31m-      }}[m
+[31m-      onClick={(e) => {[m
+[31m-        if (e.target === e.currentTarget) onClose?.();[m
+[31m-      }}[m
+[31m-      aria-modal="true"[m
+[31m-      role="dialog"[m
+[31m-    >[m
+[31m-      <div[m
+[31m-        className="modal-card"[m
+[31m-        onClick={(e) => e.stopPropagation()}[m
+[31m-      >[m
+[31m-        <div className="modal-title">Hotel</div>[m
+[32m+[m[32m        <label className="label">Hotel name</label>[m
+[32m+[m[32m        <input value={hotel_name} onChange={e=>setHotelName(e.target.value)} />[m
+ [m
+[31m-        <div className="dest-modal-body" style={{ padding: 0 }}>[m
+[31m-          <div className="field">[m
+[31m-            <label>Hotel name</label>[m
+[31m-            <input[m
+[31m-              type="text"[m
+[31m-              className="input"[m
+[31m-              value={hotel_name}[m
+[31m-              onChange={(e) => setHotelName(e.target.value)}[m
+[31m-              placeholder=""[m
+[31m-            />[m
+[31m-          </div>[m
+[32m+[m[32m        <label className="label">Stars</label>[m
+[32m+[m[32m        <input type="number" min={0} max={5} value={stars} onChange={e=>setStars(+e.target.value||0)} />[m
+ [m
+[31m-          <div className="field">[m
+[31m-            <label>Stars</label>[m
+[31m-            <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 4 }}>[m
+[31m-              {["NA", "1", "2", "3", "4", "5"].map((val) => ([m
+[31m-                <label key={val} style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>[m
+[31m-                  <input[m
+[31m-                    type="radio"[m
+[31m-                    name="stars"[m
+[31m-                    value={val}[m
+[31m-                    checked={stars === val}[m
+[31m-                    onChange={(e) => setStars(e.target.value)}[m
+[31m-                  />[m
+[31m-                  <span>{val === "NA" ? "N/A" : val + "★"}</span>[m
+[31m-                </label>[m
+[31m-              ))}[m
+[31m-            </div>[m
+[31m-          </div>[m
+[32m+[m[32m        <label className="label">Room type</label>[m
+[32m+[m[32m        <input value={room_type} onChange={e=>setRoomType(e.target.value)} />[m
+ [m
+[31m-          <div className="field">[m
+[31m-            <label>Room type</label>[m
+[31m-            <input[m
+[31m-              type="text"[m
+[31m-              className="input"[m
+[31m-              value={room_type}[m
+[31m-              onChange={(e) => setRoomType(e.target.value)}[m
+[31m-              placeholder="e.g., 1 suite, 2 double rooms"[m
+[31m-            />[m
+[31m-          </div>[m
+[32m+[m[32m        <label className="checkbox">[m
+[32m+[m[32m          <input type="checkbox" checked={breakfast} onChange={e=>setBreakfast(e.target.checked)} />[m
+[32m+[m[32m          &nbsp;Breakfast included[m
+[32m+[m[32m        </label>[m
+ [m
+[31m-          <div className="field">[m
+[31m-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>[m
+[31m-              <input[m
+[31m-                type="checkbox"[m
+[31m-                checked={breakfast}[m
+[31m-                onChange={(e) => setBreakfast(e.target.checked)}[m
+[31m-              />[m
+[31m-              <span>Breakfast</span>[m
+[31m-            </label>[m
+[31m-          </div>[m
+[32m+[m[32m        <label className="label">Website</label>[m
+[32m+[m[32m        <input value={hotel_url} onChange={e=>setHotelUrl(e.target.value)} />[m
+ [m
+[31m-          <div className="field">[m
+[31m-            <label>Hotel URL</label>[m
+[31m-            <input[m
+[31m-              type="url"[m
+[31m-              className="input"[m
+[31m-              value={hotel_url}[m
+[31m-              onChange={(e) => setHotelUrl(e.target.value)}[m
+[31m-              placeholder=""[m
+[31m-            />[m
+[31m-          </div>[m
+[32m+[m[32m        <label className="label">Description</label>[m
+[32m+[m[32m        <textarea rows={4} value={description} onChange={e=>setDescription(e.target.value)} />[m
+ [m
+[31m-          <div className="field">[m
+[31m-            <label>Description</label>[m
+[31m-            <textarea[m
+[31m-              className="textarea"[m
+[31m-              value={description}[m
+[31m-              onChange={(e) => setDescription(e.target.value)}[m
+[31m-              placeholder=""[m
+[31m-              rows={4}[m
+[31m-            />[m
+[31m-          </div>[m
+[32m+[m[32m        <label className="label">Internal note</label>[m
+[32m+[m[32m        <textarea rows={3} value={internal_note} onChange={e=>setInternalNote(e.target.value)} />[m
+ [m
+[31m-          <div className="field">[m
+[31m-            <label>Internal note</label>[m
+[31m-            <textarea[m
+[31m-              className="textarea input-internal-note"[m
+[31m-              value={internal_note}[m
+[31m-              onChange={(e) => setInternalNote(e.target.value)}[m
+[31m-              placeholder=""[m
+[31m-              rows={3}[m
+[31m-            />[m
+[31m-          </div>[m
+[31m-[m
+[31m-          <div className="field">[m
+[31m-            <button[m
+[31m-              type="button"[m
+[31m-              className="btn secondary"[m
+[31m-              style={{ opacity: 0.5, cursor: "not-allowed" }}[m
+[31m-              disabled[m
+[31m-            >[m
+[31m-              Fetch hotel details[m
+[31m-            </button>[m
+[31m-          </div>[m
+[31m-        </div>[m
+[31m-[m
+[31m-        <div className="actions">[m
+[31m-          <button className="btn secondary" onClick={onClose}>[m
+[31m-            Cancel[m
+[31m-          </button>[m
+[31m-          <button className="btn primary" onClick={handleSubmit}>[m
+[32m+[m[32m        <div className="modal-actions">[m
+[32m+[m[32m          <button onClick={onClose

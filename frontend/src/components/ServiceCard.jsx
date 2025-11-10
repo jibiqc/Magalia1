@@ -141,11 +141,8 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
 
   // HÔTEL
   if (isHotel(line)) {
-    const room = f.room_name || s['Room Name'] || inferRoom(line.title);
-    const company = line.provider_name || s['Company'] || line.supplier_name || '';
-    const stars = normStars(f.hotel_stars || s['Hotel Stars']);
-    const bf = normYes(f.meal_1 || s['Meal 1']) ? 'breakfast & VAT included' : 'VAT included';
-    title = `${room}, ${bf} at ${company}${stars}`;
+    // Utiliser line.title tel qu'écrit (déjà calculé dans QuoteEditor)
+    // Ne plus dériver depuis snapshot/fields
   } else if (!isTransfer(line)) {
     // ACTIVITÉ
     const st = f.start_time || s['Start Time'];
@@ -153,8 +150,10 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
   }
 
   // DESCRIPTION + URL
-  const fullDesc = f.full_description || s['Full Description'] || '';
-  const hotelUrl = f.hotel_url || s['Hotel URL'] || f.website || s['Website'] || '';
+  // Description affichée = celle stockée lors du submit (source: line.data.description)
+  const longDesc = line?.data?.description || '';
+  const cat = line.data?.catalog || {};
+  const hotelUrl = cat.website || f.hotel_url || s['Hotel URL'] || f.website || s['Website'] || '';
 
   // TEXT LINK for hotel URL
   const hotelUrlText = (hotelUrl || '').trim();
@@ -319,7 +318,7 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
             </div>
             <div className="svc-actions-inline" aria-label="Card actions">
               {/* Order: Edit, Move, Duplicate, Delete */}
-              <button className="icon-vert" aria-label="Edit" onClick={onEdit}><Icon name="edit" /></button>
+              <button type="button" className="icon-vert" aria-label="Edit" onClick={(e)=>{ e.stopPropagation(); onEdit?.(line); }}><Icon name="edit" /></button>
               <button
                 className="icon-vert drag-handle"
                 aria-label="Move"
@@ -376,7 +375,7 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
           <div className="supplier">{line.supplier_name}</div>
         )}
         {/* Description */}
-        {fullDesc ? <p className="desc">{fullDesc}</p> : null}
+        {longDesc ? <div className="desc">{longDesc}</div> : null}
         {/* Hotel: plain URL text, no pills */}
         {isHotel(line) && hotelUrlText ? (
           <div className="hotel-url">

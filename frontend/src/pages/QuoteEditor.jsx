@@ -11,6 +11,7 @@ import FlightModal from "../components/FlightModal";
 import TrainModal from "../components/TrainModal";
 import FerryModal from "../components/FerryModal";
 import HotelModal from "../components/HotelModal";
+import CatalogHotelModal from "../components/CatalogHotelModal";
 import NewServiceModal from "../components/NewServiceModal";
 import CatalogActivityModal from "../components/modals/CatalogActivityModal";
 import ServiceCard from "../components/ServiceCard";
@@ -116,11 +117,44 @@ function __isPaidCategoryLocal(cat) {
 }
 
 // --- Date helpers (UTC-only sequencing) ---
-function addDaysISO(iso, delta) {
-  if (!iso) return iso;
-  const d = new Date(iso + "T00:00:00Z"); // force UTC
-  d.setUTCDate(d.getUTCDate() + Number(delta||0));
-  return d.toISOString().slice(0,10);
+function addDaysISO(iso, n){ const d=new Date(iso); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); }
+
+function lastDaySameDestination(q, startDay){
+  if (!startDay) return null;
+  const dest = startDay.destination || startDay.city || startDay.label;
+  let i = q.days.findIndex(d=>d.id===startDay.id);
+  let j = i;
+  while (j+1<q.days.length && (q.days[j+1].destination||q.days[j+1].city||q.days[j+1].label)===dest) j++;
+  return q.days[j] || startDay;
+}
+
+function computeCatalogCheckout(q, startDay){
+  const last = lastDaySameDestination(q, startDay);
+  if (!last) return startDay?.date || null;
+  const hasDayAfter = q.days.findIndex(d=>d.id===last.id) < q.days.length-1;
+  return hasDayAfter ? addDaysISO(last.date, 1) : last.date;
+}
+
+function parseStars(fields){
+  const raw = String(fields?.hotel_stars ?? fields?.["Hotel Stars"] ?? "").trim();
+  if (!raw) return 0;
+  const m = raw.match(/\d+/); if (m) { const n = Math.min(5, Math.max(0, parseInt(m[0],10))); return n; }
+  return Math.min(5, (raw.match(/★/g)||[]).length || (raw.match(/\*/g)||[]).length);
+}
+
+function breakfastFrom(fields){
+  const x = String(fields?.meal_1 || fields?.["Meal 1"] || "").toLowerCase();
+  return x.includes("breakfast");
+}
+
+function websiteFrom(fields){
+  return fields?.hotel_url || fields?.["Hotel URL"] || fields?.website || "";
+}
+
+function formatHotelTitle({ room, breakfast, company, stars }){
+  const inc = breakfast ? 'breakfast & VAT' : 'VAT';
+  const starStr = stars ? ` ${'★'.repeat(stars)}` : '';
+  return `${room || 'Room'}, ${inc} included at ${company || 'Hotel'}${starStr}`;
 }
 
 function computeTotalsUSD(q, localLines, { onspotUsed = 0, hassleUsed = 0, marginStr }) {
@@ -283,6 +317,69 @@ function countNightsFromIndex(days, idx){
   return n;
 }
 
+// --- Catalog helpers ---
+function canonKey(k){ return String(k||'').trim().toLowerCase()
+  .replace(/\s*\(.*?\)\s*/g,'').replace(/[^\w]+/g,'_'); }
+function getCatalogFields(line){
+  const src =
+    line?.raw_json?.snapshot?.fields ??
+    line?.raw_json?.fields ??
+    line?.raw_json?.snapshot?.extras ??
+    line?.raw_json?.extras ??
+    line?.fields ?? {};
+  const out = {};
+  for (const [k,v] of Object.entries(src||{})) out[canonKey(k)] = v;
+  return out;
+}
+function hotelStars(fields){
+  // accepts "5.0★", "*****", "5", 5
+  const raw = String(fields.hotel_stars ?? fields.stars ?? '').trim();
+  if (!raw) return null;
+  const n = /\d/.test(raw) ? Math.round(parseFloat(raw)) : (raw.match(/★|\*/g)||[]).length;
+  return Math.min(Math.max(n||0,1),5);
+}
+function breakfastIncluded(fields){
+  const m = String(fields.meal_1 ?? fields.breakfast ?? '').toLowerCase();
+  return m.includes('breakfast') || m==='1' || m==='yes' || m==='true';
+}
+function roomNameFrom(line, fields){
+  return fields.room_name ?? fields.room ?? line?.title ?? '';
+}
+
+// Map catalog record -> normalized category used for modal routing
+function guessCategoryFromCatalog(s) {
+  const cat = String(s?.category || '').toLowerCase().trim();
+  const name = String(s?.name || '').toLowerCase();
+  const company = String(s?.supplier_name || s?.supplier?.name || s?.company || '').toLowerCase();
+
+  // Hotels
+  if (['hotel room','apartment','villa'].includes(cat)) return s.category; // already fine
+  if (cat.includes('hotel') || name.includes('room') || company.includes('hotel')) return 'Hotel room';
+
+  // Transport
+  if (cat.includes('transfer') || name.includes('transfer')) return 'Private transfer';
+
+  // Activities (fallback)
+  return 'Activity';
+}
+
+// ---- Hotel catalog helpers
+function starsToInt(v){
+  if (v==null) return null;
+  if (typeof v==='number') return Math.max(1,Math.min(5,Math.round(v)));
+  const m=String(v).match(/(\d+(\.\d+)?)/); return m?Math.max(1,Math.min(5,Math.round(parseFloat(m[1])))):null;
+}
+
+function getDestDateWindow(q,lineOrDay,findActiveIndexFn){
+  const day = lineOrDay?.date ? lineOrDay
+    : q.days.find(d=>Array.isArray(d.lines)&&d.lines.some(l=>l.id===lineOrDay?.id)) || q.days[findActiveIndexFn?.() ?? 0];
+  if (!day) return {checkIn:'',checkOut:''};
+  const dest = day.destination;
+  const same = q.days.filter(d=>d.destination===dest);
+  const toISO = s=>s?new Date(s).toISOString().slice(0,10):'';
+  return {checkIn: toISO(same[0]?.date), checkOut: toISO(same[same.length-1]?.date)};
+}
+
 
 
 const newTripInfo = () => ({
@@ -426,7 +523,9 @@ export default function QuoteEditor(){
   const [flightOpen, setFlightOpen] = useState(false);
   const [trainOpen, setTrainOpen] = useState(false);
   const [ferryOpen, setFerryOpen] = useState(false);
-  const [hotelOpen, setHotelOpen] = useState(false);
+  const [catalogHotelOpen, setCatalogHotelOpen] = useState(false);
+  const [hotelInitialData, setHotelInitialData] = useState(null);
+  const [newHotelOpen, setNewHotelOpen] = useState(false);
   const [newServiceOpen, setNewServiceOpen] = useState(false);
   const [catalogActivityOpen, setCatalogActivityOpen] = useState(false);
   const [editingLine, setEditingLine] = useState(null);
@@ -442,6 +541,18 @@ export default function QuoteEditor(){
   const [svcError, setSvcError] = useState(null);
   const [svcHoverId, setSvcHoverId] = useState(null);
   const [svcInfoCache, setSvcInfoCache] = useState(new Map()); // id -> full service
+
+  // Global state: any modal is open
+  const anyModalOpen = Boolean(
+    newServiceOpen || newHotelOpen || catalogHotelOpen ||
+    tripInfoOpen || internalInfoOpen || costOpen || flightOpen || trainOpen ||
+    ferryOpen || carModalOpen || destModal.open || catalogActivityOpen
+  );
+
+  // Close right-rail hover when any modal is open
+  useEffect(() => {
+    if (anyModalOpen) setSvcHoverId(null);
+  }, [anyModalOpen]);
 
   // ---- Services Search (Activity only)
   const [svcQuery, setSvcQuery] = useState("");
@@ -490,9 +601,11 @@ export default function QuoteEditor(){
     const fields = info?.fields || info?.extras || {};
     
     const onEnter = async (e) => {
-      setSvcHoverId(s.id);
-      ensureSvcInfo(s.id);
-      setHoverPos({ x: e.clientX, y: e.clientY });
+      if (!anyModalOpen) {
+        setSvcHoverId(s.id);
+        ensureSvcInfo(s.id);
+        setHoverPos({ x: e.clientX, y: e.clientY });
+      }
     };
     const onMove = (e) => setHoverPos({ x: e.clientX, y: e.clientY });
     const onLeave = () => setSvcHoverId(null);
@@ -532,7 +645,7 @@ export default function QuoteEditor(){
       >
         {typeof title === 'string' ? <div className="svc-title">{title}</div> : title}
         {sub ? <div className="svc-sub">{sub}</div> : null}
-        {svcHoverId === s.id && hoverText && createPortal(
+        {!anyModalOpen && svcHoverId === s.id && hoverText && createPortal(
           <div className="svc-hover"
                style={{ left: hoverPos.x - 16, top: hoverPos.y + 16, transform: 'translateX(-100%)' }}>
             <div style={{fontWeight:600, marginBottom:6}}>
@@ -1034,7 +1147,7 @@ export default function QuoteEditor(){
     return {
       id: (typeof crypto!=="undefined" && crypto.randomUUID) ? crypto.randomUUID() : uid(),
       service_id: svc.id,
-      category: "Activity",              // keep your current logic for grouping
+      category: guessCategoryFromCatalog(svc),                           // <- now "Hotel room" / "Private transfer" / "Activity"
       title: svc.name ?? "Untitled",
       supplier_name,
       visibility: "client",
@@ -1501,52 +1614,37 @@ export default function QuoteEditor(){
     return d ? d.id : null;
   };
 
-  const openEditModal = useCallback((line) => {
+  function openEditModal(line){
+    console.info('EDIT cat=', line?.category, 'title=', line?.title);
     setEditingLine(line);
-    
-    const cat = (line.category || '').toLowerCase();
-    const fromCatalog = line?.raw_json?.source === 'catalog';
-    
-    // Detect catalog line first
-    if (fromCatalog) {
-      // decide type: Activity if NOT hotel (room/suite) and NOT pure transfer
-      const t = (line.title || "").toLowerCase();
-      const isHotel = /room|suite|apartment|villa/.test(t) || cat.includes('hotel');
-      const isTransfer = /transfer/.test(t) || cat.includes('transfer') || cat.includes('transport');
-      if (!isHotel && !isTransfer) {
-        setEditingLine(line);
-        setCatalogActivityOpen(true);
-        return;
-      }
-    }
-    
-    // Handle by category (including catalog lines that are hotels/transfers)
-    if (cat.includes('hotel')) {
-      setEditingLine(line);
-      setHotelOpen(true);
+    const cat = (line?.category || '').toLowerCase();
+    if (['hotel room','apartment','villa'].includes(cat)) {
+      // snapshot (fallback 1ère insertion) + valeurs déjà éditées
+      const snap = (line?.raw_json?.snapshot?.fields) || {};
+      const prev = (line?.data?.catalog) || {};
+      const hotel_name = prev.hotel_name ?? snap.hotel_name ?? line?.supplier_name ?? '';
+      const stars = Number(prev.stars ?? snap.stars ?? 0);
+      const init = {
+        hotel_name,
+        stars,
+        website: prev.website ?? snap.hotel_url ?? '',
+        room_name: prev.room_name ?? '',
+        check_in: prev.check_in ?? '',   // déjà calculé lors de la création de la ligne
+        check_out: prev.check_out ?? '',
+        breakfast: typeof prev.breakfast === 'boolean' ? prev.breakfast : (snap.meal_1 === 'Breakfast'),
+        early_checkin: !!prev.early_checkin,
+        description: prev.description ?? snap.full_description ?? ''
+      };
+      setHotelInitialData(init);
+      setCatalogHotelOpen(true);
       return;
     }
-    
-    if (cat.includes('transfer') || cat.includes('transport')) {
-      setEditingLine(line);
-      setNewServiceOpen(true);
-      return;
-    }
-    
-    // Activities & fallback
-    switch(line.category) {
-      case "Trip info": setTripInfoOpen(true); break;
-      case "Internal info": setInternalInfoOpen(true); break;
-      case "Cost": setCostOpen(true); break;
-      case "Flight": setFlightOpen(true); break;
-      case "Train": setTrainOpen(true); break;
-      case "Ferry": setFerryOpen(true); break;
-      case "Car Rental": setCarModalOpen(true); break;
-      case "New Hotel": setHotelOpen(true); break;
-      case "New Service": setNewServiceOpen(true); break;
-      default: setNewServiceOpen(true); break; // Activities & fallback
-    }
-  }, []);
+    setNewServiceOpen(true);
+  }
+
+  function openNewHotelModal(){
+    setNewHotelOpen(true); // untouched "New Hotel" flow
+  }
 
   const restoreLine = (id) => {
     setTrashLines(t => t.filter(x=>x.id!==id));
@@ -1922,6 +2020,41 @@ export default function QuoteEditor(){
   // DEBUG: Log state before render
   // dbg('[STATE]', q);
 
+
+  function onHotelUpdate(data){
+    setQ(prev => {
+      const next = structuredClone(prev);
+      next.days = next.days.map(d => {
+        if (!Array.isArray(d.lines)) return d;
+        return {
+          ...d,
+          lines: d.lines.map(l => {
+            if (l.id !== editingLine.id) return l;
+            const raw = {...(l.raw_json||{})};
+            raw.fields = { ...(raw.fields||{}),
+              room_name: data.room_name,
+              meal_1: data.breakfast_included ? 1 : 0,
+              early_checkin: !!data.early_checkin,
+              hotel_url: hotelInitialData.hotel_url || raw.fields?.hotel_url,
+              check_in: data.check_in, check_out: data.check_out,
+              full_description: data.description
+            };
+            const title = formatHotelTitle({
+              room: data.room_name || hotelInitialData.room_name || 'Room',
+              breakfast: !!data.breakfast_included,
+              company: hotelInitialData.hotel_name || l.supplier_name || '',
+              stars: hotelInitialData.stars
+            });
+            return {...l, title, description: data.description ?? l.description, internal_note: data.internal_note ?? l.internal_note, raw_json: raw, dirty: true};
+          })
+        };
+      });
+      next.dirty = true;
+      return next;
+    });
+    setEditingLine(null);
+  }
+
   return (
 
     <div className="app">
@@ -2293,21 +2426,8 @@ export default function QuoteEditor(){
                                 console.log('[dnd] dragstart', meta);
                               }}
                             onEdit={() => {
-                              if (isLocal) {
-                                openEditModal(l);
-                              } else {
-                                // For backend lines, convert to local format for editing
-                                const editData = {
-                                  id: l.id,
-                                  category: l.category,
-                                  data: {
-                                    title: l.title || "",
-                                    body: l.raw_json?.body || "",
-                                    ...(l.raw_json || {})
-                                  }
-                                };
-                                openEditModal(editData);
-                              }
+                              // Pass the line directly (works for both local and backend)
+                              openEditModal(l);
                             }}
                             onDuplicate={() => {
                               if (isLocal) {
@@ -2510,7 +2630,7 @@ export default function QuoteEditor(){
               <button className="cat-button" onClick={()=>{setEditingLine(null); setFlightOpen(true);}}>Flight</button>
               <button className="cat-button" onClick={()=>{setEditingLine(null); setFerryOpen(true);}}>Ferry</button>
               <button className="cat-button" onClick={()=>{setEditingLine(null); setCarModalOpen(true);}}>Car Rental</button>
-              <button className="cat-button" onClick={()=>{setEditingLine(null); setHotelOpen(true);}}>New Hotel</button>
+              <button className="cat-button" onClick={openNewHotelModal}>New Hotel</button>
               <button className="cat-button" onClick={()=>{setEditingLine(null); setNewServiceOpen(true);}}>New Service</button>
             </div>
 
@@ -2696,25 +2816,49 @@ export default function QuoteEditor(){
         />
       )}
 
-      {/* Hotel Modal */}
-      {hotelOpen && (
-        <HotelModal
-          open={hotelOpen}
-          onClose={() => { setHotelOpen(false); setEditingLine(null); }}
+      {/* Catalog-hotel edit */}
+      {catalogHotelOpen && hotelInitialData && (
+        <CatalogHotelModal
+          open={catalogHotelOpen}
+          initialData={hotelInitialData}
+          onClose={()=>{ setCatalogHotelOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
-            const dayId = currentDay?.id;
-            if (dayId) {
-              if (editingLine) {
-                setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
-              } else {
-                addLocalLine(dayId, "New Hotel", payload);
-              }
-            }
-            setHotelOpen(false);
+            // payload: {room_name, description, website, check_in, check_out, breakfast, early_checkin, stars, hotel_name}
+            setLocalLines(prev => prev.map(l => {
+              if (l.id !== editingLine.id) return l;
+              const cat = { ...(l.data?.catalog||{}), ...(payload||{}) };
+              // Titre formaté
+              const bf = cat.breakfast ? 'breakfast & VAT' : 'VAT';
+              const starsSuffix = Number(cat.stars) ? ` – ${Number(cat.stars)}*` : '';
+              const roomPrefix = cat.room_name ? `${cat.room_name}, ` : '';
+              const newTitle = `${roomPrefix}${bf} included at ${cat.hotel_name}${starsSuffix}`;
+              return {
+                ...l,
+                title: newTitle,
+                data: {
+                  ...(l.data||{}),
+                  catalog: cat,
+                  description: (cat.description||'')
+                }
+              };
+            }));
+            setCatalogHotelOpen(false);
             setEditingLine(null);
           }}
-          initialData={editingLine?.data || null}
+        />
+      )}
+
+      {/* New Hotel (original modal) */}
+      {newHotelOpen && (
+        <HotelModal
+          open={newHotelOpen}
+          onClose={()=>setNewHotelOpen(false)}
+          onSubmit={(data)=>{ 
+            const currentDay = q.days.find(d=>d.id===activeDayId) || q.days[0];
+            if (currentDay?.id) addLocalLine(currentDay.id, "Hotel room", data);
+            setNewHotelOpen(false);
+          }}
+          initialData={null}
         />
       )}
 

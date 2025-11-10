@@ -1,0 +1,59 @@
+[33m89f627d[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mfeat/right-rail-hover-wide-stars-inline[m[33m, [m[1;31morigin/feat/right-rail-hover-wide-stars-inline[m[33m)[m Right rail: wider hover card, left-aligned; hotel title 'Name - 3*' with stars inline
+[33m01111cb[m[33m ([m[1;31morigin/feat/right-rail-contrast-hover-stars[m[33m, [m[1;32mfeat/right-rail-contrast-hover-stars[m[33m)[m Right rail: better contrast; fixed-position hover card; hotel stars on first line; cleaned transport titles
+[33m873a690[m[33m ([m[1;31morigin/fix/hide-supplier-for-catalog[m[33m, [m[1;32mfix/hide-supplier-for-catalog[m[33m)[m Hide supplier line for catalog services (including hotels)
+[33mdedfa4a[m[33m ([m[1;31morigin/feat/catalog-tabs-fallback[m[33m, [m[1;32mfeat/catalog-tabs-fallback[m[33m)[m Right rail: robust tab filters + Popular fallback for Hotels/Transport; case-insensitive categories
+[33mb3c7c15[m[33m ([m[1;31morigin/feat/services-insert-cleanup[m[33m, [m[1;32mfeat/services-insert-cleanup[m[33m)[m feat(services): silence [STATE] logs; insert full catalog snapshot into line.raw_json; gated debug
+[33m79de6ba[m[33m ([m[1;31morigin/feat/services-insert-title[m[33m, [m[1;32mfeat/services-insert-title[m[33m)[m fix(services): map catalog service name to line.title; keep category as chip; insert handler
+[33m1ea37df[m[33m ([m[1;31morigin/feat/services-ui-search[m[33m, [m[1;32mfeat/services-ui-search[m[33m)[m feat(ui): add right-rail search for Activity services with debounce and dest filter
+[33m38c0435[m[33m ([m[1;31morigin/feat/services-ui-popular[m[33m, [m[1;32mfeat/services-ui-popular[m[33m)[m feat(ui): wire right-rail Popular to /services/popular with dest and Activity filter
+[33m9cbe652[m[33m ([m[1;31morigin/feat/nav-guard-ribbon-a1[m[33m, [m[1;32mfeat/nav-guard-ribbon-a1[m[33m)[m feat(quote): nav-guard ribbon, deterministic Save/Open, ID badge + URL sync; stable day insert/delete/shift
+[33m64b0ac3[m[33m ([m[1;31morigin/feat/new-prefill-today-b11[m[33m, [m[1;32mfeat/new-prefill-today-b11[m[33m)[m feat(quote): on New, prefill start=today UTC and 3 consecutive days (end=start+2)
+[33mac084f3[m[33m ([m[1;31morigin/fix/insert-init-a34[m[33m, [m[1;32mfix/insert-init-a34[m[33m)[m fix(quote): robust activeDayId init and functional insert; disable when no valid active index; remove debug logs
+[33me41d2cf[m feat(quote): delete active day with min=1 guard; keep dates contiguous; adjust start/end atomically
+[33m02e6b6b[m[33m ([m[1;31morigin/fix/insert-before-a32[m[33m, [m[1;32mfix/insert-before-a32[m[33m)[m fix(quote): correct +Before semantics (shift start_date when inserting at index 0); move +After above Total
+[33m08f2683[m[33m ([m[1;31morigin/feat/open-control-a2[m[33m, [m[1;32mfeat/open-control-a2[m[33m)[m feat(quote): add Open control and ?quoteId= support with non-modal notices
+[33m9e20cdb[m[33m ([m[1;31morigin/feat/pricing-compact-row[m[33m, [m[1;32mfeat/pricing-compact-row[m[33m)[m Quote: pricing row per service on one line, right-aligned, compact widths (EUR=150, FX=90, USD=150, SELL=160)
+[33m7ac6469[m Car rental: expected drop-off UX + single 'Drop off the car' Trip info, transmission segmented control (Automatic/Manual/Do not precise), defaults (unlimited mileage, CDW & theft), central description order, visual polish. DnD slots height and day-head slot.
+[33m5e52989[m[33m ([m[1;31morigin/feat/grid-service-names[m[33m)[m feat(grid): consistent service names with 50-char truncation
+[33m1f2b796[m[33m ([m[1;31morigin/fix/fx-default-4dp-onspot-hassle-once[m[33m, [m[1;32mfix/fx-default-4dp-onspot-hassle-once[m[33m)[m fix(price): show default FX when empty, render FX with 4dp, and include Onspot/Hassle exactly once in totals
+[33m6f02d31[m[33m ([m[1;32mfeature/quote-editor-v1[m[33m)[m fix: ne pas appeler updateLine pour les lignes locales (lineIdx < 0)
+[33m62f4e90[m fix: sécurité updateLine pour éviter Object.assign sur undefined/null
+[33m132b05c[m refactor: helpers numériques robustes, inputs prix type text avec onBlur, Excel preview amélioré, CSS compact sans flèches
+[33m5fb9782[m refactor: source unique de vérité pour catégories payantes avec normalisation (norm + PAID_CATS)
+[33m29950bd[m fix: parsing robuste prix (virgules), formules FX corrigées, commission/Onspot/Hassle sans blocage, CSS compact
+[33m5452199[m[33m ([m[1;31morigin/feature/quote-editor-v1[m[33m)[m feat: add Car Rental to paid categories for pricing inputs
+[33mfa212fe[m fix: correct FX formula (€/FX=$) and ensure all paid services appear in Excel preview
+[33m8f12a41[m feat: fix per-service pricing inputs with safe onBlur recalculation
+[33m350ae15[m feat: restore single-line per-service pricing UI with smooth typing UX
+[33mc9f7d45[m feat: restore per-service pricing UI with compact inputs and FX recalculation
+[33m06e3cb0[m ux: editable AM/PM fields; Train seat reservations default + conditional; Car Rental one-way fee restored; no italics except Trip info; universal PriceGrid with FX logic
+[33m542c9d6[m ui: brand color #002060; Internal card no title; AM/PM time fields + midnight warning; Car Rental layout+render; Hotel/New Service renders; internal notes grey
+[33m36792e0[m ui: left vertical actions on service cards; Trip/Internal/Cost visuals; modal field updates + time warnings; Insert reordered; Total styling; Arial 10pt
+[33m5c82b47[m ui: finalize modal CSS classes and CarRentalModal styling
+[33m0a2215f[m ui: wire modals to local lines; show ServiceCard with Edit/Trash; remove price/currency from modals; add rental/license/notes; duration auto-calc; modal polish; custom center scrollbar
+[33m372588f[m ui: read-only ServiceCard with Edit/Trash, local-only Trash; add 8 service modals (fields only); reorder Insert rows; no backend writes
+[33m0c0c06f[m ui: complete CarRentalModal integration and Insert panel grid layout
+[33mf5ee887[m ui: add CarRentalModal (fields only, no prefill); reorganize Insert panel into 3 rows; wire Car Rental button
+[33m270d403[m ui: move red destination pin to the left of date (left list + center header)
+[33mb01a9c3[m feat(ui): add commEdit state for commission input with better UX
+[33mf22f13b[m fix: remove remaining hassleAuto reference causing runtime error
+[33m0e4b9f5[m fix(calc): remove onspotAuto reference; use onspotValue directly
+[33me461cdb[m fix(calc): use onspotValue and hassleValue in calc useMemo; use DEFAULT_MARGIN fallback
+[33m4396c68[m feat(ui): add DEFAULT_MARGIN constant; secure margin_pct default in frontend and backend; update parsePct helper
+[33m245e4e1[m fix(calc): use onspotValue and hassleValue in calc useMemo; update renderExcelPreview
+[33m6282851[m feat(ui): make Onspot and Hassle editable in Excel preview table; add parseUsd helper; update calculation logic
+[33m7c22290[m feat(ui): editable commission % with live recalculation; new summary grid layout
+[33m0a2a5a1[m fix(calc): use compute_onspot in reprice endpoint; update frontend onspot logic
+[33m5a51a86[m feat(calc): update Onspot calculation with minimum 3 days per card; use days list or date diff
+[33m09c129b[m feat(ui): editable commission % in recap; helpers for % display/parse; grid layout for summary
+[33m7f10953[m feat(ui): editable commission % in recap; helpers for % display/parse; grid layout for summary
+[33m55bc0d6[m fix: update left list to use fmtDateShortISO and remove Day N
+[33m93e8308[m ui: destination modal UX (menu close, nights free-typing); date formats; day headers without 'Day N'; destination shown once per block
+[33m55abecc[m fix(ui): render DestinationRangeModal in portal; namespace modal classes; add escape/click-outside; prevent black screen
+[33m00e547f[m fix(ui): re-enable destination pin; rely on modal ensureQuoteId flow
+[33m3975f6f[m ui/feat: lighter destination modal; ensureQuoteId before PATCH; /destinations now unions catalog distinct destinations
+[33m101f293[m fix(ui): decouple modal render from q.id; pass quoteId from state; guard when missing
+[33m1bac4cc[m fix(ui): DestinationRangeModal opens via open prop; ensure visible modal container; add click log
+[33m1baf226[m ui(quote-editor): add DestinationRangeModal and day-header action; batch destination by date+nights; refresh quote+reprice+warnings
+[33m2cbf413[m quote-editor-v1: finalize price UX; prep for destination-range assignment and catalog selection
+[33macb0962[m feat: start Quote Editor UI skeleton

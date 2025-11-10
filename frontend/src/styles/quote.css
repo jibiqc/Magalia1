@@ -569,9 +569,9 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 
 /* === Modals ============================================================ */
 /* ensure backdrops never beat the ribbon */
-.modal-backdrop{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:9990;pointer-events:none;background:rgba(0,0,0,.30)}
+.modal-backdrop{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;z-index:10000;pointer-events:none;background:rgba(0,0,0,.30)}
 .modal-open .modal-backdrop{pointer-events:auto}
-.modal-card{width:380px;max-width:92vw;background:#1b2436;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:16px 16px 12px;box-shadow:0 12px 32px rgba(0,0,0,.35);max-height:90vh;overflow-y:auto}
+.modal-card{position:relative;width:380px;max-width:92vw;background:#1b2436;border:1px solid rgba(255,255,255,.14);border-radius:12px;padding:16px 16px 12px;box-shadow:0 12px 32px rgba(0,0,0,.35);max-height:90vh;overflow-y:auto;z-index:10001}
 
 /* Time fields row */
 .modal-card .time-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
@@ -1026,6 +1026,18 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   margin-top: 12px;
 }
 
+.modal-card h2 .stars {
+  margin-left: .35rem;
+  font-size: 1rem;
+  vertical-align: baseline;
+}
+
+.modal-card .url a {
+  color: #93c5fd;
+  text-decoration: underline;
+  word-break: break-all;
+}
+
 /* Center column scrollbar */
 .center-rail {
   scrollbar-gutter: stable both-edges;
@@ -1222,7 +1234,8 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 /* carte de survol */
 .svc-hover {
   position: fixed; 
-  z-index: 99999;
+  z-index: 8000;
+  pointer-events: none;
   width: 520px;                      /* ~x2 plus large */
   max-width: 56vw;
   padding: 12px 14px;
@@ -1233,6 +1246,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   border-radius: 10px;
   text-align: left;                   /* contenu aligné à gauche */
 }
+.svc-hover .card { pointer-events: auto; }
 
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
@@ -1583,3 +1597,12 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .inline-bools input[type="checkbox"]{width:16px;height:16px}
 
 .muted{opacity:.8}
+
+.modal-card textarea { width: 100%; }
+.modal-card .grid.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.modal-card .checkbox { display:flex; align-items:center; gap:6px; }
+
+.dest-modal .grid.grid-2{ display:grid; grid-template-columns:1fr 1fr; gap:.75rem; }
+.dest-modal label.inline{ display:flex; align-items:center; gap:.5rem; }
+.dest-modal a.small{ display:block; margin-top:.25rem; font-size:.9rem; opacity:.8; }
+input[disabled], textarea[disabled]{ opacity:.7; }
