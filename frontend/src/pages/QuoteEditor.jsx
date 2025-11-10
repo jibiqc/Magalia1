@@ -1709,7 +1709,11 @@ export default function QuoteEditor(){
       if (cat === "flight")  return clamp50(`Flight ${d.from || "?"}->${d.to || "?"}`);
       if (cat === "train")   return clamp50(`Train ${d.from || "?"}->${d.to || "?"}`);
       if (cat === "ferry")   return clamp50(`Ferry ${d.from || "?"}->${d.to || "?"}`);
-      if (cat === "new hotel" || cat === "hotel") return clamp50(d.hotel_name || line.hotel_name || "Hotel");
+      if (cat === "new hotel" || cat === "hotel") {
+        // For catalog hotels, prefer raw_json.hotel_name
+        const hotelName = line?.raw_json?.hotel_name || d.hotel_name || line.hotel_name || "Hotel";
+        return clamp50(hotelName);
+      }
       if (cat === "new service" || cat === "activity") return clamp50(d.title || line.title || "Service");
       if (cat === "car rental") return "Car Rental";
       if (cat === "cost") return clamp50(d.title || line.title || "Cost");
