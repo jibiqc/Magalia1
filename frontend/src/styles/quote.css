@@ -1180,8 +1180,87 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   text-decoration: underline;
 }
 
+.svc-hit {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.svc-hit-title {
+  font-weight: 600;
+  white-space: normal;
+  overflow: visible;
+}
+.svc-hit-sub {
+  opacity: .8;
+  font-size: .9rem;
+  white-space: normal;
+}
+
+/* Right rail items */
+.svc-item {
+  display: flex; 
+  flex-direction: column; 
+  gap: .15rem;
+  padding: .6rem .8rem; 
+  border-radius: 12px;
+  background: #101a2b;                    /* plus clair */
+  border: 1px solid rgba(255,255,255,.12);
+  color: #e7ecf5;
+}
+.svc-item + .svc-item { margin-top: .5rem; }
+.svc-item:hover { background: #14213a; border-color: #5fa8ff; }
+.svc-title { font-weight: 600; line-height: 1.25; white-space: normal; color: #e7ecf5; }
+.svc-sub { opacity: .9; font-size: .9rem; line-height: 1.2; white-space: normal; color: #b9c0d4; }
+.svc-stars { letter-spacing: .05em; }
+/* Carte de survol ancrée à l'écran (pas au conteneur) */
+.svc-hover {
+  position: fixed; 
+  z-index: 10000;
+  max-width: 32rem; 
+  padding: .8rem .95rem; 
+  border-radius: 12px;
+  background: #0b1220; 
+  color: #e7ecf5;
+  border: 1px solid rgba(255,255,255,.18);
+  box-shadow: 0 12px 36px rgba(0,0,0,.45);
+  white-space: pre-wrap; 
+  line-height: 1.35;
+}
+
 .grid-2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 .grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.grid.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid.three{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+.fld{display:flex;flex-direction:column;gap:4px}
+.fld span{font-size:13px;font-weight:500;opacity:.9}
+.fld input,.fld textarea,.fld select{
+  padding:8px 12px;
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:6px;
+  background:#0f1c33;
+  color:#e6edf7;
+  font-size:14px;
+}
+.fld input:read-only{opacity:.6;cursor:not-allowed}
+.modal-actions{
+  display:flex;
+  gap:12px;
+  justify-content:flex-end;
+  padding:16px 20px;
+  border-top:1px solid rgba(255,255,255,.1);
+}
+.btn.ghost{
+  background:transparent;
+  border:1px solid rgba(255,255,255,.2);
+  color:var(--ink);
+}
+.btn.ghost:hover{background:rgba(255,255,255,.05)}
+.link{
+  color:#60a5fa;
+  text-decoration:underline;
+  cursor:pointer;
+}
+.link:hover{color:#93c5fd}
 .radio-row{display:flex;gap:10px;align-items:center}
 .pill{display:inline-flex;gap:8px;align-items:center;padding:8px 12px;border-radius:12px;background:#e9edf3;color:#0f172a;cursor:pointer}
 .pill input{display:none}

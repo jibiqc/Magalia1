@@ -1,4 +1,5 @@
 import React, {useEffect, useMemo, useRef, useState, useCallback} from "react";
+import { createPortal } from "react-dom";
 
 import "../styles/quote.css";
 import DestinationRangeModal from "../components/DestinationRangeModal";
@@ -11,6 +12,7 @@ import TrainModal from "../components/TrainModal";
 import FerryModal from "../components/FerryModal";
 import HotelModal from "../components/HotelModal";
 import NewServiceModal from "../components/NewServiceModal";
+import CatalogActivityModal from "../components/modals/CatalogActivityModal";
 import ServiceCard from "../components/ServiceCard";
 import { api } from "../lib/api";
 import { fmtDateShortISO, fmtDateLongISO } from "../utils/dateFmt";
@@ -426,6 +428,7 @@ export default function QuoteEditor(){
   const [ferryOpen, setFerryOpen] = useState(false);
   const [hotelOpen, setHotelOpen] = useState(false);
   const [newServiceOpen, setNewServiceOpen] = useState(false);
+  const [catalogActivityOpen, setCatalogActivityOpen] = useState(false);
   const [editingLine, setEditingLine] = useState(null);
   const [trashOpen, setTrashOpen] = useState(false);
 
@@ -437,6 +440,8 @@ export default function QuoteEditor(){
   const [svcPopular, setSvcPopular] = useState([]);
   const [svcLoading, setSvcLoading] = useState(false);
   const [svcError, setSvcError] = useState(null);
+  const [svcHoverId, setSvcHoverId] = useState(null);
+  const [svcInfoCache, setSvcInfoCache] = useState(new Map()); // id -> full service
 
   // ---- Services Search (Activity only)
   const [svcQuery, setSvcQuery] = useState("");
@@ -444,9 +449,85 @@ export default function QuoteEditor(){
   const [svcSError, setSvcSError] = useState(null);
   const [svcResults, setSvcResults] = useState([]);
   const [addBusy, setAddBusy] = useState(false);
+  
+  async function ensureSvcInfo(id) {
+    if (!id || svcInfoCache.has(id)) return svcInfoCache.get(id);
+    try {
+      const full = await api.getServiceById(id);
+      setSvcInfoCache(prev => new Map(prev).set(id, full));
+      return full;
+    } catch { return null; }
+  }
 
   // ---- Service tabs (Activities | Hotels | Transport)
   const [svcTab, setSvcTab] = useState("Activities"); // "Activities" | "Hotels" | "Transport"
+  
+  // --- Helpers: normalize transport title & stars
+  function normTransportTitle(name='') {
+    return name
+      .replace(/^Meet\s*&\s*gre(et|e) ?private transfer from\s*/i, '')
+      .replace(/^Private transfer from\s*/i, '')
+      .trim();
+  }
+  function starsFrom(v) {
+    if (!v) return '';
+    const n = typeof v === 'string' ? parseFloat(v) : v;
+    if (!isFinite(n) || n <= 0) return '';
+    return '★'.repeat(Math.max(1, Math.min(5, Math.round(n))));
+  }
+  
+  // Right rail item component
+  function RightItem({ s }) {
+    const tab = svcTab; // "Activities" | "Hotels" | "Transport"
+    const [hoverPos, setHoverPos] = useState({x:0,y:0});
+    const info = svcInfoCache.get(s.id);
+    const fields = info?.fields || info?.extras || {};
+    
+    const onEnter = async (e) => {
+      setSvcHoverId(s.id);
+      ensureSvcInfo(s.id);
+      setHoverPos({ x: e.clientX, y: e.clientY });
+    };
+    const onMove = (e) => setHoverPos({ x: e.clientX, y: e.clientY });
+    const onLeave = () => setSvcHoverId(null);
+
+    let title, sub = null;
+    if (tab === 'Hotels') {
+      const supplier = s.supplier_name || s.company || s.name || '';
+      const stars = starsFrom(fields.hotel_stars || fields['Hotel Stars'] || s.hotel_stars);
+      title = `${supplier}${stars ? ' ' + stars : ''}`;   // étoiles sur la 1re ligne
+    } else if (tab === 'Transport') {
+      title = normTransportTitle(s.name || '');
+      sub = s.supplier_name || s.company || null;
+    } else {
+      title = s.name || '';
+      sub = s.supplier_name || s.company || null;
+    }
+
+    const hoverText = (fields.full_description || fields['Full Description'] || info?.description || '').trim();
+
+    return (
+      <button
+        type="button"
+        className="svc-item"
+        onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); safeInsertFromCatalog(s); }}
+        onMouseEnter={onEnter}
+        onMouseMove={onMove}
+        onMouseLeave={onLeave}
+      >
+        <div className="svc-title">{title}</div>
+        {sub ? <div className="svc-sub">{sub}</div> : null}
+        {svcHoverId === s.id && hoverText && createPortal(
+          <div className="svc-hover" style={{ left: hoverPos.x + 16, top: hoverPos.y + 16 }}>
+            <div style={{fontWeight:600, marginBottom:6}}>{title}</div>
+            <div>{hoverText}</div>
+          </div>,
+          document.body
+        )}
+      </button>
+    );
+  }
+  
   const CATEGORY_GROUPS = {
     Activities: ["small group","private","private chauffeur","tickets"],
     Hotels: ["hotel room","hotel","apartment","appartment","villa"],
@@ -1404,8 +1485,38 @@ export default function QuoteEditor(){
 
   const openEditModal = useCallback((line) => {
     setEditingLine(line);
-    const category = line.category;
-    switch(category) {
+    
+    const cat = (line.category || '').toLowerCase();
+    const fromCatalog = line?.raw_json?.source === 'catalog';
+    
+    // Detect catalog line first
+    if (fromCatalog) {
+      // decide type: Activity if NOT hotel (room/suite) and NOT pure transfer
+      const t = (line.title || "").toLowerCase();
+      const isHotel = /room|suite|apartment|villa/.test(t) || cat.includes('hotel');
+      const isTransfer = /transfer/.test(t) || cat.includes('transfer') || cat.includes('transport');
+      if (!isHotel && !isTransfer) {
+        setEditingLine(line);
+        setCatalogActivityOpen(true);
+        return;
+      }
+    }
+    
+    // Handle by category (including catalog lines that are hotels/transfers)
+    if (cat.includes('hotel')) {
+      setEditingLine(line);
+      setHotelOpen(true);
+      return;
+    }
+    
+    if (cat.includes('transfer') || cat.includes('transport')) {
+      setEditingLine(line);
+      setNewServiceOpen(true);
+      return;
+    }
+    
+    // Activities & fallback
+    switch(line.category) {
       case "Trip info": setTripInfoOpen(true); break;
       case "Internal info": setInternalInfoOpen(true); break;
       case "Cost": setCostOpen(true); break;
@@ -1415,6 +1526,7 @@ export default function QuoteEditor(){
       case "Car Rental": setCarModalOpen(true); break;
       case "New Hotel": setHotelOpen(true); break;
       case "New Service": setNewServiceOpen(true); break;
+      default: setNewServiceOpen(true); break; // Activities & fallback
     }
   }, []);
 
@@ -2349,17 +2461,7 @@ export default function QuoteEditor(){
                 {svcSError && <div style={{color:"#f88"}}>Error: {String(svcSError)}</div>}
                 {!svcSLoading && !svcSError && svcQuery.trim() && (
                   <div style={{display:"grid", gridTemplateColumns:"1fr", gap:6}}>
-                    {svcResults.map(s => (
-                      <button key={s.id}
-                              className="btn"
-                              style={{justifyContent:"start", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}
-                              title={`${s.name} — ${s.supplier_name || "Supplier"} (${s.category || "Activity"})`}
-                              onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); safeInsertFromCatalog(s); }}
-                              disabled={addBusy}>
-                        <span style={{fontWeight:600, marginRight:6}}>{s.category || "Activity"}</span>
-                        <span>{s.name}</span>
-                      </button>
-                    ))}
+                    {svcResults.map(s => <RightItem key={s.id} s={s} />)}
                     {svcResults.length===0 && <div style={{opacity:.7}}>No results.</div>}
                   </div>
                 )}
@@ -2373,17 +2475,7 @@ export default function QuoteEditor(){
               {svcError && <div style={{color:"#f88"}}>Error: {String(svcError)}</div>}
               {!svcLoading && !svcError && (
                 <div style={{display:"grid", gridTemplateColumns:"1fr", gap:8}}>
-                  {svcPopular.map(s => (
-                    <button key={s.id}
-                            className="btn"
-                            style={{justifyContent:"start", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis"}}
-                            title={`${s.name} — ${s.supplier_name || "Supplier"} (${s.category || "Activity"})`}
-                            onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); safeInsertFromCatalog(s); }}
-                            disabled={addBusy}>
-                      <span style={{fontWeight:600, marginRight:6}}>{s.category || "Activity"}</span>
-                      <span>{s.name}</span>
-                    </button>
-                  ))}
+                  {svcPopular.map(s => <RightItem key={s.id} s={s} />)}
                   {svcPopular.length === 0 && <div style={{opacity:.7}}>No popular items for this destination.</div>}
                 </div>
               )}
@@ -2629,6 +2721,28 @@ export default function QuoteEditor(){
           initialData={editingLine?.data || null}
         />
       )}
+
+      {/* Catalog Activity Modal */}
+      <CatalogActivityModal
+        open={catalogActivityOpen}
+        line={editingLine}
+        onClose={() => { setCatalogActivityOpen(false); setEditingLine(null); }}
+        onSubmit={(updated) => {
+          // Replace the line in q.days[...] and set dirty
+          setQ((prev) => {
+            const next = structuredClone(prev);
+            const d = next.days.find(d => d.lines?.some(l => l.id === updated.id));
+            if (d) {
+              const idx = d.lines.findIndex(l => l.id === updated.id);
+              if (idx >= 0) d.lines[idx] = updated;
+            }
+            next.dirty = true;
+            return next;
+          });
+          setCatalogActivityOpen(false);
+          setEditingLine(null);
+        }}
+      />
 
       {/* Trash Drawer */}
       {trashOpen && (
