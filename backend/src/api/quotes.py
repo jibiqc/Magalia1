@@ -15,7 +15,9 @@ from ..db import get_db
 from ..models_quote import Quote, QuoteDay, QuoteLine
 
 from .schemas_quote import QuoteIn, QuoteOut, DestinationRangePatch, QuoteDayOut
-from typing import List
+from typing import List, Optional, Dict
+
+from ..models.prod_models import ServiceImage
 
 
 
@@ -66,15 +68,46 @@ def compute_onspot(q):
 
 
 
-def _to_out(q: Quote) -> QuoteOut:
+def _to_out(q: Quote, db: Optional[Session] = None, include_first_image: bool = False) -> QuoteOut:
 
     days = []
+
+    # Optional enrichment: prefetch first image URL per service_id in one pass
+    first_img_by_service: Dict[int, str] = {}
+    if include_first_image and db is not None:
+        try:
+            service_ids = []
+            for d in q.days or []:
+                for l in d.lines or []:
+                    if getattr(l, "service_id", None):
+                        service_ids.append(int(l.service_id))
+            # dedupe to limit query
+            service_ids = list({sid for sid in service_ids})
+            if service_ids:
+                imgs = (
+                    db.query(ServiceImage)
+                    .filter(ServiceImage.service_id.in_(service_ids))
+                    .order_by(ServiceImage.service_id.asc(), ServiceImage.id.asc())
+                    .all()
+                )
+                for img in imgs:
+                    sid = getattr(img, "service_id", None)
+                    url = getattr(img, "url", None)
+                    if sid and url and sid not in first_img_by_service:
+                        first_img_by_service[sid] = url
+        except Exception:
+            # Fail silently; exporter will tolerate missing images
+            first_img_by_service = {}
 
     for d in sorted(q.days, key=lambda x: x.position or 0):
 
         lines = []
 
         for l in sorted(d.lines, key=lambda x: x.position or 0):
+            # Optional first image url per line
+            first_image_url = None
+            if include_first_image and first_img_by_service and getattr(l, "service_id", None):
+                first_image_url = first_img_by_service.get(int(l.service_id))
 
             lines.append(dict(
 
@@ -92,7 +125,9 @@ def _to_out(q: Quote) -> QuoteOut:
 
                 currency=l.currency, base_net_amount=float(l.base_net_amount) if l.base_net_amount is not None else None,
 
-                raw_json=l.raw_json
+                raw_json=l.raw_json,
+
+                **({"first_image_url": first_image_url} if include_first_image else {})
 
             ))
 
@@ -245,7 +280,8 @@ def get_quote(quote_id: int, db: Session = Depends(get_db)):
 
     if not q: raise HTTPException(status_code=404, detail="Quote not found")
 
-    return _to_out(q)
+    # Preserve current API shape: do NOT include first_image_url here
+    return _to_out(q, db=None, include_first_image=False)
 
 
 
