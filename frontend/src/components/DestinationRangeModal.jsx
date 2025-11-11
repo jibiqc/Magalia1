@@ -6,15 +6,17 @@ export default function DestinationRangeModal({
   open = true,
   quoteId,
   startDate,
+  initialDestination = "",
+  initialNights = 1,
   ensureQuoteId,
   onClose,
   onApplied,
 }) {
-  const [destInput, setDestInput] = useState("");
+  const [destInput, setDestInput] = useState("");  // will initialize from props on open
   const [suggestions, setSuggestions] = useState([]);
   const [loading, setLoading] = useState(false);
   const [applying, setApplying] = useState(false);
-  const [nightsStr, setNightsStr] = useState("1");
+  const [nightsStr, setNightsStr] = useState("1");  // will initialize from props on open
   const [selectedDest, setSelectedDest] = useState(null);
   const [error, setError] = useState(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -22,6 +24,25 @@ export default function DestinationRangeModal({
   const debounceRef = useRef(null);
   const nightsRef = useRef(null);
   const destWrapRef = useRef(null);
+
+  // Initialize fields when modal opens or startDate/initial props change
+  useEffect(() => {
+    if (!open) return;
+    // Initialize destination input
+    const initDest = (initialDestination || "").trim();
+    setDestInput(initDest);
+    // Initialize nights from props, guard minimum 1
+    const n = Math.max(1, parseInt(String(initialNights || 1), 10));
+    setNightsStr(String(n));
+    // Reset selection state if prefilled
+    if (initDest) {
+      setSelectedDest({ name: initDest });
+      setIsCreating(false);
+    } else {
+      setSelectedDest(null);
+    }
+    setError(null);
+  }, [open, startDate, initialDestination, initialNights]);
 
   if (!open) return null;
 
@@ -295,6 +316,13 @@ export default function DestinationRangeModal({
                 )}
               </div>
             )}
+          </div>
+
+          {/* Prefill hint sentence, non-blocking */}
+          <div style={{ fontSize: 12, opacity: 0.8, marginTop: 12 }}>
+            {destInput?.trim()
+              ? <>Apply "{destInput.trim()}" for {Math.max(1, parseInt(nightsStr || "1", 10))} night(s) from {startDate}.</>
+              : <>Choose a destination and number of nights starting from {startDate}.</>}
           </div>
 
           {error && <div className="error-message">{error}</div>}

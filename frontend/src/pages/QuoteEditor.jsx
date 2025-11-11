@@ -18,6 +18,9 @@ import HotelFromCatalogModal from "../components/HotelFromCatalogModal";
 import TransportFromCatalogModal from "../components/TransportFromCatalogModal";
 import ActivityFromCatalogModal from "../components/ActivityFromCatalogModal";
 import HeaderHero from "../components/HeaderHero";
+import DayHero from "../components/DayHero";
+import DayImagesModal from "../components/modals/DayImagesModal";
+import DayHeroModal from "../components/modals/DayHeroModal";
 import { api } from "../lib/api";
 import { fmtDateShortISO, fmtDateLongISO } from "../utils/dateFmt";
 import { uid } from "../utils/localId";
@@ -61,18 +64,72 @@ async function enrichLineFromCatalog(lineId, catalogId, setQ) {
     setQ(prev => {
       const q = { ...prev, days: prev.days.map(d => {
         if (!Array.isArray(d.lines)) return d;
+        let dayUpdated = false;
+        let newDayImages = [...(d.decorative_images || [])];
+        
         const lines = d.lines.map(L => {
           if (L.id !== lineId) return L;
           const raw = { ...(L.raw_json||{}) };
           raw.fields = full?.fields || raw.fields || {};
           raw.snapshot = raw.snapshot || full || {};
+          // Store images in raw_json for future reference
+          raw.images = full?.images || [];
+          
+          // Copy image URLs to decorative_images of the day (avoid duplicates)
+          if (full?.images && Array.isArray(full.images)) {
+            const imageUrls = full.images
+              .map(img => img?.url)
+              .filter(url => url && typeof url === 'string' && url.trim() !== '');
+            
+            // Merge without duplicates
+            const existingUrls = new Set(newDayImages);
+            imageUrls.forEach(url => {
+              if (!existingUrls.has(url)) {
+                newDayImages.push(url);
+                dayUpdated = true;
+              }
+            });
+          }
+          
           return { ...L, raw_json: raw };
         });
+        
+        // Update day with new decorative_images if any were added
+        if (dayUpdated) {
+          return { ...d, lines, decorative_images: newDayImages };
+        }
         return { ...d, lines };
       })};
       return q;
     });
   } catch {}
+}
+
+// Helper function to add service images to day's decorative_images
+function addServiceImagesToDay(day, serviceData) {
+  if (!serviceData?.images || !Array.isArray(serviceData.images)) {
+    return day;
+  }
+  
+  const imageUrls = serviceData.images
+    .map(img => img?.url)
+    .filter(url => url && typeof url === 'string' && url.trim() !== '');
+  
+  if (imageUrls.length === 0) {
+    return day;
+  }
+  
+  const existingUrls = new Set(day.decorative_images || []);
+  const newImages = imageUrls.filter(url => !existingUrls.has(url));
+  
+  if (newImages.length === 0) {
+    return day;
+  }
+  
+  return {
+    ...day,
+    decorative_images: [...(day.decorative_images || []), ...newImages]
+  };
 }
 
 // Défaut global pour la marge
@@ -438,6 +495,8 @@ export default function QuoteEditor(){
   // Draft data for catalog transport and activity modals
   const [catalogTransportDraft, setCatalogTransportDraft] = useState(null);
   const [catalogActivityDraft, setCatalogActivityDraft] = useState(null);
+  const [editingDayImages, setEditingDayImages] = useState(null); // { dayId, day }
+  const [editingDayHero, setEditingDayHero] = useState(null); // { dayId, dayIdx }
   
   // Debug: log when catalogHotelDraft changes
   useEffect(() => {
@@ -641,6 +700,47 @@ export default function QuoteEditor(){
     try { return raw ? JSON.parse(raw) : null; } catch { return null; }
   };
 
+  // Helper: pick up to 2 image URLs from a day's activities
+  const pickImagesForDay = useCallback((dayObj) => {
+    if (!dayObj) return [];
+    const lines = Array.isArray(dayObj.lines) ? dayObj.lines : [];
+    const urls = [];
+    for (const l of lines) {
+      if ((l?.category || "").toLowerCase() !== "activity") continue;
+      const rx = l?.raw_json || {};
+      // First check images array (from catalog services)
+      if (rx?.images && Array.isArray(rx.images)) {
+        for (const img of rx.images) {
+          if (img?.url && typeof img.url === "string" && img.url.trim()) {
+            urls.push(img.url.trim());
+            if (urls.length >= 2) break;
+          }
+        }
+      }
+      // Fallback to normalized extras fields
+      if (urls.length < 2) {
+        const fromExtras = rx?.extras?.image_url || rx?.fields?.image_url || rx?.image_url;
+        if (fromExtras && typeof fromExtras === "string" && fromExtras.trim()) {
+          urls.push(fromExtras.trim());
+        }
+      }
+      // Stop when we have enough; UI will cap to 2 anyway
+      if (urls.length >= 2) break;
+    }
+    // Return unique, at most 2
+    return Array.from(new Set(urls)).slice(0, 2);
+  }, []);
+
+  // Helper: recompute decorative_images for a given day index in a draft quote
+  const recomputeDayDecorations = useCallback((draftQ, dayIdx) => {
+    if (!draftQ?.days?.[dayIdx]) return;
+    // Day 1 excluded
+    if (dayIdx === 0) { draftQ.days[dayIdx].decorative_images = []; return; }
+    const picked = pickImagesForDay(draftQ.days[dayIdx]);
+    // If none, clear. If one, keep single slot; UI will render second slot empty on edit
+    draftQ.days[dayIdx].decorative_images = picked;
+  }, [pickImagesForDay]);
+
 
 
 
@@ -674,7 +774,13 @@ export default function QuoteEditor(){
       next.days[toDay].lines = dst;
 
       // normalize positions after mutation
-      return normalizeQuotePositions({ ...next, dirty: true });
+      const norm = normalizeQuotePositions({ ...next, dirty: true });
+      // Recompute decorations for source and destination days
+      try {
+        if (typeof fromDay === "number") recomputeDayDecorations(norm, fromDay);
+        if (typeof toDay === "number") recomputeDayDecorations(norm, toDay);
+      } catch {}
+      return norm;
 
     });
 
@@ -712,11 +818,17 @@ export default function QuoteEditor(){
 
         dstBack.splice(insertBackIdx, 0, moved);
 
-        next.days[meta.fromDay].lines = srcBack;
-        next.days[toDay].lines = dstBack;
-        next.dirty = true;
-        console.log('[dnd] drop backend', {fromIdx, insertBackIdx, toDispIndex});
-        return normalizeQuotePositions(next);
+      next.days[meta.fromDay].lines = srcBack;
+      next.days[toDay].lines = dstBack;
+      // Normalize positions first
+      const norm = normalizeQuotePositions(next);
+      // Recompute decorations for source and destination days
+      try {
+        if (typeof meta.fromDay === "number") recomputeDayDecorations(norm, meta.fromDay);
+        if (typeof toDay === "number") recomputeDayDecorations(norm, toDay);
+      } catch {}
+      norm.dirty = true;
+      return norm;
       }
 
       // local → update via localLines using absolute anchor
@@ -745,8 +857,15 @@ export default function QuoteEditor(){
         });
       }, 0);
 
-      next.dirty = true;
-      return normalizeQuotePositions(next);
+      // Normalize positions first
+      const norm = normalizeQuotePositions(next);
+      // Recompute decorations for source and destination days
+      try {
+        if (typeof meta.fromDay === "number") recomputeDayDecorations(norm, meta.fromDay);
+        if (typeof toDay === "number") recomputeDayDecorations(norm, toDay);
+      } catch {}
+      norm.dirty = true;
+      return norm;
     });
 
     setHoverSlot({ day:-1, index:-1 });
@@ -2399,7 +2518,37 @@ export default function QuoteEditor(){
                       onClick={(e) => {
                         e.stopPropagation(); // don't change selection
                         const qid = (q && q.id) || null;
-                        setDestModal({ open: true, quoteId: qid, startDate: d.date });
+                        // Compute initial destination and contiguous nights starting at this day
+                        const startISO = d?.date || null;
+                        const initialDestination = (d && d.destination) ? d.destination : "";
+                        let initialNights = 1;
+                        try {
+                          if (q?.days && startISO && initialDestination) {
+                            // Sort days by date to be safe
+                            const daysSorted = [...q.days].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+                            const startIdx = daysSorted.findIndex(dd => dd.date === startISO);
+                            if (startIdx >= 0) {
+                              initialNights = 1;
+                              for (let i = startIdx + 1; i < daysSorted.length; i++) {
+                                const dd = daysSorted[i];
+                                // Stop if null/empty destination or different destination
+                                if (!dd?.destination || dd.destination !== initialDestination) break;
+                                initialNights += 1;
+                              }
+                            }
+                          } else {
+                            initialNights = 1;
+                          }
+                        } catch (_) {
+                          initialNights = 1;
+                        }
+                        setDestModal({
+                          open: true,
+                          quoteId: qid,
+                          startDate: startISO,
+                          initialDestination,
+                          initialNights
+                        });
                       }}
                     >
                       📍
@@ -2457,6 +2606,13 @@ export default function QuoteEditor(){
 
               <div key={d.id} id={`day-${d.id}`} className="day-card">
 
+                {/* DayHero only (above the date). Legacy block below removed */}
+                <DayHero
+                  day={d}
+                  dayIdx={dayIdx}
+                  onEdit={() => setEditingDayHero({ dayId: d.id, dayIdx })}
+                />
+
                 <div className="day-title">
                   {(() => {
                     const longDate = fmtDateLongISO(d.date);
@@ -2470,6 +2626,7 @@ export default function QuoteEditor(){
                     return (<span>{title}</span>);
                   })()}
                 </div>
+                
                 {/* head-of-day slot */}
                 <div
                   className={`drop-slot ${hoverSlot.day===dayIdx && hoverSlot.index===0 ? 'over' : ''}`}
@@ -2804,11 +2961,13 @@ export default function QuoteEditor(){
           open={destModal.open}
           quoteId={destModal.quoteId ?? ((q && q.id) || null)}
           startDate={destModal.startDate}
+          initialDestination={destModal.initialDestination || ""}
+          initialNights={destModal.initialNights || 1}
           ensureQuoteId={ensureQuoteId}
           onClose={() => setDestModal({ open: false, quoteId: null, startDate: null })}
           onApplied={async () => {
             const qid = destModal.quoteId ?? ((q && q.id) || null);
-            setDestModal({ open: false, quoteId: null, startDate: null });
+            setDestModal({ open: false, quoteId: null, startDate: null, initialDestination: "", initialNights: 1 });
             if (qid) {
               await fetchQuote(qid);
               try {
@@ -3070,6 +3229,7 @@ export default function QuoteEditor(){
               internal_note: payload.internal_note || "",
               fields: (svcFull?.fields || defaults?.fields || {}),
               snapshot: (svcFull || defaults?.snapshot || {}),
+              images: svcFull?.images || [], // Store images in raw_json
               hydrated: true
             };
             const newLine = {
@@ -3085,7 +3245,7 @@ export default function QuoteEditor(){
             };
             setQ(prev => {
               const qn = { ...prev };
-              const d = { ...qn.days[dayIdx] };
+              let d = { ...qn.days[dayIdx] };
               if (mode === 'edit' && lineId) {
                 d.lines = (d.lines || []).map(L => L.id === lineId ? {
                   ...L,
@@ -3096,6 +3256,8 @@ export default function QuoteEditor(){
               } else {
                 d.lines = Array.isArray(d.lines) ? [...d.lines, newLine] : [newLine];
               }
+              // Add service images to day's decorative_images
+              d = addServiceImagesToDay(d, svcFull);
               const normalized = normalizeQuotePositions({ ...qn, days: qn.days.map((x,i)=> i===dayIdx? d : x) });
               normalized.dirty = true;
               return normalized;
@@ -3126,6 +3288,7 @@ export default function QuoteEditor(){
               start_time: payload.start_time || "",
               internal_note: payload.internal_note || "",
               snapshot: svcFull || {},
+              images: svcFull?.images || [], // Store images in raw_json
               hydrated: true
             };
             const newLine = {
@@ -3141,7 +3304,7 @@ export default function QuoteEditor(){
             };
             setQ(prev => {
               const qn = { ...prev };
-              const d = { ...qn.days[dayIdx] };
+              let d = { ...qn.days[dayIdx] };
               if (mode === 'edit' && lineId) {
                 d.lines = (d.lines || []).map(L => L.id === lineId ? {
                   ...L,
@@ -3150,6 +3313,8 @@ export default function QuoteEditor(){
               } else {
                 d.lines = Array.isArray(d.lines) ? [...d.lines, newLine] : [newLine];
               }
+              // Add service images to day's decorative_images
+              d = addServiceImagesToDay(d, svcFull);
               const normalized = normalizeQuotePositions({ ...qn, days: qn.days.map((x,i)=> i===dayIdx? d : x) });
               normalized.dirty = true;
               return normalized;
@@ -3182,6 +3347,7 @@ export default function QuoteEditor(){
               duration: payload.duration || "",
               internal_note: payload.internal_note || "",
               snapshot: svcFull || {},
+              images: svcFull?.images || [], // Store images in raw_json
               hydrated: true
             };
             const newLine = {
@@ -3197,7 +3363,7 @@ export default function QuoteEditor(){
             };
             setQ(prev => {
               const qn = { ...prev };
-              const d = { ...qn.days[dayIdx] };
+              let d = { ...qn.days[dayIdx] };
               if (mode === 'edit' && lineId) {
                 d.lines = (d.lines || []).map(L => L.id === lineId ? {
                   ...L,
@@ -3206,6 +3372,8 @@ export default function QuoteEditor(){
               } else {
                 d.lines = Array.isArray(d.lines) ? [...d.lines, newLine] : [newLine];
               }
+              // Add service images to day's decorative_images
+              d = addServiceImagesToDay(d, svcFull);
               const normalized = normalizeQuotePositions({ ...qn, days: qn.days.map((x,i)=> i===dayIdx? d : x) });
               normalized.dirty = true;
               return normalized;
@@ -3214,6 +3382,55 @@ export default function QuoteEditor(){
           }}
         />
       )}
+
+      {/* Day images modal */}
+      {editingDayImages && (
+        <DayImagesModal
+          open={!!editingDayImages}
+          day={editingDayImages.day}
+          onClose={() => setEditingDayImages(null)}
+          onSave={(images) => {
+            setQ(prev => {
+              const qn = { ...prev };
+              const dayIdx = qn.days.findIndex(d => d.id === editingDayImages.dayId);
+              if (dayIdx >= 0) {
+                const updatedDays = [...qn.days];
+                updatedDays[dayIdx] = { ...updatedDays[dayIdx], decorative_images: images };
+                return { ...qn, days: updatedDays, dirty: true };
+              }
+              return qn;
+            });
+            setEditingDayImages(null);
+          }}
+        />
+      )}
+
+      {/* Day hero modal */}
+      {editingDayHero && (() => {
+        const { dayId, dayIdx } = editingDayHero;
+        const day = q.days?.[dayIdx];
+        return (
+          <DayHeroModal
+            initialP1={(day?.decorative_images?.[0]) || ""}
+            initialP2={(day?.decorative_images?.[1]) || ""}
+            onClose={() => setEditingDayHero(null)}
+            onSaved={({ p1, p2 }) => {
+              setQ(prev => {
+                const next = structuredClone(prev);
+                const idx = dayIdx;
+                if (!next?.days?.[idx]) return prev;
+                const arr = [];
+                if (p1?.trim()) arr.push(p1.trim());
+                if (p2?.trim()) arr.push(p2.trim());
+                next.days[idx].decorative_images = arr;
+                next.dirty = true;
+                return next;
+              });
+              setEditingDayHero(null);
+            }}
+          />
+        );
+      })()}
 
       {/* Trash Drawer */}
       {trashOpen && (
