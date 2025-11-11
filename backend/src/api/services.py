@@ -4,7 +4,7 @@ from sqlalchemy import or_, desc, func
 from sqlalchemy import inspect
 
 from ..db import get_db
-from ..models.prod_models import ServiceCatalog, ServicePopularity, Supplier
+from ..models.prod_models import ServiceCatalog, ServicePopularity, Supplier, ServiceImage
 from .schemas_services import ServiceOut
 from typing import List, Optional
 
@@ -252,6 +252,22 @@ def get_service_by_id(service_id: int, db: Session = Depends(get_db)):
             out["popularity"] = serialize_sa_row(pop)
     except Exception:
         pass
+
+    # Attach images from ServiceImage if available
+    try:
+        imgs = (
+            db.query(ServiceImage)
+            .filter(ServiceImage.service_id == service_id)
+            .all()
+        )
+        out["images"] = [
+            {"id": getattr(img, "id", None), "url": img.url, "caption": getattr(img, "caption", None)}
+            for img in imgs or []
+        ]
+    except Exception:
+        # Be resilient: always provide a predictable shape
+        out["images"] = []
+
     return out
 
 
