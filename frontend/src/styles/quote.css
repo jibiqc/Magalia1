@@ -132,9 +132,23 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   align-items:center;
   gap:8px;
   white-space:nowrap;
-  font-weight:700;
   margin-bottom:10px;
+  /* Use underline instead of bold and force Arial in titles */
+  text-decoration: underline;
+  font-family: Arial, sans-serif;
 }
+
+/* Force Arial in the central content area without touching side panels or topbars.
+   Adjust selectors if your main column uses a different wrapper. */
+.quote-main,
+.quote-body,
+.day,
+.service-card,
+.summary-grid,
+.excel-preview {
+  font-family: Arial, sans-serif;
+}
+
 .day-pin {
   padding:2px 6px;
   line-height:1;
@@ -1206,6 +1220,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   background: #101a2b;                    /* plus clair */
   border: 1px solid rgba(255,255,255,.12);
   color: #e7ecf5;
+  text-align: left;                       /* Aligner le texte à gauche */
 }
 .svc-item + .svc-item { margin-top: .5rem; }
 .svc-item:hover { background: #14213a; border-color: #5fa8ff; }
