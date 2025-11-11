@@ -1636,15 +1636,19 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   display: flex;
   justify-content: center;
   gap: 10px;
+  position: relative;
 }
 
+/* Fixed container size to prevent layout shifts, with placeholder as background */
 .hero-photo-container {
   width: 303px;
   height: 198px;
   overflow: hidden;
   position: relative;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+  border-radius: 0 !important; /* no rounded corners */
 }
 
 .hero-photo {
@@ -1652,22 +1656,17 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   height: 100%;
   object-fit: cover;
   object-position: center;
+  border-radius: 0 !important; /* no rounded corners */
+  transition: opacity 0ms; /* avoid flash animations */
 }
 
-.hero-edit-btn {
+/* Edit button: reuse service edit styling via shared class name */
+.hero-photo-container .icon-vert {
   position: absolute;
   top: 6px;
   right: 6px;
   cursor: pointer;
-  opacity: 0.8;
-  background: rgba(0, 0, 0, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+  background: rgba(0, 0, 0, 0.5);
   border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 14px;
-  transition: opacity 0.2s;
-}
-
-.hero-edit-btn:hover {
-  opacity: 1;
+  z-index: 10;
 }
