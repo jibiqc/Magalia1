@@ -2357,10 +2357,6 @@ export default function QuoteEditor(){
                   onDrop={(e)=> dropBefore(e, dayIdx, 0)}
                 />
 
-
-
-                {d.lines.length===0 && localLines.filter(ll => ll.dayId === d.id && !ll.deleted).length === 0 && <div className="hint">No services yet… Add from the right panel.</div>}
-
                 <div className="day-services">
                   {(() => {
                     const dayLocal = localLines.filter(l => l.dayId === d.id && !l.deleted);
