@@ -38,6 +38,18 @@ def _compress_to_jpeg_bytes(img: Image.Image, quality: int = JPEG_QUALITY, max_b
     out.seek(0)
     return out
 
+def _cover_crop_image(img: Image.Image, target_w_cm: float, target_h_cm: float, dpi: int = DPI) -> Image.Image:
+    """Internal: cover-crop an Image.Image to exact WxH cm."""
+    tw, th = cm_to_px(target_w_cm, dpi), cm_to_px(target_h_cm, dpi)
+    # Compute scale to cover
+    scale = max(tw / img.width, th / img.height)
+    new_w, new_h = int(round(img.width * scale)), int(round(img.height * scale))
+    img = img.resize((new_w, new_h), Image.LANCZOS)
+    # Center-crop
+    left = max(0, (new_w - tw) // 2)
+    top = max(0, (new_h - th) // 2)
+    return img.crop((left, top, left + tw, top + th))
+
 def cover_crop_to_cm(buf: BytesIO, target_w_cm: float = COL_W_CM, target_h_cm: float = COL_H_CM, dpi: int = DPI) -> Optional[BytesIO]:
     """
     Resize with 'cover' behavior to exact WxH cm without distortion:
@@ -45,18 +57,27 @@ def cover_crop_to_cm(buf: BytesIO, target_w_cm: float = COL_W_CM, target_h_cm: f
     """
     try:
         img = ensure_jpeg(buf)
-        tw, th = cm_to_px(target_w_cm, dpi), cm_to_px(target_h_cm, dpi)
-        # Compute scale to cover
-        scale = max(tw / img.width, th / img.height)
-        new_w, new_h = int(round(img.width * scale)), int(round(img.height * scale))
-        img = img.resize((new_w, new_h), Image.LANCZOS)
-        # Center-crop
-        left = max(0, (new_w - tw) // 2)
-        top = max(0, (new_h - th) // 2)
-        img = img.crop((left, top, left + tw, top + th))
+        img = _cover_crop_image(img, target_w_cm, target_h_cm, dpi)
         return _compress_to_jpeg_bytes(img)
     except Exception:
         return None
+
+def make_two_up_cover(left: Image.Image, right: Image.Image, single_w_cm: float, h_cm: float, dpi: int = DPI) -> Image.Image:
+    """Assemble deux images cover-croppées côte à côte sans espace."""
+    lw = _cover_crop_image(left, single_w_cm, h_cm, dpi)
+    rw = _cover_crop_image(right, single_w_cm, h_cm, dpi)
+    W = lw.width + rw.width
+    H = lw.height  # identiques
+    canvas = Image.new("RGB", (W, H), (255, 255, 255))
+    canvas.paste(lw, (0, 0))
+    canvas.paste(rw, (lw.width, 0))
+    return canvas
+
+def jpeg_bytes(img: Image.Image, quality: int = 85) -> bytes:
+    buf = BytesIO()
+    img = img.convert("RGB")
+    img.save(buf, format="JPEG", quality=quality, optimize=True, progressive=True)
+    return buf.getvalue()
 
 def contain_resize_to_width_cm(buf: BytesIO, page_width_cm: float, dpi: int = DPI) -> Optional[BytesIO]:
     """

@@ -10,7 +10,7 @@ ALLOWED_ATTRS = {"a": ["href", "title"]}
 def sanitize_html(html: str) -> str:
     return bleach.clean(html or "", tags=ALLOWED_TAGS, attributes=ALLOWED_ATTRS, strip=True)
 
-def _add_hyperlink(paragraph: Paragraph, url: str, text: str) -> None:
+def add_hyperlink(paragraph: Paragraph, url: str, text: str) -> None:
     """
     Create a clickable hyperlink in a paragraph.
     """
@@ -51,7 +51,7 @@ def append_sanitized_html_to_docx(paragraph: Paragraph, html: str) -> None:
                 p.add_run(before)
             url, text = m.group(1), bleach.clean(m.group(2), tags=[], strip=True)
             if url and text:
-                _add_hyperlink(p, url, text)
+                add_hyperlink(p, url, text)
             pos = m.end()
         tail = bleach.clean(chunk[pos:], tags=[], strip=True)
         if tail:
