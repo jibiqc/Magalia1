@@ -15,9 +15,12 @@ import NewServiceModal from "../components/NewServiceModal";
 import CatalogActivityModal from "../components/modals/CatalogActivityModal";
 import ServiceCard from "../components/ServiceCard";
 import HotelFromCatalogModal from "../components/HotelFromCatalogModal";
+import ActivityFromCatalogModal from "../components/ActivityFromCatalogModal";
+import TransportFromCatalogModal from "../components/TransportFromCatalogModal";
 import { api } from "../lib/api";
 import { fmtDateShortISO, fmtDateLongISO } from "../utils/dateFmt";
 import { uid } from "../utils/localId";
+import { parseHHMM, fmtHm, addMins } from "../utils/duration";
 
 // Debug helper (gated by window.__ET_DEBUG)
 window.__ET_DEBUG = window.__ET_DEBUG ?? false;
@@ -27,15 +30,35 @@ const dbg = (...args) => { if (window.__ET_DEBUG) console.log(...args); };
 
 // ---- Catalog grouping helpers ----
 const norm = (s) => (s || "").toString().trim().toLowerCase();
-const HOTEL_CATS = new Set(["hotel room","apartment","villa"]);
+const HOTEL_CATS = new Set(["hotel","hotel room","apartment","villa"]);
 const isHotelSvc = (s) => {
   const cat = norm(s?.category);
   if (HOTEL_CATS.has(cat)) return true;
   const t = norm(`${s?.name||""} ${s?.supplier_name||""}`);
   return /\b(hotel|apartment|appartment|villa)\b/.test(t);
 };
+// Version stricte pour le right rail (uniquement basée sur la catégorie)
+// Exception : si category est 'to_review', vérifier le nom pour détecter les hôtels
+const isHotelSvcStrict = (s) => {
+  const cat = norm(s?.category);
+  if (HOTEL_CATS.has(cat)) return true;
+  // Si la catégorie est 'to_review', vérifier le nom pour détecter les hôtels
+  if (cat === 'to_review') {
+    const name = norm(`${s?.name || ""} ${s?.supplier_name || ""} ${s?.company || ""}`);
+    return /\b(hotel|apartment|appartment|villa|room|suite|resort|inn|hostel)\b/.test(name);
+  }
+  return false;
+};
 const isTransportSvc = (s) => norm(s?.category) === "private transfer";
-const inTab = (s, tab) => tab === "Hotels" ? isHotelSvc(s) : tab === "Transport" ? isTransportSvc(s) : true;
+const inTab = (s, tab) => {
+  if (tab === "Hotels") return isHotelSvcStrict(s);  // Utiliser la version stricte pour éviter les faux positifs
+  if (tab === "Transport") return isTransportSvc(s);
+  // Pour Activities, exclure explicitement les hôtels et transports
+  if (tab === "Activities") {
+    return !isHotelSvcStrict(s) && !isTransportSvc(s);
+  }
+  return true;
+};
 
 // Utilitaires pour le rendu ServiceCard (utilisent norm et HOTEL_CATS déjà définis)
 const isHotelLine = L => HOTEL_CATS.has(norm(L?.category));
@@ -97,6 +120,44 @@ function fieldsFromExtras(extras) {
   const out = {};
   for (const [k,v] of Object.entries(extras)) if (CANON_MIN[k]) out[CANON_MIN[k]] = v;
   return out;
+}
+
+// Helper to parse activity_duration and convert to "3h" or "3h30" format
+function parseActivityDuration(durationStr) {
+  if (!durationStr) return "";
+  const str = String(durationStr).trim().toLowerCase();
+  // Try to match "3h30", "3h", "90m", "1:30", or just a number (minutes)
+  const hMatch = str.match(/^(\d+)\s*h(?:\s*(\d+))?\s*$/);
+  if (hMatch) {
+    const h = parseInt(hMatch[1], 10);
+    const m = hMatch[2] ? parseInt(hMatch[2], 10) : 0;
+    return m === 0 ? `${h}h` : `${h}h${m}`;
+  }
+  const mMatch = str.match(/^(\d+)\s*m\s*$/);
+  if (mMatch) {
+    const totalMins = parseInt(mMatch[1], 10);
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    return m === 0 ? `${h}h` : `${h}h${m}`;
+  }
+  const timeMatch = str.match(/^(\d+)\s*:\s*(\d+)\s*$/);
+  if (timeMatch) {
+    const h = parseInt(timeMatch[1], 10);
+    const m = parseInt(timeMatch[2], 10);
+    return m === 0 ? `${h}h` : `${h}h${m}`;
+  }
+  // If it's just a number, assume it's minutes
+  if (/^\d+$/.test(str)) {
+    const totalMins = parseInt(str, 10);
+    const h = Math.floor(totalMins / 60);
+    const m = totalMins % 60;
+    return m === 0 ? `${h}h` : `${h}h${m}`;
+  }
+  // If it's already in the right format, return as is
+  if (/^\d+h\d*$/.test(str)) {
+    return str;
+  }
+  return "";
 }
 
 const parseLocaleFloat = (s) => {
@@ -412,6 +473,114 @@ export function openEditCatalogHotelModal(line, dayIdx, enable, setDraft) {
   return true;
 }
 
+// Helper to open TransportFromCatalogModal for editing
+export async function openEditCatalogTransportModal(line, dayIdx, setDraft, api) {
+  const cat = (line?.category || '').toLowerCase();
+  const isCatalogTransport = (cat.includes('transfer') || cat.includes('transport'))
+    && (line?.raw_json?.source === 'catalog' || !!line?.raw_json?.catalog_id);
+  if (!isCatalogTransport) return false;
+  
+  const r = line.raw_json || {};
+  const catalogId = r.catalog_id || line.service_id;
+  
+  if (!catalogId) return false;
+  
+  try {
+    // Fetch full service to get complete data
+    const full = await api.getServiceById(catalogId);
+    const fields = full?.fields || r.fields || {};
+    
+    // Parse start_time from raw_json
+    let startTime = r.start_time || fields?.start_time || "";
+    
+    setDraft({
+      mode: 'edit',
+      svcFull: full,
+      dayIdx,
+      lineId: line.id,
+      defaults: {
+        description: r.description || fields?.full_description || full?.full_description || '',
+        start_time: startTime,
+        internal_note: r.internal_note || ''
+      }
+    });
+    return true;
+  } catch (e) {
+    console.error('[openEditCatalogTransportModal] Error fetching service:', e);
+    return false;
+  }
+}
+
+// Helper to open ActivityFromCatalogModal for editing
+export async function openEditCatalogActivityModal(line, dayIdx, setDraft, api) {
+  const cat = (line?.category || '').toLowerCase();
+  const isCatalogActivity = !cat.includes('hotel') && !cat.includes('transfer') && !cat.includes('transport')
+    && (line?.raw_json?.source === 'catalog' || !!line?.raw_json?.catalog_id);
+  if (!isCatalogActivity) return false;
+  
+  const r = line.raw_json || {};
+  const catalogId = r.catalog_id || line.service_id;
+  
+  if (!catalogId) return false;
+  
+  try {
+    // Fetch full service to get complete data
+    const full = await api.getServiceById(catalogId);
+    const fields = full?.fields || r.fields || {};
+    
+    // Parse start_time, end_time, duration from raw_json
+    let startTime = r.start_time || fields?.start_time || "";
+    let endTime = r.end_time || fields?.end_time || "";
+    let duration = r.duration || "";
+    
+    // If start_time and end_time are both present, calculate duration if not set
+    if (startTime && endTime && !duration) {
+      const startMins = parseHHMM(startTime);
+      const endMins = parseHHMM(endTime);
+      if (startMins != null && endMins != null) {
+        const d = ((endMins - startMins + 1440) % 1440);
+        duration = fmtHm(d);
+      }
+    }
+    // If start_time and activity_duration are present, calculate end_time if not set
+    else if (startTime && fields?.activity_duration && !endTime) {
+      const durationStr = parseActivityDuration(fields.activity_duration);
+      if (durationStr) {
+        duration = durationStr;
+        const m = /(\d+)h(?:(\d{1,2}))?/.exec(durationStr);
+        const startMins = parseHHMM(startTime);
+        if (startMins != null && m) {
+          const mins = (parseInt(m[1]) * 60 + (parseInt(m[2] || "0")));
+          endTime = addMins(startTime, mins);
+        }
+      }
+    }
+    // If only activity_duration is present (no start_time), just format it
+    else if (fields?.activity_duration && !startTime && !duration) {
+      duration = parseActivityDuration(fields.activity_duration);
+    }
+    
+    setDraft({
+      mode: 'edit',
+      svcFull: full,
+      dayIdx,
+      lineId: line.id,
+      defaults: {
+        provider_service_url: r.provider_service_url || fields?.provider_service_url || "",
+        description: r.description || fields?.full_description || full?.full_description || '',
+        start_time: startTime,
+        end_time: endTime,
+        duration: duration,
+        internal_note: r.internal_note || ''
+      }
+    });
+    return true;
+  } catch (e) {
+    console.error('[openEditCatalogActivityModal] Error fetching service:', e);
+    return false;
+  }
+}
+
 export default function QuoteEditor(){
 
   const [q,setQ] = useState(emptyQuote);
@@ -436,6 +605,24 @@ export default function QuoteEditor(){
   useEffect(() => {
     console.log('[QuoteEditor] catalogHotelDraft changed:', catalogHotelDraft);
   }, [catalogHotelDraft]);
+
+  // Draft data for the catalog activity modal
+  // { mode: 'create'|'edit', svcFull?, dayIdx, lineId?, defaults }
+  const [catalogActivityDraft, setCatalogActivityDraft] = useState(null);
+  
+  // Debug: log when catalogActivityDraft changes
+  useEffect(() => {
+    console.log('[QuoteEditor] catalogActivityDraft changed:', catalogActivityDraft);
+  }, [catalogActivityDraft]);
+
+  // Draft data for the catalog transport modal
+  // { mode: 'create'|'edit', svcFull?, dayIdx, lineId?, defaults }
+  const [catalogTransportDraft, setCatalogTransportDraft] = useState(null);
+  
+  // Debug: log when catalogTransportDraft changes
+  useEffect(() => {
+    console.log('[QuoteEditor] catalogTransportDraft changed:', catalogTransportDraft);
+  }, [catalogTransportDraft]);
 
   const [activeDayId,setActiveDayId] = useState(null);
 
@@ -1113,10 +1300,51 @@ export default function QuoteEditor(){
     const idx = findActiveIndex();
     if (idx < 0) { showNotice("Select a day first", "info"); return; }
     const d = q.days[idx];
-    // If flag on and the item looks like a Hotel, open the dedicated modal instead of inserting directly.
     // Be robust: rely on current tab, category, or name heuristic.
     const categoryLower = (svc?.category || '').toLowerCase();
     const nameLower = (svc?.name || '').toLowerCase();
+    
+    // PRIORITY: Check Transport FIRST (before Hotel and Activity)
+    const isTransport = 
+      (svcTab === 'Transport') ||
+      (categoryLower && ['private transfer', 'transfer', 'transport'].includes(categoryLower));
+    
+    if (isTransport) {
+      // Fetch full service to hydrate fields before opening the modal
+      (async () => {
+        try {
+          console.log('[insertCatalogService] Fetching full service for transport modal...', svc.id);
+          const full = await api.getServiceById(svc.id);
+          console.log('[insertCatalogService] Full service fetched:', full);
+          // Compute defaults
+          const fields = full?.fields || {};
+          
+          // Parse start_time from fields
+          let startTime = fields?.start_time || "";
+          
+          const draft = {
+            mode: 'create',
+            svcFull: full,
+            dayIdx: idx,
+            defaults: {
+              description: (fields?.full_description || full?.full_description || '') || '',
+              start_time: startTime,
+              internal_note: ''
+            }
+          };
+          console.log('[insertCatalogService] Setting catalogTransportDraft:', draft);
+          setCatalogTransportDraft(draft);
+        } catch (e) {
+          console.error(e);
+          showNotice("Unable to open transport modal. Falling back to direct insert.", "warn");
+          // fallback to previous behavior
+          directInsertCatalogLine(svc, d);
+        }
+      })();
+      return;
+    }
+    
+    // Then check if it's a Hotel
     const looksHotel =
       enableCatalogHotelModal && (
         (svcTab === 'Hotels') ||
@@ -1187,6 +1415,94 @@ export default function QuoteEditor(){
       })();
       return;
     }
+    
+    // Check if it's an Activity (from Activities tab or category matches)
+    const isActivity = 
+      (svcTab === 'Activities') ||
+      (categoryLower && ['small group', 'private', 'private chauffeur', 'tickets'].includes(categoryLower));
+    
+    if (isActivity) {
+      // Fetch full service to hydrate fields before opening the modal
+      (async () => {
+        try {
+          console.log('[insertCatalogService] Fetching full service for activity modal...', svc.id);
+          const full = await api.getServiceById(svc.id);
+          console.log('[insertCatalogService] Full service fetched:', full);
+          // Compute defaults
+          const fields = full?.fields || {};
+          
+          // Debug: log fields to verify start_time is coming from database
+          console.log('[insertCatalogService] Activity fields from database:', {
+            start_time: fields?.start_time,
+            end_time: fields?.end_time,
+            activity_duration: fields?.activity_duration,
+            provider_service_url: fields?.provider_service_url
+          });
+          
+          // Parse start_time and end_time from fields
+          let startTime = fields?.start_time || "";
+          let endTime = fields?.end_time || "";
+          let duration = "";
+          
+          // If start_time and end_time are both present, calculate duration
+          if (startTime && endTime) {
+            const startMins = parseHHMM(startTime);
+            const endMins = parseHHMM(endTime);
+            if (startMins != null && endMins != null) {
+              const d = ((endMins - startMins + 1440) % 1440);
+              duration = fmtHm(d);
+            }
+          }
+          // If start_time and activity_duration are present, calculate end_time
+          else if (startTime && fields?.activity_duration) {
+            const durationStr = parseActivityDuration(fields.activity_duration);
+            if (durationStr) {
+              duration = durationStr;
+              const m = /(\d+)h(?:(\d{1,2}))?/.exec(durationStr);
+              const startMins = parseHHMM(startTime);
+              if (startMins != null && m) {
+                const mins = (parseInt(m[1]) * 60 + (parseInt(m[2] || "0")));
+                endTime = addMins(startTime, mins);
+              }
+            }
+          }
+          // If only activity_duration is present (no start_time), just format it and put in duration field
+          else if (fields?.activity_duration && !startTime) {
+            duration = parseActivityDuration(fields.activity_duration);
+          }
+          
+          // Debug: log final values
+          console.log('[insertCatalogService] Activity defaults computed:', {
+            start_time: startTime,
+            end_time: endTime,
+            duration: duration
+          });
+          
+          const draft = {
+            mode: 'create',
+            svcFull: full,
+            dayIdx: idx,
+            defaults: {
+              provider_service_url: fields?.provider_service_url || "",
+              description: (fields?.full_description || full?.full_description || '') || '',
+              start_time: startTime,
+              end_time: endTime,
+              duration: duration,
+              internal_note: ''
+            }
+          };
+          console.log('[insertCatalogService] Setting catalogActivityDraft:', draft);
+          setCatalogActivityDraft(draft);
+        } catch (e) {
+          console.error(e);
+          showNotice("Unable to open activity modal. Falling back to direct insert.", "warn");
+          // fallback to previous behavior
+          directInsertCatalogLine(svc, d);
+        }
+      })();
+      return;
+    }
+    
     // do not insert the same catalog service twice on the same day
     const exists = Array.isArray(d?.lines) && d.lines.some(
       (l) => l?.raw_json?.catalog_id === svc.id
@@ -1219,28 +1535,116 @@ export default function QuoteEditor(){
     (async () => {
       setSvcLoading(true); setSvcError(null);
       try {
-        const base = await api.getPopularServices({ dest: activeDest, limit: 50 });
+        // Pour Hotels, passer les catégories explicitement pour filtrer côté backend
+        // Pour Activities, passer le groupe "Activity"
+        const categoryParam = svcTab === "Activities" ? "Activity" : undefined;
+        const categoriesParam = svcTab === "Hotels" ? ["Hotel", "Hotel room", "Apartment", "Villa"] : undefined;
+        
+        // Debug: log les paramètres envoyés
+        console.log('[getPopularServices]', {
+          svcTab,
+          activeDest,
+          categoryParam,
+          categoriesParam,
+          limit: 50
+        });
+        
+        const base = await api.getPopularServices({ 
+          dest: activeDest, 
+          limit: 50,
+          category: categoryParam,
+          categories: categoriesParam
+        });
+        
+        // Debug: log les résultats reçus
+        console.log('[getPopularServices] results', {
+          count: base?.length || 0,
+          firstFew: base?.slice(0, 3).map(s => ({ id: s.id, name: s.name, category: s.category })) || []
+        });
+        
+        // Debug: vérifier pourquoi les résultats ne passent pas inTab
+        if (base && base.length > 0 && svcTab === "Hotels") {
+          base.forEach(s => {
+            const cat = (s?.category || "").toString().trim().toLowerCase();
+            const inHOTEL_CATS = ["hotel","hotel room","apartment","villa"].includes(cat);
+            const passesFilter = isHotelSvcStrict(s);
+            console.log(`[getPopularServices] Check item: ${s.name}`, {
+              category: s.category,
+              categoryLower: cat,
+              inHOTEL_CATS,
+              isHotelSvcStrict: passesFilter,
+              passesFilter: passesFilter
+            });
+          });
+        }
+        
         let out = (base || []).filter(r => inTab(r, svcTab));
+        
+        // Debug: log après filtrage
+        console.log('[getPopularServices] after inTab filter', {
+          count: out.length,
+          items: out.map(s => ({ id: s.id, name: s.name, category: s.category }))
+        });
 
         // Fallback si peu d'items: seed via search
         if (out.length < 6) {
+          console.log('[getPopularServices] Fallback triggered, out.length:', out.length);
           const seeds = svcTab === "Hotels" ? ["hotel","apartment","villa"] :
                         svcTab === "Transport" ? ["transfer","chauffeur"] : [""];
           const extra = [];
 
           for (const q of seeds) {
+            console.log('[getPopularServices] Fallback search for:', q);
             const r = await api.searchServices({ q, dest: activeDest, limit: 50 });
+            console.log('[getPopularServices] Fallback search results:', r?.length || 0, 'items');
             extra.push(...(r||[]));
           }
 
+          console.log('[getPopularServices] Fallback extra before inTab:', extra.length);
+          // Debug: vérifier pourquoi les résultats du fallback ne passent pas inTab
+          if (svcTab === "Hotels" && extra.length > 0) {
+            const sample = extra.slice(0, 5);
+            sample.forEach(x => {
+              const cat = (x?.category || "").toString().trim().toLowerCase();
+              const passes = inTab(x, svcTab);
+              console.log(`[getPopularServices] Fallback item: ${x.name}`, {
+                category: x.category,
+                categoryLower: cat,
+                passesFilter: passes
+              });
+            });
+          }
           const merged = [...out, ...extra.filter(x => inTab(x, svcTab))];
+          console.log('[getPopularServices] Fallback merged after inTab:', merged.length);
           // dédup par id
           const seen = new Set(); out = [];
           for (const x of merged) if (!seen.has(x.id)) { seen.add(x.id); out.push(x); }
+          console.log('[getPopularServices] Fallback final out:', out.length);
+        }
+
+        // Dédupliquer les hôtels par nom (normalisé) pour éviter les doublons
+        if (svcTab === "Hotels") {
+          const seenNames = new Set();
+          const deduped = [];
+          for (const x of out) {
+            const name = (x.supplier_name || x.company || x.name || "").toLowerCase().trim();
+            if (!seenNames.has(name)) {
+              seenNames.add(name);
+              deduped.push(x);
+            }
+          }
+          out = deduped;
         }
 
         out = out.slice(0,12);
-        if (!cancelled) setSvcPopular(out);
+        if (!cancelled) {
+          setSvcPopular(out);
+          // Précharger les infos complètes pour tous les services populaires
+          // Cela permet d'afficher les étoiles immédiatement sans attendre le survol
+          for (const s of out) {
+            ensureSvcInfo(s.id);
+          }
+        }
       } catch {
         if (!cancelled) setSvcError("Load failed");
       } finally {
@@ -1659,10 +2063,41 @@ export default function QuoteEditor(){
       const t = (line.title || "").toLowerCase();
       const isHotel = /room|suite|apartment|villa/.test(t) || cat.includes('hotel');
       const isTransfer = /transfer/.test(t) || cat.includes('transfer') || cat.includes('transport');
+      
+      // Handle transport first
+      if (isTransfer) {
+        // Find the day index for this line
+        const dayIdx = q.days.findIndex(d => d.lines?.some(l => l.id === line.id));
+        if (dayIdx >= 0) {
+          // Use the catalog transport modal
+          (async () => {
+            const opened = await openEditCatalogTransportModal(line, dayIdx, setCatalogTransportDraft, api);
+            if (!opened) {
+              // Fallback to old modal if opening fails
+              setEditingLine(line);
+              setNewServiceOpen(true);
+            }
+          })();
+          return;
+        }
+      }
+      
+      // Handle activity
       if (!isHotel && !isTransfer) {
-        setEditingLine(line);
-        setCatalogActivityOpen(true);
-        return;
+        // Find the day index for this line
+        const dayIdx = q.days.findIndex(d => d.lines?.some(l => l.id === line.id));
+        if (dayIdx >= 0) {
+          // Use the catalog activity modal
+          (async () => {
+            const opened = await openEditCatalogActivityModal(line, dayIdx, setCatalogActivityDraft, api);
+            if (!opened) {
+              // Fallback to old modal if opening fails
+              setEditingLine(line);
+              setCatalogActivityOpen(true);
+            }
+          })();
+          return;
+        }
       }
     }
     
@@ -1738,7 +2173,11 @@ export default function QuoteEditor(){
       if (cat === "flight")  return clamp50(`Flight ${d.from || "?"}->${d.to || "?"}`);
       if (cat === "train")   return clamp50(`Train ${d.from || "?"}->${d.to || "?"}`);
       if (cat === "ferry")   return clamp50(`Ferry ${d.from || "?"}->${d.to || "?"}`);
-      if (cat === "new hotel" || cat === "hotel") return clamp50(d.hotel_name || line.hotel_name || "Hotel");
+      if (cat === "new hotel" || cat === "hotel") {
+        // For catalog hotels, prefer raw_json.hotel_name or supplier_name
+        const catalogHotelName = line?.raw_json?.hotel_name || line?.supplier_name;
+        return clamp50(catalogHotelName || d.hotel_name || line.hotel_name || "Hotel");
+      }
       if (cat === "new service" || cat === "activity") return clamp50(d.title || line.title || "Service");
       if (cat === "car rental") return "Car Rental";
       if (cat === "cost") return clamp50(d.title || line.title || "Cost");
@@ -2359,8 +2798,6 @@ export default function QuoteEditor(){
 
 
 
-                {d.lines.length===0 && localLines.filter(ll => ll.dayId === d.id && !ll.deleted).length === 0 && <div className="hint">No services yet… Add from the right panel.</div>}
-
                 <div className="day-services">
                   {(() => {
                     const dayLocal = localLines.filter(l => l.dayId === d.id && !l.deleted);
@@ -2471,8 +2908,22 @@ export default function QuoteEditor(){
                                 const victim = localLines.find(x => x.id === l.id);
                                 if (victim) setTrashLines(t => [victim, ...t]);
                               } else {
-                                // For backend lines, we could mark for deletion or convert to local
-                                // For now, just remove from display (would need backend delete later)
+                                // For backend lines, remove from q.days and add to trash
+                                setQ(prev => {
+                                  const next = structuredClone(prev);
+                                  const day = next.days.find(d => d.lines?.some(line => line.id === l.id));
+                                  if (day) {
+                                    const lineToDelete = day.lines.find(line => line.id === l.id);
+                                    if (lineToDelete) {
+                                      // Add to trash
+                                      setTrashLines(t => [lineToDelete, ...t]);
+                                      // Remove from day
+                                      day.lines = day.lines.filter(line => line.id !== l.id);
+                                      next.dirty = true;
+                                    }
+                                  }
+                                  return next;
+                                });
                               }
                             }}
                           />
@@ -2974,6 +3425,171 @@ export default function QuoteEditor(){
               return normalized;
             });
             setCatalogHotelDraft(null);
+          }}
+        />
+      )}
+
+      {/* Activity-from-catalog modal */}
+      {catalogActivityDraft && (
+        <ActivityFromCatalogModal
+          open={!!catalogActivityDraft}
+          data={catalogActivityDraft}
+          onClose={() => setCatalogActivityDraft(null)}
+          onSubmit={(payload) => {
+            // payload: { description, start_time, end_time, duration, internal_note }
+            const { mode, svcFull, dayIdx, defaults, lineId } = catalogActivityDraft;
+            const activityName = svcFull?.name || "Activity";
+            const supplier_name = svcFull?.supplier?.name || svcFull?.company || "";
+            const category = svcFull?.category || "Activity";
+            
+            // Build title: "Activity Name" or "Activity Name at start_time"
+            let title = activityName;
+            if (payload.start_time) {
+              // Convert 24h format to AM/PM for display
+              const [h, m] = payload.start_time.split(":").map(x => parseInt(x || "0", 10));
+              const h12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+              const ampm = h >= 12 ? "PM" : "AM";
+              const mm = String(m).padStart(2, "0");
+              title = `${activityName} at ${h12}:${mm} ${ampm}`;
+            }
+            
+            // Merge fields with user-provided data
+            const baseFields = svcFull?.fields || defaults?.fields || {};
+            const userFields = {
+              ...baseFields,
+              start_time: payload.start_time || "",
+              end_time: payload.end_time || "",
+              activity_duration: payload.duration || "",
+              full_description: payload.description || "",
+              provider_service_url: defaults?.provider_service_url || baseFields?.provider_service_url || ""
+            };
+            
+            const baseRaw = {
+              source: "catalog",
+              catalog_id: svcFull.id,
+              start_destination: svcFull.start_destination ?? null,
+              supplier_id: svcFull.supplier_id ?? null,
+              supplier_ref: supplier_name,
+              description: payload.description || "",
+              start_time: payload.start_time || "",
+              end_time: payload.end_time || "",
+              duration: payload.duration || "",
+              internal_note: payload.internal_note || "",
+              fields: userFields,
+              snapshot: (svcFull || defaults?.snapshot || {}),
+              hydrated: true
+            };
+            
+            const newLine = {
+              id: (typeof crypto!=="undefined" && crypto.randomUUID) ? crypto.randomUUID() : uid(),
+              service_id: svcFull.id,
+              category: category,
+              title: activityName, // Store base name, ServiceCard will add "at start_time" if needed
+              supplier_name,
+              visibility: "client",
+              achat_eur: null, achat_usd: null, vente_usd: null, fx_rate: null,
+              currency: null, base_net_amount: null,
+              raw_json: baseRaw
+            };
+            
+            setQ(prev => {
+              const qn = { ...prev };
+              const d = { ...qn.days[dayIdx] };
+              if (mode === 'edit' && lineId) {
+                d.lines = (d.lines || []).map(L => L.id === lineId ? {
+                  ...L,
+                  title: activityName,
+                  supplier_name,
+                  raw_json: { ...(L.raw_json||{}), ...baseRaw }
+                } : L);
+              } else {
+                d.lines = Array.isArray(d.lines) ? [...d.lines, newLine] : [newLine];
+              }
+              const normalized = normalizeQuotePositions({ ...qn, days: qn.days.map((x,i)=> i===dayIdx? d : x) });
+              normalized.dirty = true;
+              return normalized;
+            });
+            setCatalogActivityDraft(null);
+          }}
+        />
+      )}
+
+      {/* Transport-from-catalog modal */}
+      {catalogTransportDraft && (
+        <TransportFromCatalogModal
+          open={!!catalogTransportDraft}
+          data={catalogTransportDraft}
+          onClose={() => setCatalogTransportDraft(null)}
+          onSubmit={(payload) => {
+            // payload: { description, start_time, internal_note }
+            const { mode, svcFull, dayIdx, defaults, lineId } = catalogTransportDraft;
+            const transportName = svcFull?.name || "Transport";
+            const supplier_name = svcFull?.supplier?.name || svcFull?.company || "";
+            const category = svcFull?.category || "Private Transfer";
+            
+            // Build title: "Transport Name" or "Transport Name at start_time"
+            let title = transportName;
+            if (payload.start_time) {
+              // Convert 24h format to AM/PM for display
+              const [h, m] = payload.start_time.split(":").map(x => parseInt(x || "0", 10));
+              const h12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+              const ampm = h >= 12 ? "PM" : "AM";
+              const mm = String(m).padStart(2, "0");
+              title = `${transportName} at ${h12}:${mm} ${ampm}`;
+            }
+            
+            // Merge fields with user-provided data
+            const baseFields = svcFull?.fields || defaults?.fields || {};
+            const userFields = {
+              ...baseFields,
+              start_time: payload.start_time || "",
+              full_description: payload.description || ""
+            };
+            
+            const baseRaw = {
+              source: "catalog",
+              catalog_id: svcFull.id,
+              start_destination: svcFull.start_destination ?? null,
+              supplier_id: svcFull.supplier_id ?? null,
+              supplier_ref: supplier_name,
+              description: payload.description || "",
+              start_time: payload.start_time || "",
+              internal_note: payload.internal_note || "",
+              fields: userFields,
+              snapshot: (svcFull || defaults?.snapshot || {}),
+              hydrated: true
+            };
+            
+            const newLine = {
+              id: (typeof crypto!=="undefined" && crypto.randomUUID) ? crypto.randomUUID() : uid(),
+              service_id: svcFull.id,
+              category: category,
+              title: transportName, // Store base name, ServiceCard will add "at start_time" if needed
+              supplier_name,
+              visibility: "client",
+              achat_eur: null, achat_usd: null, vente_usd: null, fx_rate: null,
+              currency: null, base_net_amount: null,
+              raw_json: baseRaw
+            };
+            
+            setQ(prev => {
+              const qn = { ...prev };
+              const d = { ...qn.days[dayIdx] };
+              if (mode === 'edit' && lineId) {
+                d.lines = (d.lines || []).map(L => L.id === lineId ? {
+                  ...L,
+                  title: transportName,
+                  supplier_name,
+                  raw_json: { ...(L.raw_json||{}), ...baseRaw }
+                } : L);
+              } else {
+                d.lines = Array.isArray(d.lines) ? [...d.lines, newLine] : [newLine];
+              }
+              const normalized = normalizeQuotePositions({ ...qn, days: qn.days.map((x,i)=> i===dayIdx? d : x) });
+              normalized.dirty = true;
+              return normalized;
+            });
+            setCatalogTransportDraft(null);
           }}
         />
       )}

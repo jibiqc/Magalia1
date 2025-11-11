@@ -119,10 +119,13 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 
 
-.day-card{
-  background:rgba(255,255,255,.03);
-  border:1px solid rgba(255,255,255,.06);
-  border-radius:14px;
+/* Center column: flatten day container styles to full white with no frame */
+.center-rail .day-card,
+.page .center-rail .day-card{
+  background:#ffffff !important;
+  border:none !important;
+  box-shadow:none !important;
+  border-radius:0;
   padding:14px;
   margin-bottom:14px;
 }
@@ -132,7 +135,8 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   align-items:center;
   gap:8px;
   white-space:nowrap;
-  margin-bottom:10px;
+  /* tighter spacing under the date */
+  margin-bottom:6px;
   /* Use underline instead of bold and force Arial in titles */
   text-decoration: underline;
   font-family: Arial, sans-serif;
@@ -175,10 +179,13 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   background: rgba(255,255,255,0.05);
 }
 
-.service{
-  background:var(--card);
-  border:1px solid rgba(255,255,255,.06);
-  border-radius:12px;
+/* Services in center column: no frame, white background */
+.center-rail .service,
+.page .center-rail .service{
+  background:#ffffff !important;
+  border:none !important;
+  box-shadow:none !important;
+  border-radius:0;
   padding:10px 12px;
   margin:8px 0;
 }
@@ -1077,8 +1084,9 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   grid-template-columns: 1fr; /* no left gutter */
   gap: 10px;
   padding: 10px;
-  border-radius: 10px;
-  border: 1px solid #e5e7eb;
+  /* Remove framed look for services in center column */
+  border-radius: 0;
+  border: none;
   background: #ffffff;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 10pt;
