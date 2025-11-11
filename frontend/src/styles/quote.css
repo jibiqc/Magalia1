@@ -1616,3 +1616,58 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .inline-bools input[type="checkbox"]{width:16px;height:16px}
 
 .muted{opacity:.8}
+
+/* Header Hero Styles */
+.hero-container {
+  text-align: center;
+  margin-top: 20px;
+  margin-bottom: 30px;
+}
+
+.hero-title {
+  font-family: Arial, sans-serif;
+  font-weight: bold;
+  font-size: 28px;
+  margin-bottom: 10px;
+  color: var(--ink);
+}
+
+.hero-photos {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.hero-photo-container {
+  width: 303px;
+  height: 198px;
+  overflow: hidden;
+  position: relative;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hero-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+
+.hero-edit-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  cursor: pointer;
+  opacity: 0.8;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 14px;
+  transition: opacity 0.2s;
+}
+
+.hero-edit-btn:hover {
+  opacity: 1;
+}

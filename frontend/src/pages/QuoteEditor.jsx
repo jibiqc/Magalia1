@@ -15,6 +15,9 @@ import NewServiceModal from "../components/NewServiceModal";
 import CatalogActivityModal from "../components/modals/CatalogActivityModal";
 import ServiceCard from "../components/ServiceCard";
 import HotelFromCatalogModal from "../components/HotelFromCatalogModal";
+import TransportFromCatalogModal from "../components/TransportFromCatalogModal";
+import ActivityFromCatalogModal from "../components/ActivityFromCatalogModal";
+import HeaderHero from "../components/HeaderHero";
 import { api } from "../lib/api";
 import { fmtDateShortISO, fmtDateLongISO } from "../utils/dateFmt";
 import { uid } from "../utils/localId";
@@ -432,6 +435,10 @@ export default function QuoteEditor(){
   // { mode: 'create'|'edit', svcFull?, dayIdx, lineId?, defaults }
   const [catalogHotelDraft, setCatalogHotelDraft] = useState(null);
   
+  // Draft data for catalog transport and activity modals
+  const [catalogTransportDraft, setCatalogTransportDraft] = useState(null);
+  const [catalogActivityDraft, setCatalogActivityDraft] = useState(null);
+  
   // Debug: log when catalogHotelDraft changes
   useEffect(() => {
     console.log('[QuoteEditor] catalogHotelDraft changed:', catalogHotelDraft);
@@ -802,6 +809,9 @@ export default function QuoteEditor(){
       }
       const payload = {
         title: qNorm.title,
+        display_title: qNorm.display_title,
+        hero_photo_1: qNorm.hero_photo_1,
+        hero_photo_2: qNorm.hero_photo_2,
         pax: qNorm.pax,
         start_date: qNorm.start_date,
         end_date: qNorm.end_date,
@@ -1187,6 +1197,66 @@ export default function QuoteEditor(){
       })();
       return;
     }
+    // Check if it's a transport service
+    const looksTransport = isTransportSvc(svc) || (svcTab === 'Transport' && categoryLower.includes('transfer'));
+    
+    // Check if it's an activity service (not hotel, not transport)
+    const looksActivity = !looksHotel && !looksTransport && (svcTab === 'Activity' || categoryLower.includes('activity') || categoryLower.includes('small group') || categoryLower.includes('private') || categoryLower.includes('tickets'));
+    
+    if (looksTransport) {
+      // Fetch full service and open transport modal
+      (async () => {
+        try {
+          const full = await api.getServiceById(svc.id);
+          const fields = full?.fields || {};
+          const draft = {
+            mode: 'create',
+            svcFull: full,
+            dayIdx: idx,
+            defaults: {
+              description: (fields?.full_description || full?.full_description || '') || '',
+              start_time: (fields?.start_time || '') || '',
+              internal_note: ''
+            }
+          };
+          setCatalogTransportDraft(draft);
+        } catch (e) {
+          console.error(e);
+          showNotice("Unable to open transport modal. Falling back to direct insert.", "warn");
+          directInsertCatalogLine(svc, d);
+        }
+      })();
+      return;
+    }
+    
+    if (looksActivity) {
+      // Fetch full service and open activity modal
+      (async () => {
+        try {
+          const full = await api.getServiceById(svc.id);
+          const fields = full?.fields || {};
+          const draft = {
+            mode: 'create',
+            svcFull: full,
+            dayIdx: idx,
+            defaults: {
+              description: (fields?.full_description || full?.full_description || '') || '',
+              start_time: (fields?.start_time || '') || '',
+              end_time: (fields?.end_time || '') || '',
+              duration: (fields?.duration || '') || '',
+              internal_note: ''
+            }
+          };
+          setCatalogActivityDraft(draft);
+        } catch (e) {
+          console.error(e);
+          showNotice("Unable to open activity modal. Falling back to direct insert.", "warn");
+          directInsertCatalogLine(svc, d);
+        }
+      })();
+      return;
+    }
+    
     // do not insert the same catalog service twice on the same day
     const exists = Array.isArray(d?.lines) && d.lines.some(
       (l) => l?.raw_json?.catalog_id === svc.id
@@ -1361,6 +1431,9 @@ export default function QuoteEditor(){
     try {
       const payload = {
         title: q.title,
+        display_title: q.display_title,
+        hero_photo_1: q.hero_photo_1,
+        hero_photo_2: q.hero_photo_2,
         pax: q.pax,
         start_date: q.start_date,
         end_date: q.end_date,
@@ -1659,7 +1732,52 @@ export default function QuoteEditor(){
       const t = (line.title || "").toLowerCase();
       const isHotel = /room|suite|apartment|villa/.test(t) || cat.includes('hotel');
       const isTransfer = /transfer/.test(t) || cat.includes('transfer') || cat.includes('transport');
+      
+      if (isTransfer) {
+        // Open transport modal for editing
+        const dayIdx = q.days.findIndex(d => d.lines?.some(l => l.id === line.id));
+        if (dayIdx >= 0) {
+          const rawJson = line.raw_json || {};
+          const svcFull = rawJson.snapshot || {};
+          const draft = {
+            mode: 'edit',
+            svcFull: svcFull,
+            dayIdx: dayIdx,
+            lineId: line.id,
+            defaults: {
+              description: line.raw_json?.description || '',
+              start_time: line.raw_json?.start_time || '',
+              internal_note: line.raw_json?.internal_note || ''
+            }
+          };
+          setCatalogTransportDraft(draft);
+          return;
+        }
+      }
+      
       if (!isHotel && !isTransfer) {
+        // Open activity modal for editing
+        const dayIdx = q.days.findIndex(d => d.lines?.some(l => l.id === line.id));
+        if (dayIdx >= 0) {
+          const rawJson = line.raw_json || {};
+          const svcFull = rawJson.snapshot || {};
+          const draft = {
+            mode: 'edit',
+            svcFull: svcFull,
+            dayIdx: dayIdx,
+            lineId: line.id,
+            defaults: {
+              description: line.raw_json?.description || '',
+              start_time: line.raw_json?.start_time || '',
+              end_time: line.raw_json?.end_time || '',
+              duration: line.raw_json?.duration || '',
+              internal_note: line.raw_json?.internal_note || ''
+            }
+          };
+          setCatalogActivityDraft(draft);
+          return;
+        }
+        // Fallback to old modal
         setEditingLine(line);
         setCatalogActivityOpen(true);
         return;
@@ -2333,6 +2451,8 @@ export default function QuoteEditor(){
 
             {/* ---- tout ce qui suit doit être DEDANS ---- */}
 
+            <HeaderHero quote={q} setQuote={setQ} activeDest={activeDest} />
+
             {q.days.map((d, dayIdx)=>(
 
               <div key={d.id} id={`day-${d.id}`} className="day-card">
@@ -2467,8 +2587,19 @@ export default function QuoteEditor(){
                                 const victim = localLines.find(x => x.id === l.id);
                                 if (victim) setTrashLines(t => [victim, ...t]);
                               } else {
-                                // For backend lines, we could mark for deletion or convert to local
-                                // For now, just remove from display (would need backend delete later)
+                                // For backend lines (including catalog hotels and transports), remove from q.days
+                                setQ(prev => {
+                                  const qn = { ...prev };
+                                  const day = { ...qn.days[dayIdx] };
+                                  day.lines = (day.lines || []).filter(line => line.id !== l.id);
+                                  const normalized = normalizeQuotePositions({ 
+                                    ...qn, 
+                                    days: qn.days.map((d, i) => i === dayIdx ? day : d) 
+                                  });
+                                  normalized.dirty = true;
+                                  return normalized;
+                                });
+                                showNotice("Service deleted", "success");
                               }
                             }}
                           />
@@ -2970,6 +3101,116 @@ export default function QuoteEditor(){
               return normalized;
             });
             setCatalogHotelDraft(null);
+          }}
+        />
+      )}
+
+      {/* Transport-from-catalog modal */}
+      {catalogTransportDraft && (
+        <TransportFromCatalogModal
+          open={!!catalogTransportDraft}
+          data={catalogTransportDraft}
+          onClose={() => setCatalogTransportDraft(null)}
+          onSubmit={(payload) => {
+            // payload: { description, start_time, internal_note }
+            const { mode, svcFull, dayIdx, lineId } = catalogTransportDraft;
+            const supplier_name = svcFull?.supplier_name ?? svcFull?.supplier?.name ?? svcFull?.company ?? "";
+            const title = svcFull?.name || "Transport";
+            const baseRaw = {
+              source: "catalog",
+              catalog_id: svcFull.id,
+              start_destination: svcFull.start_destination ?? null,
+              supplier_id: svcFull.supplier_id ?? null,
+              supplier_ref: supplier_name,
+              description: payload.description || "",
+              start_time: payload.start_time || "",
+              internal_note: payload.internal_note || "",
+              snapshot: svcFull || {},
+              hydrated: true
+            };
+            const newLine = {
+              id: (typeof crypto!=="undefined" && crypto.randomUUID) ? crypto.randomUUID() : uid(),
+              service_id: svcFull.id,
+              category: "Private Transfer",
+              title,
+              supplier_name,
+              visibility: "client",
+              achat_eur: null, achat_usd: null, vente_usd: null, fx_rate: null,
+              currency: null, base_net_amount: null,
+              raw_json: baseRaw
+            };
+            setQ(prev => {
+              const qn = { ...prev };
+              const d = { ...qn.days[dayIdx] };
+              if (mode === 'edit' && lineId) {
+                d.lines = (d.lines || []).map(L => L.id === lineId ? {
+                  ...L,
+                  raw_json: { ...(L.raw_json||{}), ...baseRaw }
+                } : L);
+              } else {
+                d.lines = Array.isArray(d.lines) ? [...d.lines, newLine] : [newLine];
+              }
+              const normalized = normalizeQuotePositions({ ...qn, days: qn.days.map((x,i)=> i===dayIdx? d : x) });
+              normalized.dirty = true;
+              return normalized;
+            });
+            setCatalogTransportDraft(null);
+          }}
+        />
+      )}
+
+      {/* Activity-from-catalog modal */}
+      {catalogActivityDraft && (
+        <ActivityFromCatalogModal
+          open={!!catalogActivityDraft}
+          data={catalogActivityDraft}
+          onClose={() => setCatalogActivityDraft(null)}
+          onSubmit={(payload) => {
+            // payload: { description, start_time, end_time, duration, internal_note }
+            const { mode, svcFull, dayIdx, lineId } = catalogActivityDraft;
+            const supplier_name = svcFull?.supplier_name ?? svcFull?.supplier?.name ?? svcFull?.company ?? "";
+            const title = svcFull?.name || "Activity";
+            const baseRaw = {
+              source: "catalog",
+              catalog_id: svcFull.id,
+              start_destination: svcFull.start_destination ?? null,
+              supplier_id: svcFull.supplier_id ?? null,
+              supplier_ref: supplier_name,
+              description: payload.description || "",
+              start_time: payload.start_time || "",
+              end_time: payload.end_time || "",
+              duration: payload.duration || "",
+              internal_note: payload.internal_note || "",
+              snapshot: svcFull || {},
+              hydrated: true
+            };
+            const newLine = {
+              id: (typeof crypto!=="undefined" && crypto.randomUUID) ? crypto.randomUUID() : uid(),
+              service_id: svcFull.id,
+              category: "Activity",
+              title,
+              supplier_name,
+              visibility: "client",
+              achat_eur: null, achat_usd: null, vente_usd: null, fx_rate: null,
+              currency: null, base_net_amount: null,
+              raw_json: baseRaw
+            };
+            setQ(prev => {
+              const qn = { ...prev };
+              const d = { ...qn.days[dayIdx] };
+              if (mode === 'edit' && lineId) {
+                d.lines = (d.lines || []).map(L => L.id === lineId ? {
+                  ...L,
+                  raw_json: { ...(L.raw_json||{}), ...baseRaw }
+                } : L);
+              } else {
+                d.lines = Array.isArray(d.lines) ? [...d.lines, newLine] : [newLine];
+              }
+              const normalized = normalizeQuotePositions({ ...qn, days: qn.days.map((x,i)=> i===dayIdx? d : x) });
+              normalized.dirty = true;
+              return normalized;
+            });
+            setCatalogActivityDraft(null);
           }}
         />
       )}
