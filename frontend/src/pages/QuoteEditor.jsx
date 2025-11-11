@@ -2551,7 +2551,14 @@ export default function QuoteEditor(){
                         });
                       }}
                     >
-                      📍
+                      {/* Destination pin icon, stroked like edit/delete icons (size ~18) */}
+                      <svg viewBox="0 0 24 24" width="18" height="18"
+                           fill="none" stroke="currentColor" strokeWidth="1.6"
+                           strokeLinecap="round" strokeLinejoin="round" role="img"
+                           aria-label="Set destination">
+                        <path d="M12 21s-6-4.5-6-10a6 6 0 1 1 12 0c0 5.5-6 10-6 10z"/>
+                        <circle cx="12" cy="11" r="2.5"/>
+                      </svg>
                     </button>
                     <button
                       className={`day-pill ${activeDayId===d.id ? "active":""}`}
@@ -2580,9 +2587,6 @@ export default function QuoteEditor(){
               <button className="total-pill" onClick={totalScroll}>
                 <span>Total: <span className="total-amt">{money(totalsForBadge.grandTotal,{digits:2})}</span></span>
               </button>
-              <div style={{marginTop:6, fontSize:12, opacity:.8}}>
-                {q?.id ? `Quote #${q.id}` : "Draft (no ID yet)"}
-              </div>
 
             </div>
 
