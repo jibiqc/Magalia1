@@ -1636,7 +1636,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   display: flex;
   justify-content: center;
   gap: 10px;
-  position: relative;
+  position: relative; /* anchor for edit overlay */
 }
 
 /* Fixed container size to prevent layout shifts, with placeholder as background */
@@ -1660,13 +1660,13 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   transition: opacity 0ms; /* avoid flash animations */
 }
 
-/* Edit button: reuse service edit styling via shared class name */
-.hero-photo-container .icon-vert {
+/* Single edit overlay positioned relative to the hero-photos wrapper */
+.hero-photos .hero-edit.icon-vert {
   position: absolute;
   top: 6px;
   right: 6px;
   cursor: pointer;
-  background: rgba(0, 0, 0, 0.5);
-  border-radius: 4px;
   z-index: 10;
+  /* Keep whatever base styles .icon-vert inherits from ServiceCard.
+     Avoid adding background/radius here to respect your no-rounded rule. */
 }

@@ -29,6 +29,9 @@ export default function HeaderHero({ quote, setQuote, activeDest }) {
   useEffect(() => { safeSet1(); }, [p1, safeSet1]);
   useEffect(() => { safeSet2(); }, [p2, safeSet2]);
 
+  // Hide header when no active destination per UX rule
+  if (!activeDest?.trim()) return null;
+
   return (
     <>
       <div className="hero-container">
@@ -50,15 +53,6 @@ export default function HeaderHero({ quote, setQuote, activeDest }) {
                 style={{ opacity: img1Loaded ? 1 : 0 }}
               />
             )}
-            {/* Use same edit icon style as services: className aligns with existing service edit button */}
-            <button
-              type="button"
-              className="icon-vert"
-              onClick={() => setModalOpen(true)}
-              aria-label="Edit header"
-            >
-              <Icon name="edit" />
-            </button>
           </div>
 
           {/* Photo 2 with container-first placeholder and load gating */}
@@ -78,6 +72,18 @@ export default function HeaderHero({ quote, setQuote, activeDest }) {
               />
             )}
           </div>
+
+          {/* Single edit button overlay for the whole hero block.
+              Reuse the same visual class as services: .icon-vert */}
+          <button
+            type="button"
+            className="icon-vert hero-edit"
+            onClick={() => setModalOpen(true)}
+            aria-label="Edit header"
+            title="Edit header"
+          >
+            <Icon name="edit" />
+          </button>
         </div>
       </div>
 
@@ -87,7 +93,8 @@ export default function HeaderHero({ quote, setQuote, activeDest }) {
           quote={quote}
           onClose={() => setModalOpen(false)}
           onSave={(changes) => {
-            setQuote({ ...quote, ...changes });
+            // Parent update without flicker
+            setQuote((prev) => ({ ...prev, ...changes }));
             setModalOpen(false);
           }}
         />
