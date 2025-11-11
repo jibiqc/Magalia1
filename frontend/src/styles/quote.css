@@ -423,7 +423,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   border: none;
   padding: 0;
   font: inherit;
-  color: #a5b4fc; /* slightly darker for better contrast */
+  color: #1e293b; /* match main text color for uniform look */
   cursor: pointer;
   text-decoration: underline;
 }
