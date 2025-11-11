@@ -2,11 +2,18 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../../lib/api";
 
-export default function HeaderHeroModal({ open, quote, onClose, onSave }) {
+export default function HeaderHeroModal({ open, quote, onClose, onSave, activeDest }) {
   const [displayTitle, setDisplayTitle] = useState(quote?.display_title || "");
   const [heroPhoto1, setHeroPhoto1] = useState(quote?.hero_photo_1 || "");
   const [heroPhoto2, setHeroPhoto2] = useState(quote?.hero_photo_2 || "");
   const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const urlOk = (u) => {
+    if (!u) return true; // empty allowed
+    if (u.length > 500) return false;
+    try { const x = new URL(u); return x.protocol === "http:" || x.protocol === "https:"; } catch { return false; }
+  };
 
   // Update state when quote changes
   useEffect(() => {
@@ -14,6 +21,7 @@ export default function HeaderHeroModal({ open, quote, onClose, onSave }) {
       setDisplayTitle(quote.display_title || "");
       setHeroPhoto1(quote.hero_photo_1 || "");
       setHeroPhoto2(quote.hero_photo_2 || "");
+      setErr("");
     }
   }, [quote]);
 
@@ -33,24 +41,38 @@ export default function HeaderHeroModal({ open, quote, onClose, onSave }) {
   }
 
   const handleSave = async () => {
+    // validate URLs
+    if (!urlOk(heroPhoto1) || !urlOk(heroPhoto2)) {
+      setErr("Invalid URL (http/https only, ≤500 chars)");
+      return;
+    }
+
+    const changes = {
+      display_title: displayTitle.trim() || null,
+      hero_photo_1: heroPhoto1.trim() || null,
+      hero_photo_2: heroPhoto2.trim() || null,
+    };
+
     if (!quote.id) {
       // If quote has no ID, just update local state
-      onSave({
-        display_title: displayTitle.trim() || null,
-        hero_photo_1: heroPhoto1.trim() || null,
-        hero_photo_2: heroPhoto2.trim() || null,
-      });
+      onSave(changes);
+      // increment usage for active destination if resolvable
+      try {
+        if (activeDest?.trim()) {
+          const results = await api.getDestinations(activeDest.trim());
+          const match = (results || []).find(d => d.name?.toLowerCase() === activeDest.trim().toLowerCase());
+          if (match?.id) {
+            const body = (url) => ({ dest_id: match.id, photo_url: url, increment: true });
+            if (heroPhoto1.trim()) await api.upsertDestinationPhoto(body(heroPhoto1.trim()));
+            if (heroPhoto2.trim()) await api.upsertDestinationPhoto(body(heroPhoto2.trim()));
+          }
+        }
+      } catch {}
       return;
     }
 
     setSaving(true);
     try {
-      const changes = {
-        display_title: displayTitle.trim() || null,
-        hero_photo_1: heroPhoto1.trim() || null,
-        hero_photo_2: heroPhoto2.trim() || null,
-      };
-
       // Build full payload with existing quote data
       const payload = {
         ...quote,
@@ -61,6 +83,19 @@ export default function HeaderHeroModal({ open, quote, onClose, onSave }) {
 
       await api.saveQuote(quote.id, payload);
       onSave(changes);
+
+      // increment usage for active destination if resolvable
+      try {
+        if (activeDest?.trim()) {
+          const results = await api.getDestinations(activeDest.trim());
+          const match = (results || []).find(d => d.name?.toLowerCase() === activeDest.trim().toLowerCase());
+          if (match?.id) {
+            const body = (url) => ({ dest_id: match.id, photo_url: url, increment: true });
+            if (heroPhoto1.trim()) await api.upsertDestinationPhoto(body(heroPhoto1.trim()));
+            if (heroPhoto2.trim()) await api.upsertDestinationPhoto(body(heroPhoto2.trim()));
+          }
+        }
+      } catch {}
     } catch (error) {
       console.error("[HeaderHeroModal] Save error:", error);
       alert("Failed to save header. Please try again.");
@@ -97,8 +132,8 @@ export default function HeaderHeroModal({ open, quote, onClose, onSave }) {
             <input
               type="url"
               value={heroPhoto1}
-              onChange={(e) => setHeroPhoto1(e.target.value)}
-              placeholder="https://..."
+              onChange={(e) => { setHeroPhoto1(e.target.value); setErr(""); }}
+              placeholder="http(s)://..."
             />
           </div>
           <div className="form-row">
@@ -106,10 +141,11 @@ export default function HeaderHeroModal({ open, quote, onClose, onSave }) {
             <input
               type="url"
               value={heroPhoto2}
-              onChange={(e) => setHeroPhoto2(e.target.value)}
-              placeholder="https://..."
+              onChange={(e) => { setHeroPhoto2(e.target.value); setErr(""); }}
+              placeholder="http(s)://..."
             />
           </div>
+          {err ? <div className="form-error">{err}</div> : null}
         </div>
         <div className="modal-footer" style={{ display: "flex", gap: 12, justifyContent: "flex-end" }}>
           <button type="button" onClick={onClose} disabled={saving}>

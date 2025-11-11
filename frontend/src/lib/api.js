@@ -32,6 +32,14 @@ export const api = {
     return apiCall("POST", "/destinations", { name });
   },
 
+  async getDestinationPhotos(destId, limit = 5) {
+    return apiCall("GET", `/destinations/photos?dest_id=${destId}&limit=${limit}`);
+  },
+
+  async upsertDestinationPhoto(payload) {
+    return apiCall("POST", "/destinations/photos", payload);
+  },
+
   // Quotes
   async getQuote(quoteId) {
     return apiCall("GET", `/quotes/${quoteId}`);
@@ -83,6 +91,9 @@ export async function getServiceById(id) {
   if (!id) throw new Error("id is required");
   return apiCall("GET", `/services/${id}`);
 }
+
+// Expose apiCall for advanced usage
+api.apiCall = apiCall;
 
 // DEBUG facultatif pour tests dans la console:
 if (typeof window !== "undefined") window.api = api;

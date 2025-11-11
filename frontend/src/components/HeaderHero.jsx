@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from "react";
 import HeaderHeroModal from "./modals/HeaderHeroModal";
+import { api } from "../lib/api";
 
 // Icon component for edit button (matching ServiceCard style)
 function Icon({ name, className = "", size = 18 }) {
@@ -28,6 +29,42 @@ export default function HeaderHero({ quote, setQuote, activeDest }) {
   const safeSet2 = useCallback(() => { setImg2Loaded(false); setImg2Error(false); }, []);
   useEffect(() => { safeSet1(); }, [p1, safeSet1]);
   useEffect(() => { safeSet2(); }, [p2, safeSet2]);
+
+  // Suggest up to 2 photos when both empty: resolve dest_id(s) then GET /destinations/photos
+  useEffect(() => {
+    const bothEmpty = !p1 && !p2;
+    if (!bothEmpty) return;
+    // collect distinct destination names in quote
+    const names = Array.from(
+      new Set((quote?.days || []).map(d => (d?.destination || "").trim()).filter(Boolean))
+    );
+    if (names.length === 0) return;
+    let aborted = false;
+    (async () => {
+      try {
+        const destIds = [];
+        for (const name of names) {
+          // use existing API to fetch destinations by query and find exact match ignoring case
+          const results = await api.getDestinations(name);
+          const match = (results || []).find(d => d.name?.toLowerCase() === name.toLowerCase());
+          if (match?.id) destIds.push(match.id);
+        }
+        const picks = [];
+        for (const id of destIds) {
+          if (picks.length >= 2) break;
+          const photos = await api.getDestinationPhotos(id, 5);
+          for (const ph of photos || []) {
+            if (picks.length < 2 && ph?.photo_url) picks.push(ph.photo_url);
+          }
+        }
+        if (!aborted && picks.length) {
+          setQuote(prev => ({ ...prev, hero_photo_1: picks[0] || "", hero_photo_2: picks[1] || "", dirty: true }));
+        }
+      } catch {}
+    })();
+    return () => { aborted = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote?.id]); // run once per quote
 
   // Hide header when no active destination per UX rule
   if (!activeDest?.trim()) return null;
@@ -91,6 +128,7 @@ export default function HeaderHero({ quote, setQuote, activeDest }) {
         <HeaderHeroModal
           open={modalOpen}
           quote={quote}
+          activeDest={activeDest}
           onClose={() => setModalOpen(false)}
           onSave={(changes) => {
             // Parent update without flicker
