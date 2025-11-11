@@ -34,14 +34,38 @@ const dbg = (...args) => { if (window.__ET_DEBUG) console.log(...args); };
 // ---- Catalog grouping helpers ----
 const norm = (s) => (s || "").toString().trim().toLowerCase();
 const HOTEL_CATS = new Set(["hotel room","apartment","villa"]);
+const isTransportSvc = (s) => norm(s?.category) === "private transfer";
+// Vérifier si un service contient "DO NOT USE" dans le nom du supplier
+const hasDoNotUse = (s) => {
+  const supplier = (s?.supplier_name || s?.company || s?.name || "").toLowerCase();
+  return supplier.includes("do not use");
+};
+// Amélioration de isHotelSvc : exclure explicitement les transports et activités
 const isHotelSvc = (s) => {
   const cat = norm(s?.category);
+  // Si c'est clairement un transport ou une activité, ce n'est pas un hôtel
+  if (cat === "private transfer" || cat === "private driver" || 
+      cat === "small group" || cat === "private" || cat === "tickets" ||
+      cat === "train" || cat === "flight" || cat === "ferry") {
+    return false;
+  }
+  // Vérifier les catégories d'hôtel
   if (HOTEL_CATS.has(cat)) return true;
+  // Vérifier le nom et supplier pour des mots-clés d'hôtel
   const t = norm(`${s?.name||""} ${s?.supplier_name||""}`);
+  // Exclure si c'est clairement un transport ou une activité
+  if (/\b(transfer|chauffeur|driver|activity|tour|ticket|train|flight|ferry|golf cart|mobility)\b/.test(t)) {
+    return false;
+  }
+  // Inclure si c'est un hôtel, appartement ou villa
   return /\b(hotel|apartment|appartment|villa)\b/.test(t);
 };
-const isTransportSvc = (s) => norm(s?.category) === "private transfer";
-const inTab = (s, tab) => tab === "Hotels" ? isHotelSvc(s) : tab === "Transport" ? isTransportSvc(s) : true;
+const inTab = (s, tab) => {
+  // Exclure les services avec "DO NOT USE" pour tous les types
+  if (hasDoNotUse(s)) return false;
+  // Filtrer par type
+  return tab === "Hotels" ? isHotelSvc(s) : tab === "Transport" ? isTransportSvc(s) : true;
+};
 
 // Utilitaires pour le rendu ServiceCard (utilisent norm et HOTEL_CATS déjà définis)
 const isHotelLine = L => HOTEL_CATS.has(norm(L?.category));
@@ -607,6 +631,13 @@ export default function QuoteEditor(){
     const info = svcInfoCache.get(s.id);
     const fields = info?.fields || info?.extras || {};
     
+    // Charger les infos en arrière-plan pour les hôtels si pas encore chargées (pour afficher les étoiles immédiatement)
+    useEffect(() => {
+      if (tab === 'Hotels' && !info) {
+        ensureSvcInfo(s.id);
+      }
+    }, [tab, s.id, info]);
+    
     const onEnter = async (e) => {
       setSvcHoverId(s.id);
       ensureSvcInfo(s.id);
@@ -619,8 +650,9 @@ export default function QuoteEditor(){
     
     if (tab === 'Hotels') {
       const supplier = s.supplier_name || s.company || s.name || '';
+      // Utiliser s.hotel_stars en premier si disponible, sinon fields (qui seront chargés en arrière-plan)
       const starsAbbr = starsAbbrFrom(
-        fields.hotel_stars || fields['Hotel Stars'] || s.hotel_stars
+        s.hotel_stars || fields.hotel_stars || fields['Hotel Stars']
       );
       // Nom - 3* (collé, aligné à gauche)
       title = (
@@ -1242,10 +1274,42 @@ export default function QuoteEditor(){
     const idx = findActiveIndex();
     if (idx < 0) { showNotice("Select a day first", "info"); return; }
     const d = q.days[idx];
-    // If flag on and the item looks like a Hotel, open the dedicated modal instead of inserting directly.
-    // Be robust: rely on current tab, category, or name heuristic.
     const categoryLower = (svc?.category || '').toLowerCase();
     const nameLower = (svc?.name || '').toLowerCase();
+    
+    // VÉRIFIER D'ABORD SI C'EST UN TRANSPORT (avant la vérification hôtel)
+    // Cela évite que des services de transport avec "hotel" dans le nom ouvrent le modal hôtel
+    const looksTransport = isTransportSvc(svc) || (svcTab === 'Transport' && categoryLower.includes('transfer'));
+    
+    if (looksTransport) {
+      // Fetch full service and open transport modal
+      (async () => {
+        try {
+          const full = await api.getServiceById(svc.id);
+          const fields = full?.fields || {};
+          const draft = {
+            mode: 'create',
+            svcFull: full,
+            dayIdx: idx,
+            defaults: {
+              description: (fields?.full_description || full?.full_description || '') || '',
+              start_time: (fields?.start_time || '') || '',
+              internal_note: ''
+            }
+          };
+          setCatalogTransportDraft(draft);
+        } catch (e) {
+          console.error(e);
+          showNotice("Unable to open transport modal. Falling back to direct insert.", "warn");
+          directInsertCatalogLine(svc, d);
+        }
+      })();
+      return;
+    }
+    
+    // PUIS vérifier si c'est un hôtel (seulement si ce n'est PAS un transport)
+    // If flag on and the item looks like a Hotel, open the dedicated modal instead of inserting directly.
+    // Be robust: rely on current tab, category, or name heuristic.
     const looksHotel =
       enableCatalogHotelModal && (
         (svcTab === 'Hotels') ||
@@ -1265,7 +1329,8 @@ export default function QuoteEditor(){
       svcName: svc?.name,
       svcFields: svc?.fields,
       svcHotelStars: svc?.hotel_stars,
-      looksHotel 
+      looksHotel,
+      looksTransport
     });
     if (looksHotel) {
       // Fetch full service to hydrate fields before opening the modal
@@ -1316,37 +1381,9 @@ export default function QuoteEditor(){
       })();
       return;
     }
-    // Check if it's a transport service
-    const looksTransport = isTransportSvc(svc) || (svcTab === 'Transport' && categoryLower.includes('transfer'));
     
     // Check if it's an activity service (not hotel, not transport)
     const looksActivity = !looksHotel && !looksTransport && (svcTab === 'Activity' || categoryLower.includes('activity') || categoryLower.includes('small group') || categoryLower.includes('private') || categoryLower.includes('tickets'));
-    
-    if (looksTransport) {
-      // Fetch full service and open transport modal
-      (async () => {
-        try {
-          const full = await api.getServiceById(svc.id);
-          const fields = full?.fields || {};
-          const draft = {
-            mode: 'create',
-            svcFull: full,
-            dayIdx: idx,
-            defaults: {
-              description: (fields?.full_description || full?.full_description || '') || '',
-              start_time: (fields?.start_time || '') || '',
-              internal_note: ''
-            }
-          };
-          setCatalogTransportDraft(draft);
-        } catch (e) {
-          console.error(e);
-          showNotice("Unable to open transport modal. Falling back to direct insert.", "warn");
-          directInsertCatalogLine(svc, d);
-        }
-      })();
-      return;
-    }
     
     if (looksActivity) {
       // Fetch full service and open activity modal
@@ -1408,8 +1445,34 @@ export default function QuoteEditor(){
     (async () => {
       setSvcLoading(true); setSvcError(null);
       try {
-        const base = await api.getPopularServices({ dest: activeDest, limit: 50 });
+        // Passer la catégorie appropriée selon svcTab
+        // Le backend accepte "Activity" comme groupe, ou des catégories individuelles comme "Hotel", "Private Transfer"
+        const category = svcTab === "Hotels" ? "Hotel" : 
+                        svcTab === "Transport" ? "Private Transfer" : 
+                        "Activity";
+        const base = await api.getPopularServices({ dest: activeDest, category, limit: 50 });
         let out = (base || []).filter(r => inTab(r, svcTab));
+
+        // Helper pour extraire le supplier (utilisé pour la déduplication des hôtels)
+        const getSupplierKey = (x) => {
+          if (svcTab === "Hotels") {
+            // Pour les hôtels, dédupliquer par supplier (car plusieurs types de chambres peuvent exister)
+            return (x.supplier_name || x.company || x.name || "").trim().toLowerCase();
+          }
+          // Pour les autres types, dédupliquer par id
+          return x.id;
+        };
+
+        // DÉDUPLIQUER les résultats initiaux
+        // Pour les hôtels: par supplier (plusieurs chambres = même hôtel)
+        // Pour les autres: par id
+        const seen = new Set();
+        out = out.filter(x => {
+          const key = getSupplierKey(x);
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
 
         // Fallback si peu d'items: seed via search
         if (out.length < 6) {
@@ -1423,12 +1486,25 @@ export default function QuoteEditor(){
           }
 
           const merged = [...out, ...extra.filter(x => inTab(x, svcTab))];
-          // dédup par id
-          const seen = new Set(); out = [];
-          for (const x of merged) if (!seen.has(x.id)) { seen.add(x.id); out.push(x); }
+          // dédup par supplier (hôtels) ou id (autres) - déjà fait pour out, mais refaire pour merged
+          const seen2 = new Set(out.map(x => getSupplierKey(x)));
+          for (const x of merged) {
+            const key = getSupplierKey(x);
+            if (!seen2.has(key)) {
+              seen2.add(key);
+              out.push(x);
+            }
+          }
         }
 
         out = out.slice(0,12);
+        
+        // Charger les infos complètes pour les hôtels immédiatement (pour afficher les étoiles)
+        if (svcTab === "Hotels") {
+          const promises = out.map(s => ensureSvcInfo(s.id));
+          await Promise.all(promises);
+        }
+        
         if (!cancelled) setSvcPopular(out);
       } catch {
         if (!cancelled) setSvcError("Load failed");
@@ -2883,8 +2959,6 @@ export default function QuoteEditor(){
         <div className="rail right">
 
           <div className="catalog">
-
-            <input className="cat-button" placeholder="Search name / company" readOnly />
 
             <div className="chipbar">
               {["Hotels","Activities","Transport"].map(tab => (

@@ -166,16 +166,32 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
     title = `${room}${eci}, ${bf} at ${company}${stars}`;
   } else if (!isTransfer(line)) {
     // ACTIVITÉ
-    const st = f.start_time || s['Start Time'];
-    if (st) title = `${title} at ${st}`;
+    // Check if it's a catalog activity
+    const isCatalogActivity = !!(line?.raw_json?.catalog_id && line?.category === "Activity");
+    
+    if (isCatalogActivity) {
+      // For catalog activities: "Titre at (start_time)" if start_time exists
+      const startTime = line.raw_json?.start_time || '';
+      if (startTime) {
+        title = `${title} at ${fmtAMPM(startTime)}`;
+      }
+      // Duration will be set in subtitle below
+      // Description will be set in note below
+    } else {
+      // Regular activity: existing logic
+      const st = f.start_time || s['Start Time'];
+      if (st) title = `${title} at ${st}`;
+    }
   }
 
   // DESCRIPTION + URL
   // For catalog hotels, prefer raw_json.description (user-edited) over fields
   const isCatalogHotel = !!(line?.raw_json?.catalog_id && line?.category === "Hotel");
+  const isCatalogActivity = !!(line?.raw_json?.catalog_id && line?.category === "Activity");
+  // For catalog activities, description is handled in note (via switch case), so don't use fullDesc
   const fullDesc = isHotel(line) && (line?.raw_json?.source === 'catalog' || isCatalogHotel) && line?.raw_json?.description
     ? line.raw_json.description
-    : (f.full_description || s['Full Description'] || '');
+    : (!isCatalogActivity ? (f.full_description || s['Full Description'] || '') : '');
   // Pour les hôtels du catalogue, utiliser raw_json.hotel_url
   const hotelUrl = isCatalogHotel 
     ? (line.raw_json.hotel_url || '')
@@ -184,8 +200,17 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
   // TEXT LINK for hotel URL
   const hotelUrlText = (hotelUrl || '').trim();
 
-  // Badge catégorie masqué pour le catalogue
-  const showChip = !isCatalog(line) && !!line.category;
+  // Badge catégorie masqué pour le catalogue et pour Trip info, Internal info, Cost, Train, Flight, Ferry, Car Rental, New Hotel, New Service
+  const showChip = !isCatalog(line) && !!line.category && 
+                   category !== "Trip info" && 
+                   category !== "Internal info" && 
+                   category !== "Cost" &&
+                   category !== "Train" &&
+                   category !== "Flight" &&
+                   category !== "Ferry" &&
+                   category !== "Car Rental" &&
+                   category !== "New Hotel" &&
+                   category !== "New Service";
   
   // Legacy compatibility for chips section
   const isActivity = !isHotel(line) && !isTransfer(line) && (line?.category && ["Small Group","Private","Private Chauffeur","Tickets"].includes(line.category));
@@ -216,17 +241,31 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
       break;
     }
     case "Flight": {
-      const withSeats = data?.seat_res === true ? " with seat reservations" : "";
-      title = `${data?.airline||"Airline"} flight from ${data?.from||"?"} to ${data?.to||"?"}${withSeats}`;
+      // Back-compat: legacy boolean seat_res or with_seats
+      let suffix = "";
+      const choice = data?.seat_res_opt;
+      if (choice === "with") {
+        suffix = " with seat reservations";
+      } else if (data?.seat_res === true || data?.with_seats === true) {
+        suffix = " with seat reservations";
+      }
+      title = `${data?.airline||"Airline"} flight from ${data?.from||"?"} to ${data?.to||"?"}${suffix}`;
       subtitle = `Departure at ${fmtAMPM(data?.dep_time)}; arrival at ${fmtAMPM(data?.arr_time)} – Schedule subject to change`;
       note = data?.note || "";
       break;
     }
     case "Train": {
-      const base = `${data?.class_type || "First Class Train"} from ${data?.from||"?"} to ${data?.to||"?"}`;
-      const suffix = (data?.seat_res === false)
-        ? " without seat reservations (open seating)"
-        : " with seat reservations";
+      // Afficher "Train" juste après le class_type
+      const classType = data?.class_type || "First Class";
+      const base = `${classType} Train from ${data?.from||"?"} to ${data?.to||"?"}`;
+      // Back-compat: legacy boolean seat_res
+      let suffix = "";
+      const choice = data?.seat_res_choice;
+      if (choice === "with")        suffix = " with seat reservations";
+      else if (choice === "without") suffix = " without seat reservations (open seating)";
+      else if (choice === "none")    suffix = "";
+      else if (data?.seat_res === true)  suffix = " with seat reservations";
+      else if (data?.seat_res === false) suffix = " without seat reservations (open seating)";
       title = base + suffix;
       subtitle = `Departure at ${fmtAMPM(data?.dep_time)}; arrival at ${fmtAMPM(data?.arr_time)} – Schedule subject to change`;
       note = data?.note || "";
@@ -255,8 +294,8 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
         h?.stars && h.stars !== "NA"
           ? " " + "★".repeat(Math.min(5, isNaN(starCount) ? 0 : starCount))
           : "";
-      // Bloc room
-      const room = h?.room_type ? `1 ${h.room_type}` : null;
+      // Bloc room - afficher juste le room_type sans le "1"
+      const room = h?.room_type || null;
       // Options
       const opts = [];
       if (h?.early_checkin) opts.push("early check-in guaranteed");
@@ -268,6 +307,34 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
       subtitle = "";
       // Prefer description from raw_json when present
       note = line?.raw_json?.description || h?.description || "";
+      break;
+    }
+    case "Activity": {
+      // Check if it's a catalog activity
+      const isCatalogActivity = !!(line?.raw_json?.catalog_id);
+      if (isCatalogActivity) {
+        // For catalog activities: title already set above with "at (start_time)" if applicable
+        // Duration in subtitle
+        const duration = line.raw_json?.duration || '';
+        if (duration && String(duration).trim() !== "") {
+          subtitle = `Duration: ${prettyDur(duration)}`;
+        }
+        // Description in note
+        note = line.raw_json?.description || '';
+      } else {
+        // Regular activity: use existing logic
+        const s = data || {};
+        title = (s.title || "Activity") + (s.start_time ? ` at ${fmtAMPM(s.start_time)}` : "");
+        const mins = minsBetween24(s.start_time, s.end_time);
+        let durationLine = "";
+        if (mins && mins > 0) durationLine = `Duration: ${humanDur(mins)}`;
+        else if (mins === -1) durationLine = "⚠ End time before start time";
+        else if (s.duration && String(s.duration).trim()!=="") {
+          durationLine = `Duration: ${prettyDur(s.duration)}`;
+        }
+        subtitle = [durationLine, s.description || ""].filter(Boolean).join("\n");
+        note = "";
+      }
       break;
     }
     case "New Service": {

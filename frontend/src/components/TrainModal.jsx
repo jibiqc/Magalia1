@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import "../styles/quote.css";
 import TimeAmPmField from "./TimeAmPmField";
@@ -14,14 +14,42 @@ export default function TrainModal({
   const [class_type, setClassType] = useState(initialData?.class_type || "");
   const [dep_time, setDepTime] = useState(initialData?.dep_time || "");
   const [arr_time, setArrTime] = useState(initialData?.arr_time || "");
-  const [seat_res, setSeatRes] = useState(initialData?.seat_res !== undefined ? initialData.seat_res : true);
   const [description, setDescription] = useState(initialData?.note || initialData?.description || "");
   const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
+  // Tri-state radio: "with" | "without" | "none"
+  const defaultSeat = initialData?.seat_res_choice || (initialData?.seat_res === true ? "with" : initialData?.seat_res === false ? "without" : "with");
+  const [seat_res_choice, setSeatChoice] = useState(defaultSeat);
+
+  // Mettre à jour l'état quand initialData change ou quand le modal s'ouvre (pour l'édition)
+  useEffect(() => {
+    if (open) {
+      if (initialData) {
+        setFrom(initialData.from || "");
+        setTo(initialData.to || "");
+        setClassType(initialData.class_type || "");
+        setDepTime(initialData.dep_time || "");
+        setArrTime(initialData.arr_time || "");
+        setDescription(initialData.note || initialData.description || "");
+        setInternalNote(initialData.internal_note || "");
+        const seatChoice = initialData.seat_res_choice || (initialData.seat_res === true ? "with" : initialData.seat_res === false ? "without" : "with");
+        setSeatChoice(seatChoice);
+      } else {
+        setFrom("");
+        setTo("");
+        setClassType("");
+        setDepTime("");
+        setArrTime("");
+        setDescription("");
+        setInternalNote("");
+        setSeatChoice("with");
+      }
+    }
+  }, [initialData, open]);
 
   if (!open) return null;
 
   const handleSubmit = () => {
-    onSubmit({ from, to, class_type, dep_time, arr_time, seat_res, note: description, description, internal_note });
+    onSubmit({ from, to, class_type, dep_time, arr_time, seat_res_choice, note: description, description, internal_note });
   };
 
   const backdrop = (
@@ -71,31 +99,40 @@ export default function TrainModal({
             />
           </div>
 
-          <div className="field">
-            <label>Class type</label>
-            <input
-              type="text"
-              className="input"
-              value={class_type}
-              onChange={(e) => setClassType(e.target.value)}
-              placeholder="First Class Train"
-            />
+          {/* Row: Class type (left)  |  Seat reservation (right) */}
+          <div className="row-split">
+            <div className="field">
+              <label>Class type</label>
+              <input
+                type="text"
+                className="input"
+                value={class_type}
+                onChange={(e) => setClassType(e.target.value)}
+                placeholder="First Class Train"
+              />
+            </div>
+            <div className="field seat-field">
+              <label>Seat reservation</label>
+              <div className="seatbox">
+                <label className={`seatopt ${seat_res_choice==="with"?"active":""}`}>
+                  <input type="radio" name="train-seat" className="sr-only" checked={seat_res_choice==="with"} onChange={()=>setSeatChoice("with")} />
+                  <span>with seat reservations</span>
+                </label>
+                <label className={`seatopt ${seat_res_choice==="without"?"active":""}`}>
+                  <input type="radio" name="train-seat" className="sr-only" checked={seat_res_choice==="without"} onChange={()=>setSeatChoice("without")} />
+                  <span>without seat reservations (open seating)</span>
+                </label>
+                <label className={`seatopt ${seat_res_choice==="none"?"active":""}`}>
+                  <input type="radio" name="train-seat" className="sr-only" checked={seat_res_choice==="none"} onChange={()=>setSeatChoice("none")} />
+                  <span>do not precise</span>
+                </label>
+              </div>
+            </div>
           </div>
 
           <TimeAmPmField label="Departure time" value24={dep_time} onChange={setDepTime} />
 
           <TimeAmPmField label="Arrival time" value24={arr_time} onChange={setArrTime} />
-
-          <div className="field">
-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={seat_res}
-                onChange={(e) => setSeatRes(e.target.checked)}
-              />
-              <span>Seat reservations</span>
-            </label>
-          </div>
 
           <div className="field">
             <label>Description</label>

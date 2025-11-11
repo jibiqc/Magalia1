@@ -111,6 +111,12 @@ def _to_out(q: Quote) -> QuoteOut:
 
         id=q.id, title=q.title, pax=q.pax,
 
+        display_title=q.display_title,
+
+        hero_photo_1=q.hero_photo_1,
+
+        hero_photo_2=q.hero_photo_2,
+
         start_date=_date_str(q.start_date), end_date=_date_str(q.end_date), days=days,
 
         margin_pct=margin_pct,
@@ -178,6 +184,12 @@ def create_quote(payload: QuoteIn, db: Session = Depends(get_db)):
     q = Quote(
 
         title=payload.title, pax=payload.pax,
+
+        display_title=payload.display_title,
+
+        hero_photo_1=payload.hero_photo_1,
+
+        hero_photo_2=payload.hero_photo_2,
 
         start_date=_to_date(payload.start_date), end_date=_to_date(payload.end_date),
 
@@ -248,6 +260,13 @@ def upsert_quote(quote_id: int, payload: QuoteIn, db: Session = Depends(get_db))
         q = Quote(id=quote_id); db.add(q); db.flush()
 
     q.title = payload.title
+
+    # Header fields
+    q.display_title = payload.display_title
+
+    q.hero_photo_1 = payload.hero_photo_1
+
+    q.hero_photo_2 = payload.hero_photo_2
 
     q.pax = payload.pax
 

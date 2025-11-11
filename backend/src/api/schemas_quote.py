@@ -56,6 +56,12 @@ class QuoteIn(BaseModel):
 
     title: Optional[str] = None
 
+    display_title: Optional[str] = None
+
+    hero_photo_1: Optional[str] = None
+
+    hero_photo_2: Optional[str] = None
+
     pax: Optional[int] = None
 
     start_date: Optional[str] = None
@@ -133,6 +139,12 @@ class QuoteOut(BaseModel):
     id: int
 
     title: Optional[str] = None
+
+    display_title: Optional[str] = None
+
+    hero_photo_1: Optional[str] = None
+
+    hero_photo_2: Optional[str] = None
 
     pax: Optional[int] = None
 

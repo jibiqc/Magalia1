@@ -27,6 +27,14 @@ class Quote(Base):
 
     title = Column(String, nullable=True)
 
+    # Display title for document header (Arial 28 bold centered in UI/Word)
+    display_title = Column(String, nullable=True)
+
+    # Two hero photos for the document header (URLs)
+    hero_photo_1 = Column(String, nullable=True)
+
+    hero_photo_2 = Column(String, nullable=True)
+
     pax = Column(Integer, nullable=True)
 
     start_date = Column(Date, nullable=True)

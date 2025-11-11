@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import "../styles/quote.css";
 import TimeAmPmField from "./TimeAmPmField";
@@ -22,6 +22,32 @@ export default function FlightModal({
       ?? (initialData?.with_seats ? "with" : "none")
       ?? "with"
   );
+
+  // Mettre à jour l'état quand initialData change ou quand le modal s'ouvre (pour l'édition)
+  useEffect(() => {
+    if (open) {
+      if (initialData) {
+        setFrom(initialData.from || "");
+        setTo(initialData.to || "");
+        setAirline(initialData.airline || "");
+        setDepTime(initialData.dep_time || "");
+        setArrTime(initialData.arr_time || "");
+        setDescription(initialData.note || initialData.description || "");
+        setInternalNote(initialData.internal_note || "");
+        const seatOpt = initialData.seat_res_opt ?? (initialData.with_seats ? "with" : "none") ?? "with";
+        setSeatResOpt(seatOpt);
+      } else {
+        setFrom("");
+        setTo("");
+        setAirline("");
+        setDepTime("");
+        setArrTime("");
+        setDescription("");
+        setInternalNote("");
+        setSeatResOpt("with");
+      }
+    }
+  }, [initialData, open]);
 
   if (!open) return null;
 

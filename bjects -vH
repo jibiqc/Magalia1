@@ -1,0 +1,50 @@
+* [33m3513465[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mstyle/center-flat-white-no-hint[m[33m, [m[1;31morigin/style/day-title-underline-arial[m[33m, [m[1;32mstyle/day-title-underline-arial[m[33m)[m style(quote): underline day titles and force Arial in center content
+* [33mb60db77[m[33m ([m[1;32mfeat/catalog-hotel-modal-end2end[m[33m)[m feat(quote): catalog hotel modal end-to-end (clickmodal, create/edit, render breakfast/ECI/notes)
+* [33macc17ed[m[33m ([m[1;31morigin/backup/audit-debug-[m[33m, [m[1;32msafe/backup-[m[33m, [m[1;32mbackup/audit-debug-[m[33m)[m fix(audit): debug prints and schema checks for audit_logs
+* [33md9d6c6d[m[33m ([m[1;33mtag: [m[1;33msafe-snapshot[m[33m, [m[1;31morigin/safe/backup-[m[33m)[m chore(safety): snapshot working state
+* [33m34d2c47[m[33m ([m[1;31morigin/feat/catalog-hotel-edit-and-render[m[33m, [m[1;32mfeat/catalog-hotel-edit-and-render[m[33m)[m feat(quote): catalog hotel modal (create+edit), breakfast/ECI rendering, desc+internal note sync
+* [33m89f627d[m[33m ([m[1;31morigin/feat/right-rail-hover-wide-stars-inline[m[33m, [m[1;32mwip/broken-[m[33m, [m[1;32mfeat/right-rail-hover-wide-stars-inline[m[33m)[m Right rail: wider hover card, left-aligned; hotel title 'Name - 3*' with stars inline
+* [33m01111cb[m[33m ([m[1;31morigin/feat/right-rail-contrast-hover-stars[m[33m, [m[1;32mfeat/right-rail-contrast-hover-stars[m[33m)[m Right rail: better contrast; fixed-position hover card; hotel stars on first line; cleaned transport titles
+* [33m873a690[m[33m ([m[1;31morigin/fix/hide-supplier-for-catalog[m[33m, [m[1;32mfix/hide-supplier-for-catalog[m[33m)[m Hide supplier line for catalog services (including hotels)
+* [33mdedfa4a[m[33m ([m[1;31morigin/feat/catalog-tabs-fallback[m[33m, [m[1;32mfeat/catalog-tabs-fallback[m[33m)[m Right rail: robust tab filters + Popular fallback for Hotels/Transport; case-insensitive categories
+* [33mb3c7c15[m[33m ([m[1;31morigin/feat/services-insert-cleanup[m[33m, [m[1;32mfeat/services-insert-cleanup[m[33m)[m feat(services): silence [STATE] logs; insert full catalog snapshot into line.raw_json; gated debug
+* [33m79de6ba[m[33m ([m[1;31morigin/feat/services-insert-title[m[33m, [m[1;32mfeat/services-insert-title[m[33m)[m fix(services): map catalog service name to line.title; keep category as chip; insert handler
+* [33m1ea37df[m[33m ([m[1;31morigin/feat/services-ui-search[m[33m, [m[1;32mfeat/services-ui-search[m[33m)[m feat(ui): add right-rail search for Activity services with debounce and dest filter
+* [33m38c0435[m[33m ([m[1;31morigin/feat/services-ui-popular[m[33m, [m[1;32mfeat/services-ui-popular[m[33m)[m feat(ui): wire right-rail Popular to /services/popular with dest and Activity filter
+* [33mf9b33ef[m[33m ([m[1;31morigin/feat/services-api-block1[m[33m, [m[1;32mfeat/services-api-block1[m[33m)[m feat(services): add /services/search|/popular with Activity map, /services/{id}; front api exports; start_destination filter; title/URL/id badge
+* [33m9cbe652[m[33m ([m[1;31morigin/feat/nav-guard-ribbon-a1[m[33m, [m[1;32mfeat/nav-guard-ribbon-a1[m[33m)[m feat(quote): nav-guard ribbon, deterministic Save/Open, ID badge + URL sync; stable day insert/delete/shift
+* [33m64b0ac3[m[33m ([m[1;31morigin/feat/new-prefill-today-b11[m[33m, [m[1;32mfeat/new-prefill-today-b11[m[33m)[m feat(quote): on New, prefill start=today UTC and 3 consecutive days (end=start+2)
+* [33mac084f3[m[33m ([m[1;31morigin/fix/insert-init-a34[m[33m, [m[1;32mfix/insert-init-a34[m[33m)[m fix(quote): robust activeDayId init and functional insert; disable when no valid active index; remove debug logs
+* [33m76cc0be[m[33m ([m[1;31morigin/feat/delete-day-a4[m[33m, [m[1;32mfeat/delete-day-a4[m[33m)[m docs: add QuoteEditor smoke and regression test checklist
+* [33me41d2cf[m feat(quote): delete active day with min=1 guard; keep dates contiguous; adjust start/end atomically
+* [33m02e6b6b[m[33m ([m[1;31morigin/fix/insert-before-a32[m[33m, [m[1;32mfix/insert-before-a32[m[33m)[m fix(quote): correct +Before semantics (shift start_date when inserting at index 0); move +After above Total
+* [33m08f2683[m[33m ([m[1;31morigin/feat/open-control-a2[m[33m, [m[1;32mfeat/open-control-a2[m[33m)[m feat(quote): add Open control and ?quoteId= support with non-modal notices
+* [33m9e20cdb[m[33m ([m[1;31morigin/feat/pricing-compact-row[m[33m, [m[1;32mfeat/pricing-compact-row[m[33m)[m Quote: pricing row per service on one line, right-aligned, compact widths (EUR=150, FX=90, USD=150, SELL=160)
+* [33m671aed8[m[33m ([m[1;31morigin/feat/carrental-polish[m[33m, [m[1;32mfeat/carrental-polish[m[33m, [m[1;32mbaseline/compact-pricing[m[33m)[m Compact pricing inputs: narrower widths (EUR/USD 150px, FX 90px, Sell 160px) and right-aligned row
+* [33m415466f[m TripInfo & InternalInfo modals: clean fields; central render; internal badge and light background; no price grid/Excel.
+* [33m0179a95[m ServiceCard: hide Amount/Currency for Cost (internal). Keep price grid; remove phantom meta lines.
+* [33m7ac6469[m Car rental: expected drop-off UX + single 'Drop off the car' Trip info, transmission segmented control (Automatic/Manual/Do not precise), defaults (unlimited mileage, CDW & theft), central description order, visual polish. DnD slots height and day-head slot.
+* [33mebb3a61[m[33m ([m[1;32mfix/newservice-subtitle-newlines[m[33m)[m ServiceCard: preserve line breaks in subtitle so Duration and Description render on separate lines
+* [33m7603ecb[m[33m ([m[1;32mfix/ferry-modal-layout[m[33m)[m FlightModal: replace checkbox with 2-option seat reservation radio; persist seat_res_opt; ServiceCard: append 'with seat reservations' when seat_res_opt=with; reuse radio pill styles.
+* [33m516abd4[m fix(ferry): align seat reservation radios to the right of Class type; responsive grid; pill styling
+* [33m48a0946[m[33m ([m[1;32mfix/train-radio-pill-contrast[m[33m)[m ui(train): high-contrast pill radios for seat reservation; remove fieldset border
+* [33mf384efb[m[33m ([m[1;32mfeat/grid-service-names[m[33m)[m DnD: taller animated drop slot (22px over state) + minor spacing
+* [33m5e52989[m[33m ([m[1;31morigin/feat/grid-service-names[m[33m)[m feat(grid): consistent service names with 50-char truncation
+* [33m73390b5[m[33m ([m[1;31morigin/fix/timefield-minutes-typing[m[33m, [m[1;32mfix/timefield-minutes-typing[m[33m)[m fix(timefield): only emit when minutes are two digits; no padding while typing; clamp on blur
+* [33maf426b4[m[33m ([m[1;31morigin/feat/flightmodal-seatrow-maxlen[m[33m, [m[1;32mfeat/flightmodal-seatrow-maxlen[m[33m)[m feat(flight): inline seat reservation row; limit internal note to 1000 with counter
+* [33m63d66d6[m[33m ([m[1;31morigin/feat/flight-seatres-time-typing[m[33m, [m[1;32mfeat/flight-seatres-time-typing[m[33m)[m feat(flight): seat_res toggle; fix time typing; improve hint readability; append to title
+* [33m1f2b796[m[33m ([m[1;31morigin/fix/fx-default-4dp-onspot-hassle-once[m[33m, [m[1;32mfix/fx-default-4dp-onspot-hassle-once[m[33m)[m fix(price): show default FX when empty, render FX with 4dp, and include Onspot/Hassle exactly once in totals
+* [33md4c0921[m[33m ([m[1;31morigin/chore/price-css-cleanup[m[33m, [m[1;32mchore/price-css-cleanup[m[33m)[m chore(ui): unify price inputs row and remove spinners; improve contrast and spacing
+* [33m6f02d31[m[33m ([m[1;32mfeature/quote-editor-v1[m[33m)[m fix: ne pas appeler updateLine pour les lignes locales (lineIdx < 0)
+* [33m62f4e90[m fix: sécurité updateLine pour éviter Object.assign sur undefined/null
+* [33m132b05c[m refactor: helpers numériques robustes, inputs prix type text avec onBlur, Excel preview amélioré, CSS compact sans flèches
+* [33m5fb9782[m refactor: source unique de vérité pour catégories payantes avec normalisation (norm + PAID_CATS)
+* [33m29950bd[m fix: parsing robuste prix (virgules), formules FX corrigées, commission/Onspot/Hassle sans blocage, CSS compact
+* [33m5452199[m[33m ([m[1;31morigin/feature/quote-editor-v1[m[33m)[m feat: add Car Rental to paid categories for pricing inputs
+* [33mfa212fe[m fix: correct FX formula (€/FX=$) and ensure all paid services appear in Excel preview
+* [33m8f12a41[m feat: fix per-service pricing inputs with safe onBlur recalculation
+* [33m350ae15[m feat: restore single-line per-service pricing UI with smooth typing UX
+* [33mc9f7d45[m feat: restore per-service pricing UI with compact inputs and FX recalculation
+* [33m8ab1865[m ui(hotel): show clickable hotel URL under description; open in new tab; brand color
+* [33m06e3cb0[m ux: editable AM/PM fields; Train seat reservations default + conditional; Car Rental one-way fee restored; no italics except Trip info; universal PriceGrid with FX logic
+* [33m542c9d6[m ui: brand color #002060; Internal card no title; AM/PM time fields + midnight warning; Car Rental layout+render; Hotel/New Service renders; internal notes grey

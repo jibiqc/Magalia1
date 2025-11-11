@@ -417,6 +417,28 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   backdrop-filter: blur(4px);
 }
 
+/* Clickable name in Excel preview */
+.link-like {
+  background: transparent;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: #a5b4fc; /* slightly darker for better contrast */
+  cursor: pointer;
+  text-decoration: underline;
+}
+.link-like:hover,
+.link-like:focus-visible {
+  text-decoration: none;
+  outline: none;
+}
+
+/* Brief highlight for target service card after scroll */
+.flash-highlight {
+  box-shadow: 0 0 0 2px rgba(199,210,254,0.9), 0 0 12px rgba(199,210,254,0.6);
+  transition: box-shadow 0.3s ease;
+}
+
 /* Colonnes un peu plus serrées */
 .quote-table .col-dest      { width: 14%; }
 .quote-table .col-service   { width: 28%; }
@@ -1187,7 +1209,8 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   font-style: normal;
 }
 
-/* allow Trip info body to be italic only */
+/* allow Trip info title, body and subtitle to be italic */
+.service-card.tripinfo .service-title,
 .service-card.tripinfo .service-note,
 .service-card.tripinfo .service-sub {
   font-style: italic;

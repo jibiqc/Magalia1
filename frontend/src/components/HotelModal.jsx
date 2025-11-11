@@ -9,7 +9,7 @@ export default function HotelModal({
   initialData = null,
 }) {
   const [hotel_name, setHotelName] = useState(initialData?.hotel_name || "");
-  const [stars, setStars] = useState(initialData?.stars || "NA");
+  const [stars, setStars] = useState(initialData?.stars || "4");
   const [room_type, setRoomType] = useState(initialData?.room_type || "");
   const [breakfast, setBreakfast] = useState(initialData?.breakfast !== undefined ? initialData.breakfast : true);
   const [hotel_url, setHotelUrl] = useState(initialData?.hotel_url || "");
