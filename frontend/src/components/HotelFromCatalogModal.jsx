@@ -2,6 +2,35 @@ import React, { useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 
 export default function HotelFromCatalogModal({ open=true, data, onClose, onSubmit }) {
+  // Debug logs
+  useEffect(() => {
+    console.log('[HotelFromCatalogModal] Props:', { open, data: !!data, hasData: !!data });
+  }, [open, data]);
+  
+  // Controlled fields - must be declared before early return
+  const defaults = data?.defaults || {};
+  const [roomType, setRoomType] = useState(defaults?.room_type || "");
+  const [breakfast, setBreakfast] = useState(!!defaults?.breakfast);
+  const [earlyCI, setEarlyCI] = useState(!!defaults?.early_check_in);
+  const [checkIn, setCheckIn] = useState(defaults?.check_in_date || "");
+  const [checkOut, setCheckOut] = useState(defaults?.check_out_date || "");
+  const [description, setDescription] = useState(defaults?.description || "");
+  const [internalNote, setInternalNote] = useState(defaults?.internal_note || "");
+
+  // Update state when data changes
+  useEffect(() => {
+    if (data?.defaults) {
+      const d = data.defaults;
+      setRoomType(d.room_type || "");
+      setBreakfast(!!d.breakfast);
+      setEarlyCI(!!d.early_check_in);
+      setCheckIn(d.check_in_date || "");
+      setCheckOut(d.check_out_date || "");
+      setDescription(d.description || "");
+      setInternalNote(d.internal_note || "");
+    }
+  }, [data]);
+
   // Prevent body scroll and interactions when modal is open
   useEffect(() => {
     if (open && data) {
@@ -13,8 +42,11 @@ export default function HotelFromCatalogModal({ open=true, data, onClose, onSubm
     }
   }, [open, data]);
 
-  if (!open || !data) return null;
-  const { svcFull, defaults } = data;
+  if (!open || !data) {
+    console.log('[HotelFromCatalogModal] Not rendering:', { open, hasData: !!data });
+    return null;
+  }
+  const { svcFull } = data;
   const hotelName = (defaults?.hotel_name || svcFull?.company || svcFull?.supplier?.name || svcFull?.name || "") || "";
   // Parse stars correctly: extract first number and limit to 5
   const starsStr = String(defaults?.hotel_stars || "").trim();
@@ -22,28 +54,6 @@ export default function HotelFromCatalogModal({ open=true, data, onClose, onSubm
   const starsNum = starsMatch ? Math.min(5, Math.max(1, Math.round(parseFloat(starsMatch[1])))) : null;
   const starsText = starsNum ? `${starsNum}*` : "";
   const url = defaults?.hotel_url || "";
-
-  // Controlled fields
-  const [roomType, setRoomType] = useState(defaults?.room_type || "");
-  const [breakfast, setBreakfast] = useState(!!defaults?.breakfast);
-  const [earlyCI, setEarlyCI] = useState(!!defaults?.early_check_in);
-  const [checkIn, setCheckIn] = useState(defaults?.check_in_date || "");
-  const [checkOut, setCheckOut] = useState(defaults?.check_out_date || "");
-  const [description, setDescription] = useState(defaults?.description || "");
-  const [internalNote, setInternalNote] = useState(defaults?.internal_note || "");
-
-  // Réinitialiser les champs quand defaults change (mode edit/create)
-  useEffect(() => {
-    if (defaults) {
-      setRoomType(defaults.room_type || "");
-      setBreakfast(!!defaults.breakfast);
-      setEarlyCI(!!defaults.early_check_in);
-      setCheckIn(defaults.check_in_date || "");
-      setCheckOut(defaults.check_out_date || "");
-      setDescription(defaults.description || "");
-      setInternalNote(defaults.internal_note || "");
-    }
-  }, [defaults]);
 
   const disableSave = roomType.trim() === "" || !checkIn || !checkOut;
 
@@ -121,7 +131,7 @@ export default function HotelFromCatalogModal({ open=true, data, onClose, onSubm
         </div>
       </div>
       <style>{`
-        .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none}
+        .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none}
         .modal.card{background:#0b1220;color:#e6ecff;border-radius:16px;min-width:560px;max-width:720px;padding:20px;border:1px solid rgba(255,255,255,0.08);pointer-events:auto;user-select:text;position:relative;z-index:1}
         .form-row{margin-top:12px;display:flex;flex-direction:column;gap:6px}
         .modal-header{margin-bottom:8px}
@@ -136,4 +146,3 @@ export default function HotelFromCatalogModal({ open=true, data, onClose, onSubm
     document.body
   );
 }
-

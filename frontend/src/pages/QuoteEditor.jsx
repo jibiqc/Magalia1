@@ -420,14 +420,22 @@ export default function QuoteEditor(){
   const enableCatalogHotelModal = useMemo(() => {
     try {
       const qs = new URLSearchParams(window.location.search);
-      return qs.get('enableCatalogHotelModal') === '1';
+      const fromUrl = qs.get('enableCatalogHotelModal') === '1';
+      // Enable by default for development (can be disabled via ?enableCatalogHotelModal=0)
+      if (qs.get('enableCatalogHotelModal') === '0') return false;
+      return fromUrl || true; // Default to true for now
     } catch {
-      return false;
+      return true; // Default to true for development
     }
   }, []);
   // Draft data for the catalog hotel modal
   // { mode: 'create'|'edit', svcFull?, dayIdx, lineId?, defaults }
   const [catalogHotelDraft, setCatalogHotelDraft] = useState(null);
+  
+  // Debug: log when catalogHotelDraft changes
+  useEffect(() => {
+    console.log('[QuoteEditor] catalogHotelDraft changed:', catalogHotelDraft);
+  }, [catalogHotelDraft]);
 
   const [activeDayId,setActiveDayId] = useState(null);
 
@@ -1107,17 +1115,36 @@ export default function QuoteEditor(){
     const d = q.days[idx];
     // If flag on and the item looks like a Hotel, open the dedicated modal instead of inserting directly.
     // Be robust: rely on current tab, category, or name heuristic.
+    const categoryLower = (svc?.category || '').toLowerCase();
+    const nameLower = (svc?.name || '').toLowerCase();
     const looksHotel =
       enableCatalogHotelModal && (
         (svcTab === 'Hotels') ||
-        ((svc?.category || '').toLowerCase() === 'hotel') ||
-        ((svc?.name || '').toLowerCase().includes('hotel'))
+        categoryLower.includes('hotel') ||
+        categoryLower.includes('apartment') ||
+        categoryLower.includes('villa') ||
+        nameLower.includes('hotel') ||
+        nameLower.includes('apartment') ||
+        nameLower.includes('villa') ||
+        (svc?.fields?.hotel_stars) ||
+        (svc?.hotel_stars)
       );
+    console.log('[insertCatalogService]', { 
+      enableCatalogHotelModal, 
+      svcTab, 
+      svcCategory: svc?.category, 
+      svcName: svc?.name,
+      svcFields: svc?.fields,
+      svcHotelStars: svc?.hotel_stars,
+      looksHotel 
+    });
     if (looksHotel) {
       // Fetch full service to hydrate fields before opening the modal
       (async () => {
         try {
+          console.log('[insertCatalogService] Fetching full service for hotel modal...', svc.id);
           const full = await api.getServiceById(svc.id);
+          console.log('[insertCatalogService] Full service fetched:', full);
           // Compute defaults
           const fields = full?.fields || {};
           const dayDate = d?.date ? new Date(d.date) : new Date();
@@ -1132,7 +1159,7 @@ export default function QuoteEditor(){
           const checkOutISO = checkOutBase.toISOString().slice(0,10);
           const meal1 = String(fields?.meal_1 || '').toLowerCase();
           const breakfastDefault = meal1.includes('breakfast');
-          setCatalogHotelDraft({
+          const draft = {
             mode: 'create',
             svcFull: full,
             dayIdx: idx,
@@ -1148,7 +1175,9 @@ export default function QuoteEditor(){
               description: (fields?.full_description || full?.full_description || '') || '',
               internal_note: ''
             }
-          });
+          };
+          console.log('[insertCatalogService] Setting catalogHotelDraft:', draft);
+          setCatalogHotelDraft(draft);
         } catch (e) {
           console.error(e);
           showNotice("Unable to open hotel modal. Falling back to direct insert.", "warn");
@@ -1709,11 +1738,7 @@ export default function QuoteEditor(){
       if (cat === "flight")  return clamp50(`Flight ${d.from || "?"}->${d.to || "?"}`);
       if (cat === "train")   return clamp50(`Train ${d.from || "?"}->${d.to || "?"}`);
       if (cat === "ferry")   return clamp50(`Ferry ${d.from || "?"}->${d.to || "?"}`);
-      if (cat === "new hotel" || cat === "hotel") {
-        // For catalog hotels, prefer raw_json.hotel_name
-        const hotelName = line?.raw_json?.hotel_name || d.hotel_name || line.hotel_name || "Hotel";
-        return clamp50(hotelName);
-      }
+      if (cat === "new hotel" || cat === "hotel") return clamp50(d.hotel_name || line.hotel_name || "Hotel");
       if (cat === "new service" || cat === "activity") return clamp50(d.title || line.title || "Service");
       if (cat === "car rental") return "Car Rental";
       if (cat === "cost") return clamp50(d.title || line.title || "Cost");
@@ -2888,10 +2913,10 @@ export default function QuoteEditor(){
         }}
       />
 
-      {/* Hotel-from-catalog modal placeholder. Implemented next block. */}
+      {/* Hotel-from-catalog modal */}
       {enableCatalogHotelModal && catalogHotelDraft && (
         <HotelFromCatalogModal
-          open={true}
+          open={!!catalogHotelDraft}
           data={catalogHotelDraft}
           onClose={() => setCatalogHotelDraft(null)}
           onSubmit={(payload) => {
