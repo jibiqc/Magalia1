@@ -2022,6 +2022,22 @@ export default function QuoteEditor(){
 
   const totalScroll = ()=> totalsRef.current?.scrollIntoView({behavior:"smooth", block:"start"});
 
+  // Smooth scroll to a service card and apply a brief highlight
+  function scrollToLine(lineId) {
+    if (!lineId) return;
+    const el = document.getElementById(`line-${lineId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      // flash highlight
+      el.classList.remove("flash-highlight"); // reset if still present
+      // Force reflow to restart animation if clicking twice quickly
+      // eslint-disable-next-line no-unused-expressions
+      el.offsetHeight;
+      el.classList.add("flash-highlight");
+      window.setTimeout(() => el.classList.remove("flash-highlight"), 1400);
+    }
+  }
+
 
 
   // Recalculate totals (trigger re-render)
@@ -2151,7 +2167,8 @@ export default function QuoteEditor(){
         rows.push({
           dest: printedDest ? "" : destOf(day, line),
           name: excelServiceName(line),
-          eur, fx, usd, sell
+          eur, fx, usd, sell,
+          lineId: line.id
         });
         printedDest = true;
       });
@@ -2183,7 +2200,8 @@ export default function QuoteEditor(){
         rows.push({
           dest: destOf(day, lineForDest), // if needed we can wire active day destination later
           name: excelServiceName(lineForName),
-          eur, fx, usd, sell
+          eur, fx, usd, sell,
+          lineId: line.id
         });
       });
     });
@@ -2252,7 +2270,19 @@ export default function QuoteEditor(){
 
                 <td>{r.dest}</td>
 
-                <td>{r.name}</td>
+                <td>
+                  {r.lineId
+                    ? (
+                      <button
+                        className="link-like"
+                        title="Scroll to service"
+                        onClick={() => scrollToLine(r.lineId)}
+                      >
+                        {r.name}
+                      </button>
+                    )
+                    : r.name}
+                </td>
 
                 <td className="num">{r.eur ? r.eur.toFixed(2) : ""}</td>
 
@@ -2773,7 +2803,11 @@ export default function QuoteEditor(){
                             onDrop={(e)=> dropBefore(e, dayIdx, displayIndex)}
                           />
                           {/* card wrapper */}
-                          <div className="draggable-wrap" onDragOver={allowDrop}>
+                          <div
+                            className="draggable-wrap"
+                            id={`line-${l.id}`}
+                            onDragOver={allowDrop}
+                          >
                           <ServiceCard
                             line={lineData}
                             onChangeLocalData={isLocal ? (newData)=>{

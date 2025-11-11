@@ -35,33 +35,62 @@ def _add_hyperlink(paragraph: Paragraph, url: str, text: str) -> None:
 
 def append_sanitized_html_to_docx(paragraph: Paragraph, html: str) -> None:
     """
-    Very small mapper: split by <br>, convert <a> to hyperlink runs, keep bold/italic via Word default if source is simple.
-    For lists, caller should create separate paragraphs; here we render inline text segments and links.
+    Minimal HTML → Word:
+    - <p>/<br>: new paragraphs only when needed (no duplicates)
+    - <a>: clickable hyperlink runs
+    - <ul>/<ol>/<li>: plain paragraphs with simple bullet/number prefix to avoid template style drift
     """
     safe = sanitize_html(html)
-    # naive split preserving <a href>…</a> using bleach linkify as fallback
-    # For simplicity, rely on bleach to convert bare URLs to <a> and then parse minimal tags.
-    # We keep paragraphs simple: hyperlinks and plain text runs separated by <br>.
-    # More advanced block mapping will be handled in the exporter step.
-    parts = safe.replace("</p>", "<br>").replace("<p>", "").split("<br>")
-    first = True
-    for block in parts:
-        if not first:
-            paragraph = paragraph._element.addnext(paragraph._element)  # force a new paragraph logically
-        first = False
-        # crude parsing for <a href="...">text</a>
-        # This keeps implementation short; exporter can expand if needed.
-        import re
+    import re
+
+    def _emit_text_or_link(p: Paragraph, chunk: str):
         pos = 0
-        for m in re.finditer(r'<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>', block, flags=re.I):
-            before = bleach.clean(block[pos:m.start()], tags=[], strip=True)
+        for m in re.finditer(r'<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>', chunk, flags=re.I):
+            before = bleach.clean(chunk[pos:m.start()], tags=[], strip=True)
             if before:
-                paragraph.add_run(before)
+                p.add_run(before)
             url, text = m.group(1), bleach.clean(m.group(2), tags=[], strip=True)
             if url and text:
-                _add_hyperlink(paragraph, url, text)
+                _add_hyperlink(p, url, text)
             pos = m.end()
-        tail = bleach.clean(block[pos:], tags=[], strip=True)
+        tail = bleach.clean(chunk[pos:], tags=[], strip=True)
         if tail:
-            paragraph.add_run(tail)
+            p.add_run(tail)
+
+    # Normalize paragraphs and lists
+    # Convert </p> to \n markers, strip <p>, handle <br> as line breaks
+    text = safe.replace("</p>", "\n").replace("<p>", "")
+    # Lists: split blocks for <ul> and <ol>
+    # We render each <li> as its own Normal paragraph with a simple prefix.
+    # Unordered
+    def _render_list(par: Paragraph, block: str, ordered: bool):
+        items = re.findall(r"<li>(.*?)</li>", block, flags=re.I | re.S)
+        for i, raw in enumerate(items, 1):
+            newp = par._parent.add_paragraph()
+            newp.style = par.style
+            prefix = f"{i}. " if ordered else "• "
+            newp.add_run(prefix)
+            _emit_text_or_link(newp, raw)
+
+    # Process lists first
+    def _strip_lists(s: str, par: Paragraph) -> str:
+        # Ordered lists
+        for m in re.finditer(r"<ol>(.*?)</ol>", s, flags=re.I | re.S):
+            _render_list(par, m.group(1), ordered=True)
+        s = re.sub(r"<ol>.*?</ol>", "", s, flags=re.I | re.S)
+        # Unordered lists
+        for m in re.finditer(r"<ul>(.*?)</ul>", s, flags=re.I | re.S):
+            _render_list(par, m.group(1), ordered=False)
+        s = re.sub(r"<ul>.*?</ul>", "", s, flags=re.I | re.S)
+        return s
+
+    text = _strip_lists(text, paragraph)
+    # Split leftover by explicit paragraph breaks
+    for idx, blk in enumerate([b for b in text.split("\n") if b.strip()]):
+        if idx == 0:
+            _emit_text_or_link(paragraph, blk)
+        else:
+            newp = paragraph._parent.add_paragraph()
+            newp.style = paragraph.style
+            _emit_text_or_link(newp, blk)
 

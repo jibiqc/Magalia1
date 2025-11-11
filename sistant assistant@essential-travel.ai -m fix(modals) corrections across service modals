@@ -1,0 +1,30 @@
+ .../7426b0c8e996_add_quote_header_fields.py        |    35 [32m+[m
+ backend/src/api/quotes.py                          |    19 [32m+[m
+ backend/src/api/schemas_quote.py                   |    12 [32m+[m
+ backend/src/models_quote.py                        |     8 [32m+[m
+ bjects -vH                                         |    50 [32m+[m
+ frontend/.vite/deps/_metadata.json                 |    38 [32m+[m[31m-[m
+ frontend/.vite/deps/chunk-EZWSRKYN.js              | 21626 [32m+++++++++++++++++++[m
+ frontend/.vite/deps/chunk-EZWSRKYN.js.map          |     7 [32m+[m
+ frontend/.vite/deps/chunk-GFWMZNU4.js              |  1908 [32m++[m
+ frontend/.vite/deps/chunk-GFWMZNU4.js.map          |     7 [32m+[m
+ frontend/.vite/deps/react-dom.js                   |     6 [32m+[m
+ frontend/.vite/deps/react-dom.js.map               |     7 [32m+[m
+ frontend/.vite/deps/react-dom_client.js            |    38 [32m+[m
+ frontend/.vite/deps/react-dom_client.js.map        |     7 [32m+[m
+ frontend/.vite/deps/react.js                       |     5 [32m+[m
+ frontend/.vite/deps/react.js.map                   |     7 [32m+[m
+ frontend/src/components/CarRentalModal.jsx         |   260 [32m+[m[31m-[m
+ frontend/src/components/DayHero.jsx                |    68 [32m+[m
+ frontend/src/components/FlightModal.jsx            |    28 [32m+[m[31m-[m
+ frontend/src/components/HotelModal.jsx             |     2 [32m+[m[31m-[m
+ frontend/src/components/InternalInfoModal.jsx      |    62 [32m+[m[31m-[m
+ frontend/src/components/ServiceCard.jsx            |    93 [32m+[m[31m-[m
+ frontend/src/components/TrainModal.jsx             |    83 [32m+[m[31m-[m
+ frontend/src/components/TripInfoModal.jsx          |    77 [32m+[m[31m-[m
+ frontend/src/components/modals/DayHeroModal.jsx    |    97 [32m+[m
+ frontend/src/components/modals/DayImagesModal.jsx  |   112 [32m+[m
+ frontend/src/pages/QuoteEditor.jsx                 |   154 [32m+[m[31m-[m
+ frontend/src/styles/quote.css                      |     3 [32m+[m[31m-[m
+ frontend_backup.zip                                |   Bin [31m0[m -> [32m18015083[m bytes
+ 29 files changed, 24693 insertions(+), 126 deletions(-)
