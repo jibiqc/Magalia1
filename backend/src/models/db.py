@@ -19,6 +19,9 @@ load_dotenv()  # Fallback: try loading from current working directory
 default_db_path = project_root / "app.db"
 # Always use the app.db in project root (where migrations were run)
 DATABASE_URL = f"sqlite:///{default_db_path}"
+print(f"DB_DSN: {DATABASE_URL}")
+print(f"DB_PATH: {default_db_path}")
+print(f"DB_EXISTS: {default_db_path.exists()}")
 
 # Debug: print DATABASE_URL to verify it's loaded correctly
 if "sqlite" not in DATABASE_URL.lower():
@@ -41,4 +44,13 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Create base class for models
 Base = declarative_base()
+
+# Dependency for getting database session
+def get_db():
+    """Dependency for getting database session."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 

@@ -141,9 +141,22 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
 
   // HÔTEL
   if (isHotel(line)) {
-    const room = f.room_name || s['Room Name'] || inferRoom(line.title);
-    const company = line.provider_name || s['Company'] || line.supplier_name || '';
-    const stars = normStars(f.hotel_stars || s['Hotel Stars']);
+    // Pour les hôtels du catalogue, utiliser les données de raw_json
+    const isCatalogHotel = !!(line?.raw_json?.catalog_id && line?.category === "Hotel");
+    
+    let room, company, stars;
+    if (isCatalogHotel) {
+      // Hôtel du catalogue : utiliser raw_json
+      room = line.raw_json.room_type || '';
+      company = line.raw_json.hotel_name || line.provider_name || line.supplier_name || '';
+      stars = normStars(line.raw_json.hotel_stars || '');
+    } else {
+      // Hôtel classique : logique existante
+      room = f.room_name || s['Room Name'] || inferRoom(line.title);
+      company = line.provider_name || s['Company'] || line.supplier_name || '';
+      stars = normStars(f.hotel_stars || s['Hotel Stars']);
+    }
+    
     // Prefer explicit user choice saved in raw_json.breakfast over inferred fields
     const bfFromJson = (line?.raw_json?.breakfast === true) ? 'breakfast & VAT included'
                       : (line?.raw_json?.breakfast === false) ? 'VAT included'
@@ -159,10 +172,14 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
 
   // DESCRIPTION + URL
   // For catalog hotels, prefer raw_json.description (user-edited) over fields
-  const fullDesc = isHotel(line) && line?.raw_json?.source === 'catalog' && line?.raw_json?.description
+  const isCatalogHotel = !!(line?.raw_json?.catalog_id && line?.category === "Hotel");
+  const fullDesc = isHotel(line) && (line?.raw_json?.source === 'catalog' || isCatalogHotel) && line?.raw_json?.description
     ? line.raw_json.description
     : (f.full_description || s['Full Description'] || '');
-  const hotelUrl = f.hotel_url || s['Hotel URL'] || f.website || s['Website'] || '';
+  // Pour les hôtels du catalogue, utiliser raw_json.hotel_url
+  const hotelUrl = isCatalogHotel 
+    ? (line.raw_json.hotel_url || '')
+    : (f.hotel_url || s['Hotel URL'] || f.website || s['Website'] || '');
 
   // TEXT LINK for hotel URL
   const hotelUrlText = (hotelUrl || '').trim();

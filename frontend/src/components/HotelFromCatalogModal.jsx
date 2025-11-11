@@ -32,6 +32,19 @@ export default function HotelFromCatalogModal({ open=true, data, onClose, onSubm
   const [description, setDescription] = useState(defaults?.description || "");
   const [internalNote, setInternalNote] = useState(defaults?.internal_note || "");
 
+  // Réinitialiser les champs quand defaults change (mode edit/create)
+  useEffect(() => {
+    if (defaults) {
+      setRoomType(defaults.room_type || "");
+      setBreakfast(!!defaults.breakfast);
+      setEarlyCI(!!defaults.early_check_in);
+      setCheckIn(defaults.check_in_date || "");
+      setCheckOut(defaults.check_out_date || "");
+      setDescription(defaults.description || "");
+      setInternalNote(defaults.internal_note || "");
+    }
+  }, [defaults]);
+
   const disableSave = roomType.trim() === "" || !checkIn || !checkOut;
 
   const handleSave = () => {
