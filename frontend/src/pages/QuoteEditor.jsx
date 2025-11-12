@@ -833,6 +833,16 @@ export default function QuoteEditor(){
     const meta = readDnd(e);
     if (!meta) return;
 
+    // Capturer la valeur actuelle de localLines pour la vérification
+    const currentLocalLines = localLines;
+    
+    console.log('[dnd] dropBefore start', { 
+      meta, 
+      fromDayLines: q.days[meta.fromDay]?.lines?.length,
+      toDayLines: q.days[toDay]?.lines?.length,
+      currentLocalLinesCount: currentLocalLines.length
+    });
+
     setQ(prev => {
       const next = structuredClone(prev);
       const srcDay = next.days[meta.fromDay];
@@ -840,6 +850,16 @@ export default function QuoteEditor(){
 
       const dstBack = [...(dstDay.lines || [])];
       const srcBack = [...(srcDay.lines || [])];
+
+      console.log('[dnd] dropBefore processing', { 
+        isLocal: meta.isLocal, 
+        fromBackendIndex: meta.fromBackendIndex,
+        lineId: meta.lineId,
+        srcBackLength: srcBack.length,
+        dstBackLength: dstBack.length,
+        srcBackIds: srcBack.map(l => l.id),
+        dstBackIds: dstBack.map(l => l.id)
+      });
 
       if (!meta.isLocal) {
         // backend → backend
@@ -896,23 +916,92 @@ export default function QuoteEditor(){
         // Vérifier que la ligne n'existe pas déjà dans le jour destination
         // Seulement si on déplace vers un jour différent (pas pour réordonner dans le même jour)
         const lineId = srcBack[fromIdx]?.id;
-        if (lineId && meta.fromDay !== toDay && dstBack.some(l => l.id === lineId)) {
+        if (!lineId) {
+          console.warn('[dnd] No lineId found, cannot move');
+          return prev;
+        }
+
+        if (meta.fromDay !== toDay && dstBack.some(l => l.id === lineId)) {
           // La ligne existe déjà dans le jour destination, ne pas dupliquer
-          console.warn('[dnd] Line already exists in destination day, skipping duplicate');
+          console.warn('[dnd] Line already exists in destination day (backend), skipping duplicate');
+          return prev;
+        }
+
+        // Vérifier aussi dans les localLines si la ligne existe déjà dans le jour destination
+        // pour éviter les duplications entre backend et local
+        if (meta.fromDay !== toDay) {
+          const dayLocal = currentLocalLines.filter(ll => ll.dayId === dstDay.id && !ll.deleted);
+          if (dayLocal.some(ll => ll.id === lineId)) {
+            console.warn('[dnd] Line already exists in destination day (local), skipping duplicate');
+            return prev;
+          }
+        }
+
+        // S'assurer que la ligne est bien supprimée du jour source avant de l'ajouter au jour destination
+        if (fromIdx < 0 || fromIdx >= srcBack.length) {
+          console.warn('[dnd] Invalid fromIdx, cannot move', {fromIdx, srcBackLength: srcBack.length, lineId, meta});
           return prev;
         }
 
         const [moved] = srcBack.splice(fromIdx, 1);
+        
+        // Vérifier que la ligne a bien été supprimée
+        if (!moved || moved.id !== lineId) {
+          console.warn('[dnd] Moved line mismatch', {movedId: moved?.id, expectedId: lineId, movedCategory: moved?.category});
+          return prev;
+        }
+
+        // Vérifier une dernière fois que la ligne n'existe pas déjà dans le jour destination
+        // (double vérification après avoir récupéré la ligne)
+        if (meta.fromDay !== toDay && dstBack.some(l => l.id === lineId)) {
+          console.warn('[dnd] Line already exists in destination day (final check), skipping duplicate');
+          // Remettre la ligne dans le jour source puisqu'on ne la déplace pas
+          srcBack.splice(fromIdx, 0, moved);
+          return prev;
+        }
 
         // compute backend insert index from visual index
         let insertBackIdx = Math.min(Math.max(0, toDispIndex), dstBack.length);
-        // same-day downward adjustment
-        if (meta.fromDay === toDay && fromIdx < insertBackIdx) insertBackIdx -= 1;
-
-        dstBack.splice(insertBackIdx, 0, moved);
-
-      next.days[meta.fromDay].lines = srcBack;
-      next.days[toDay].lines = dstBack;
+        
+        // Pour le réordonnancement dans le même jour, utiliser le même tableau
+        if (meta.fromDay === toDay) {
+          // same-day: on a déjà supprimé la ligne de srcBack, maintenant on l'insère à la nouvelle position
+          // Ajuster l'index d'insertion si nécessaire
+          if (fromIdx < insertBackIdx) {
+            insertBackIdx -= 1; // La ligne a été supprimée avant la position d'insertion
+          }
+          // Vérifier que la ligne n'est pas déjà à cette position
+          if (srcBack[insertBackIdx]?.id === lineId) {
+            console.warn('[dnd] Line already at target position (same day), skipping duplicate');
+            // Remettre la ligne à sa position originale
+            srcBack.splice(fromIdx, 0, moved);
+            return prev;
+          }
+          srcBack.splice(insertBackIdx, 0, moved);
+          next.days[meta.fromDay].lines = srcBack;
+        } else {
+          // Déplacement vers un jour différent
+          // Vérifier que la ligne n'est pas déjà à cette position
+          if (dstBack[insertBackIdx]?.id === lineId) {
+            console.warn('[dnd] Line already at target position (different day), skipping duplicate');
+            // Remettre la ligne dans le jour source
+            srcBack.splice(fromIdx, 0, moved);
+            return prev;
+          }
+          dstBack.splice(insertBackIdx, 0, moved);
+          next.days[meta.fromDay].lines = srcBack;
+          next.days[toDay].lines = dstBack;
+        }
+      
+      console.log('[dnd] dropBefore final', {
+        fromDayLinesAfter: srcBack.length,
+        toDayLinesAfter: dstBack.length,
+        movedId: moved.id,
+        movedCategory: moved.category,
+        fromDayLineIds: srcBack.map(l => l.id),
+        toDayLineIds: dstBack.map(l => l.id)
+      });
+      
       // Normalize positions first
       const norm = normalizeQuotePositions(next);
       // Recompute decorations for source and destination days
@@ -1145,7 +1234,10 @@ export default function QuoteEditor(){
         }
         
         // Merge with existing lines (existing lines first, then converted localLines)
-        const allLines = [...(d.lines || []), ...convertedLocalLines];
+        // Éviter les doublons en vérifiant les IDs
+        const existingLineIds = new Set((d.lines || []).map(l => l.id));
+        const uniqueConvertedLocalLines = convertedLocalLines.filter(ll => !existingLineIds.has(ll.id));
+        const allLines = [...(d.lines || []), ...uniqueConvertedLocalLines];
         
         // DEBUG: Verify merge
         if (convertedLocalLines.length > 0) {
@@ -1258,12 +1350,34 @@ export default function QuoteEditor(){
       
       // DEBUG: Log what the backend returned - show FULL raw_json for Train/Flight/Ferry/Car Rental/Trip info
       const returnedLines = updatedNorm.days?.flatMap(d => d.lines?.map(l => ({
+        id: l.id,
         category: l.category,
         title: l.title,
         raw_json_keys: l.raw_json ? Object.keys(l.raw_json) : [],
         raw_json: l.raw_json
       })) || []) || [];
       console.log("[saveQuote] Backend returned quote:", JSON.stringify(returnedLines, null, 2));
+      
+      // Vérifier les doublons dans les lignes retournées
+      const returnedLineIds = returnedLines.map(l => l.id).filter(Boolean);
+      const duplicateIds = returnedLineIds.filter((id, idx) => returnedLineIds.indexOf(id) !== idx);
+      if (duplicateIds.length > 0) {
+        console.warn("[saveQuote] Backend returned duplicate line IDs:", duplicateIds);
+        // Supprimer les doublons en gardant la première occurrence
+        const seenIds = new Set();
+        updatedNorm.days = updatedNorm.days.map(d => ({
+          ...d,
+          lines: (d.lines || []).filter(l => {
+            if (!l.id) return true; // Garder les lignes sans ID
+            if (seenIds.has(l.id)) {
+              console.warn("[saveQuote] Removing duplicate line:", l.id, l.title);
+              return false;
+            }
+            seenIds.add(l.id);
+            return true;
+          })
+        }));
+      }
       
       // DEBUG: Show FULL raw_json for specific categories
       const specialReturned = returnedLines.filter(l => 
@@ -3195,11 +3309,12 @@ export default function QuoteEditor(){
                                   isLocal,
                                   lineId: l.id,
                                   fromDayId: d.id,
+                                  category: l.category, // Ajouter category pour debug
                                 };
                                 e.dataTransfer.effectAllowed = 'move';
                                 e.dataTransfer.setData('application/json', JSON.stringify(meta));
                                 e.dataTransfer.setData('text/plain', JSON.stringify(meta)); // fallback
-                                console.log('[dnd] dragstart', meta);
+                                console.log('[dnd] dragstart', { ...meta, lineCategory: l.category, serviceId: l.service_id });
                               }}
                             onEdit={() => {
                               if (isLocal) {
@@ -3355,7 +3470,7 @@ export default function QuoteEditor(){
 
             {/* ===== Excel-like preview (new spec) ===== */}
 
-            {renderExcelPreview()}
+            {showCostFields && renderExcelPreview()}
 
           </div>
 
