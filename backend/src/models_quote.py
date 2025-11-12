@@ -41,7 +41,12 @@ class Quote(Base):
 
     end_date = Column(Date, nullable=True)
 
-
+    # New fields for quote metadata
+    travel_agency = Column(String, nullable=True)
+    travel_advisor = Column(String, nullable=True)
+    client_name = Column(String, nullable=True)
+    fx_rate = Column(DEC6, nullable=True)  # Exchange rate at quote level (default for lines)
+    internal_note = Column(Text, nullable=True)
 
     # ---- Cost fields (quote-level) ----
 

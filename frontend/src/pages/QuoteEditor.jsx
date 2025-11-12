@@ -21,6 +21,7 @@ import HeaderHero from "../components/HeaderHero";
 import DayHero from "../components/DayHero";
 import DayImagesModal from "../components/modals/DayImagesModal";
 import DayHeroModal from "../components/modals/DayHeroModal";
+import NewQuoteModal from "../components/NewQuoteModal";
 import { api } from "../lib/api";
 import { fmtDateShortISO, fmtDateLongISO } from "../utils/dateFmt";
 import { uid } from "../utils/localId";
@@ -553,7 +554,8 @@ export default function QuoteEditor(){
 
   const [fxEuroToUsd, setFxEuroToUsd] = useState(0.75);
 
-
+  // New Quote Modal state
+  const [newQuoteModalOpen, setNewQuoteModalOpen] = useState(false);
 
   // (moved openId above)
 
@@ -1159,6 +1161,59 @@ export default function QuoteEditor(){
     showNotice("New quote created", "success");
   };
 
+  const handleCreateQuoteFromModal = (data) => {
+    const q0 = emptyQuote();
+    
+    // Calculate number of days
+    const start = new Date(data.startDate);
+    const end = new Date(data.endDate);
+    const numDays = Math.ceil((end - start) / (1000 * 60 * 60 * 24)) + 1;
+    
+    // Create days array
+    // Note: destinations field from modal is only used for quote name generation, not for day destinations
+    const days = [];
+    for (let i = 0; i < numDays; i++) {
+      const dayDate = new Date(start);
+      dayDate.setDate(dayDate.getDate() + i);
+      days.push({
+        id: crypto.randomUUID ? crypto.randomUUID() : uid(),
+        date: dayDate.toISOString().slice(0, 10),
+        destination: "", // Keep destinations empty - they are set separately
+        lines: []
+      });
+    }
+    
+    const q1 = {
+      ...q0,
+      title: data.internalName,
+      pax: data.numberOfPax,
+      start_date: data.startDate,
+      end_date: data.endDate,
+      days: days,
+      margin_pct: DEFAULT_MARGIN,
+      hassle_manual: data.hassleTotal,
+      // New fields
+      travel_agency: data.travelAgency,
+      travel_advisor: data.travelAdvisor,
+      client_name: data.clientName,
+      fx_rate: data.exchangeRate,
+      internal_note: data.internalNote,
+    };
+    
+    // Update the global FX rate with the one from the modal
+    setFxEuroToUsd(data.exchangeRate);
+    
+    setQ(q1);
+    setOpenId("");
+    if (q1.days && q1.days.length > 0) setActiveDayId(q1.days[0].id);
+    setShowCostFields(true);
+    setShowActionIcons(true);
+    setShowDescriptions(true);
+    setShowImages(true);
+    setNewQuoteModalOpen(false);
+    showNotice("New quote created", "success");
+  };
+
   // Helper: convert localLine to normal line format for saving
   const convertLocalLineToNormal = (localLine) => {
     const { category, data } = localLine;
@@ -1366,6 +1421,12 @@ export default function QuoteEditor(){
         pax: qNorm.pax,
         start_date: qNorm.start_date,
         end_date: qNorm.end_date,
+        // New fields
+        travel_agency: qNorm.travel_agency,
+        travel_advisor: qNorm.travel_advisor,
+        client_name: qNorm.client_name,
+        fx_rate: qNorm.fx_rate,
+        internal_note: qNorm.internal_note,
         margin_pct: qNorm.margin_pct,
         onspot_manual: qNorm.onspot_manual,
         hassle_manual: qNorm.hassle_manual,
@@ -1479,6 +1540,10 @@ export default function QuoteEditor(){
       const quote = normalizeQuotePositions(quoteRaw); // trust backend order, ensure positions are consistent client-side
       // Assurer que margin_pct a une valeur par défaut
       if (quote.margin_pct == null) quote.margin_pct = DEFAULT_MARGIN;
+      // Update global FX rate if quote has one
+      if (quote.fx_rate != null) {
+        setFxEuroToUsd(quote.fx_rate);
+      }
       setQ(quote);
       setOpenId(String(quoteId));
       // keep URL in sync
@@ -1540,7 +1605,7 @@ export default function QuoteEditor(){
     if (q?.dirty) {
       setConfirmNav({ visible:true, busy:false, action:{ type:"new" } });
     } else {
-      handleNew();
+      setNewQuoteModalOpen(true);
     }
   };
   const requestOpen = (id) => {
@@ -1565,7 +1630,7 @@ export default function QuoteEditor(){
     setConfirmNav({ visible:false, busy:false, action:null }); // close ribbon first
     console.log("[RIBBON AFTER SET]", { confirmNav: { visible:false, busy:false, action:null } });
     if (!a) return;
-    if (a.type === "new") handleNew();
+    if (a.type === "new") setNewQuoteModalOpen(true);
     if (a.type === "open" && a.id) fetchQuote(a.id);
   };
   const inflightRef = useRef(false);
@@ -4034,6 +4099,16 @@ export default function QuoteEditor(){
             setEditingLine(null);
           }}
           initialData={editingLine?.data || null}
+        />
+      )}
+
+      {/* New Quote Modal */}
+      {newQuoteModalOpen && (
+        <NewQuoteModal
+          open={newQuoteModalOpen}
+          onClose={() => setNewQuoteModalOpen(false)}
+          onSubmit={handleCreateQuoteFromModal}
+          defaultExchangeRate={parseLocaleFloat(fxEuroToUsd) || DEFAULT_FX}
         />
       )}
 

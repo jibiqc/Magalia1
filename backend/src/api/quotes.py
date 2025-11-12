@@ -155,6 +155,13 @@ def _to_out(q: Quote, db: Optional[Session] = None, include_first_image: bool = 
 
         start_date=_date_str(q.start_date), end_date=_date_str(q.end_date), days=days,
 
+        # New fields
+        travel_agency=q.travel_agency,
+        travel_advisor=q.travel_advisor,
+        client_name=q.client_name,
+        fx_rate=float(q.fx_rate) if q.fx_rate is not None else None,
+        internal_note=q.internal_note,
+
         margin_pct=margin_pct,
 
         onspot_manual=float(q.onspot_manual) if q.onspot_manual is not None else None,
@@ -233,6 +240,13 @@ def create_quote(payload: QuoteIn, db: Session = Depends(get_db)):
         hero_photo_2=payload.hero_photo_2,
 
         start_date=_to_date(payload.start_date), end_date=_to_date(payload.end_date),
+
+        # New fields
+        travel_agency=payload.travel_agency,
+        travel_advisor=payload.travel_advisor,
+        client_name=payload.client_name,
+        fx_rate=Decimal(str(payload.fx_rate)) if payload.fx_rate is not None else None,
+        internal_note=payload.internal_note,
 
         margin_pct=Decimal(str(payload.margin_pct)) if payload.margin_pct is not None else Decimal("0.1627"),
 
@@ -354,6 +368,18 @@ def upsert_quote(quote_id: int, payload: QuoteIn, db: Session = Depends(get_db))
     q.start_date = _to_date(payload.start_date)
 
     q.end_date = _to_date(payload.end_date)
+
+    # New fields
+    if payload.travel_agency is not None:
+        q.travel_agency = payload.travel_agency
+    if payload.travel_advisor is not None:
+        q.travel_advisor = payload.travel_advisor
+    if payload.client_name is not None:
+        q.client_name = payload.client_name
+    if payload.fx_rate is not None:
+        q.fx_rate = Decimal(str(payload.fx_rate))
+    if payload.internal_note is not None:
+        q.internal_note = payload.internal_note
 
     if payload.margin_pct is not None: q.margin_pct = Decimal(str(payload.margin_pct))
 

@@ -68,6 +68,13 @@ class QuoteIn(BaseModel):
 
     end_date: Optional[str] = None
 
+    # New fields
+    travel_agency: Optional[str] = None
+    travel_advisor: Optional[str] = None
+    client_name: Optional[str] = None
+    fx_rate: Optional[float] = None
+    internal_note: Optional[str] = None
+
     days: Optional[List[QuoteDayIn]] = None
 
 
@@ -151,6 +158,13 @@ class QuoteOut(BaseModel):
     start_date: Optional[str] = None
 
     end_date: Optional[str] = None
+
+    # New fields
+    travel_agency: Optional[str] = None
+    travel_advisor: Optional[str] = None
+    client_name: Optional[str] = None
+    fx_rate: Optional[float] = None
+    internal_note: Optional[str] = None
 
     days: Optional[List[QuoteDayOut]] = None
 
