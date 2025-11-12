@@ -426,6 +426,9 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   color: #1e293b; /* match main text color for uniform look */
   cursor: pointer;
   text-decoration: underline;
+  text-align: left;
+  display: inline-block;
+  width: 100%;
 }
 .link-like:hover,
 .link-like:focus-visible {
@@ -458,6 +461,12 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 /* Tableau compact (déjà en place, je complète) */
 .et-table.table-compact th, .et-table.table-compact td { padding: 8px 10px; }
 .et-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+/* Alignement à gauche pour la colonne "Nom du service" (2ème colonne) dans Excel preview */
+.et-table.table-compact th:nth-child(2),
+.et-table.table-compact td:nth-child(2),
+.et-table.table-compact td:nth-child(2) .link-like {
+  text-align: left !important;
+}
 .et-table .row-meta td { font-style: italic; color: #64748b; }
 .table-compact tfoot .totals td { font-weight: 600; border-top: 1px solid #2a3a4d; }
 
@@ -588,6 +597,12 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .page .et-table th{ background:#f8fafc; color:#0f172a; }
 .page .et-table td{ color:#111827; }
 .page .et-table .num{ text-align:right; font-variant-numeric:tabular-nums; }
+/* Alignement à gauche pour la colonne "Nom du service" (2ème colonne) */
+.page .et-table th:nth-child(2),
+.page .et-table td:nth-child(2),
+.page .et-table td:nth-child(2) .link-like {
+  text-align: left !important;
+}
 
 /* Inputs plus lisibles sur fond blanc */
 .page .et-input { background:#ffffff; color:#0f172a; border:1px solid #d0d5dd; }
