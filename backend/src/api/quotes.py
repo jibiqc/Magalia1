@@ -5,6 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from math import ceil
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import Response
 
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,8 @@ from .schemas_quote import QuoteIn, QuoteOut, DestinationRangePatch, QuoteDayOut
 from typing import List, Optional, Dict
 
 from ..models.prod_models import ServiceImage
+
+from ..exports.word import build_docx_for_quote
 
 
 
@@ -208,7 +211,12 @@ def _upd_line(l: QuoteLine, li):
 
     l.base_net_amount = Decimal(str(li.base_net_amount)) if li.base_net_amount is not None else None
 
-    l.raw_json = li.raw_json or {}
+    # PRESERVE raw_json exactly as received (don't replace with {} if None)
+    # This ensures all fields from frontend are preserved
+    if li.raw_json is not None:
+        l.raw_json = li.raw_json
+    else:
+        l.raw_json = {}
 
 
 
@@ -247,7 +255,11 @@ def create_quote(payload: QuoteIn, db: Session = Depends(get_db)):
         db.add(day); db.flush()
 
         for li_idx, li in enumerate(d.lines or []):
-
+            # DEBUG: Log raw_json before saving
+            if li.raw_json and li.category in ("Flight", "Train", "Ferry", "Car Rental", "Trip info"):
+                print(f"[create_quote] Line {li_idx} ({li.category}): raw_json keys = {list(li.raw_json.keys())}")
+                print(f"[create_quote] Full raw_json: {li.raw_json}")
+            
             line = QuoteLine(quote_day_id=day.id, position=li_idx)
 
             _upd_line(line, li); db.add(line)
@@ -270,6 +282,38 @@ def recent_quotes(limit: int = Query(10, ge=1, le=50), db: Session = Depends(get
 
                       "updated_at":(q.updated_at.isoformat() if q.updated_at else None)} for q in qs]}
 
+
+
+@router.get("/{quote_id}/export/word")
+def export_quote_word(quote_id: int, db: Session = Depends(get_db)):
+    """
+    Export a quote to Word format (.docx).
+    Returns the Word document as a downloadable file.
+    """
+    q = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    try:
+        buf = build_docx_for_quote(db, quote_id)
+        # Generate filename from quote start_date if available
+        filename = f"quote_{quote_id}"
+        if q.start_date:
+            filename = f"quote_{q.start_date.isoformat()}"
+        filename = f"{filename}.docx"
+        
+        return Response(
+            content=buf.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
+        print(f"ERROR in export_quote_word: {e}\n{error_detail}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
 @router.get("/{quote_id}", response_model=QuoteOut)
@@ -333,7 +377,11 @@ def upsert_quote(quote_id: int, payload: QuoteIn, db: Session = Depends(get_db))
         db.add(day); db.flush()
 
         for li_idx, li in enumerate(d.lines or []):
-
+            # DEBUG: Log raw_json before saving
+            if li.raw_json and li.category in ("Flight", "Train", "Ferry", "Car Rental", "Trip info"):
+                print(f"[upsert_quote] Line {li_idx} ({li.category}): raw_json keys = {list(li.raw_json.keys())}")
+                print(f"[upsert_quote] Full raw_json: {li.raw_json}")
+            
             line = QuoteLine(quote_day_id=day.id, position=li_idx)
 
             _upd_line(line, li); db.add(line)
@@ -341,8 +389,15 @@ def upsert_quote(quote_id: int, payload: QuoteIn, db: Session = Depends(get_db))
 
 
     db.commit(); db.refresh(q)
-
-    return _to_out(q)
+    
+    # DEBUG: Log what we're returning
+    result = _to_out(q)
+    for day in (result.days or []):
+        for line in (day.lines or []):
+            if line.category in ("Flight", "Train", "Ferry", "Car Rental", "Trip info"):
+                print(f"[upsert_quote] Returning line ({line.category}): raw_json keys = {list(line.raw_json.keys()) if line.raw_json else []}")
+    
+    return result
 
 
 

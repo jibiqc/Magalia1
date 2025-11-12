@@ -126,8 +126,9 @@ const cleanRoom = title => {
 
 export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onChangeLocalData, onDragFromHandle }) {
   const { category } = line;
-  // For backend lines, data might be in line directly; for local lines, it's in line.data
-  const data = line.data || line;
+  // For backend lines, data is in raw_json; for local lines, it's in line.data
+  // Merge raw_json into data for backend lines so all fields are accessible
+  const data = line.data || (line.raw_json ? { ...line.raw_json } : {}) || line;
   // Build a compact, read-only summary per category
   let subtitle = "", note = "", showMore = false;
   let isInternal = false;
@@ -172,8 +173,11 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
     if (isCatalogActivity) {
       // For catalog activities: "Titre at (start_time)" if start_time exists
       const startTime = line.raw_json?.start_time || '';
-      if (startTime) {
-        title = `${title} at ${fmtAMPM(startTime)}`;
+      // Vérifier que startTime n'est pas vide après trim
+      if (startTime && String(startTime).trim() !== '') {
+        // Nettoyer le start_time en supprimant "am"/"pm" s'ils sont présents
+        const cleanedTime = String(startTime).trim().replace(/\s*(am|pm)\s*$/i, '');
+        title = `${title} at ${fmtAMPM(cleanedTime)}`;
       }
       // Duration will be set in subtitle below
       // Description will be set in note below

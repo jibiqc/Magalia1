@@ -825,6 +825,7 @@ export default function QuoteEditor(){
 
   const dropBefore = (e, toDay, toDispIndex) => {
     e.preventDefault();
+    e.stopPropagation(); // Empêcher la propagation pour éviter l'ouverture accidentelle du modal
     const meta = readDnd(e);
     if (!meta) return;
 
@@ -840,6 +841,14 @@ export default function QuoteEditor(){
         // backend → backend
         const fromIdx = meta.fromBackendIndex;
         if (fromIdx < 0) return prev;
+
+        // Vérifier que la ligne n'existe pas déjà dans le jour destination
+        const lineId = srcBack[fromIdx]?.id;
+        if (lineId && dstBack.some(l => l.id === lineId)) {
+          // La ligne existe déjà dans le jour destination, ne pas dupliquer
+          console.warn('[dnd] Line already exists in destination day, skipping duplicate');
+          return prev;
+        }
 
         const [moved] = srcBack.splice(fromIdx, 1);
 
@@ -942,6 +951,105 @@ export default function QuoteEditor(){
     showNotice("New quote created", "success");
   };
 
+  // Helper: convert localLine to normal line format for saving
+  const convertLocalLineToNormal = (localLine) => {
+    const { category, data } = localLine;
+    const d = data || {};
+    
+    // PRESERVE ALL fields from data in raw_json
+    // Start with a copy of all data, then ensure description field exists
+    const rawJson = { ...d };
+    
+    // Generate title based on category (matching ServiceCard logic)
+    let title = "";
+    
+    switch (category) {
+      case "Flight": {
+        let suffix = "";
+        if (d.seat_res_opt === "with" || d.seat_res === true || d.with_seats === true) {
+          suffix = " with seat reservations";
+        }
+        title = `${d.airline || "Airline"} flight from ${d.from || "?"} to ${d.to || "?"}${suffix}`;
+        // Ensure description field is set (for export compatibility)
+        if (rawJson.description === null || rawJson.description === undefined) {
+          rawJson.description = d.note || d.description || null;
+        }
+        break;
+      }
+      case "Train": {
+        const classType = d.class_type || "First Class";
+        let suffix = "";
+        if (d.seat_res_choice === "with") suffix = " with seat reservations";
+        else if (d.seat_res_choice === "without") suffix = " without seat reservations (open seating)";
+        else if (d.seat_res === true) suffix = " with seat reservations";
+        else if (d.seat_res === false) suffix = " without seat reservations (open seating)";
+        title = `${classType} Train from ${d.from || "?"} to ${d.to || "?"}${suffix}`;
+        // Ensure description field is set (for export compatibility)
+        if (rawJson.description === null || rawJson.description === undefined) {
+          rawJson.description = d.note || d.description || null;
+        }
+        break;
+      }
+      case "Ferry": {
+        const cls = d.class_type ? `${d.class_type} ` : "";
+        let suffix = "";
+        if (d.seat_res_choice === "with") suffix = " with seat reservations";
+        else if (d.seat_res_choice === "without") suffix = " without seat reservations (open seating)";
+        else if (d.seat_res === true) suffix = " with seat reservations";
+        else if (d.seat_res === false) suffix = " without seat reservations (open seating)";
+        title = `${cls}Ferry from ${d.from || "?"} to ${d.to || "?"}${suffix}`;
+        // Ensure description field is set (for export compatibility)
+        if (rawJson.description === null || rawJson.description === undefined) {
+          rawJson.description = d.note || d.description || null;
+        }
+        break;
+      }
+      case "Car Rental": {
+        const loc = d.pickup_loc || "?";
+        const vehicle = d.vehicle_type || "";
+        const tx = (d.transmission && d.transmission !== "Do not precise") ? `${d.transmission.toLowerCase()}, ` : "";
+        const mileage = d.mileage || "";
+        const ins = d.insurance || "";
+        title = `Pick up car in ${loc}, ${vehicle} ${tx}${mileage} ${ins}`.replace(/\s+/g, " ").trim();
+        // Ensure description field is set (for export compatibility)
+        if (rawJson.description === null || rawJson.description === undefined) {
+          rawJson.description = d.notes || d.description || null;
+        }
+        break;
+      }
+      case "Trip info": {
+        title = d.title || "Trip info";
+        // Ensure description field is set (for export compatibility)
+        if (rawJson.description === null || rawJson.description === undefined) {
+          rawJson.description = d.body || null;
+        }
+        break;
+      }
+      default: {
+        title = d.title || category || "Service";
+        // Ensure description field is set
+        if (rawJson.description === null || rawJson.description === undefined) {
+          rawJson.description = d.body || d.description || d.note || null;
+        }
+      }
+    }
+    
+    return {
+      service_id: null,
+      category: category,
+      title: title,
+      supplier_name: null,
+      visibility: "client",
+      achat_eur: null,
+      achat_usd: null,
+      vente_usd: null,
+      fx_rate: null,
+      currency: null,
+      base_net_amount: null,
+      raw_json: rawJson, // Preserve ALL fields from data, including null values
+    };
+  };
+
   // Returns boolean: true on success, false on failure
   const saveQuote = async () => {
     if (!q) {
@@ -950,7 +1058,7 @@ export default function QuoteEditor(){
       return false;
     }
     try {
-      console.info("[saveQuote] start", { hasId: !!q.id });
+      console.info("[saveQuote] start", { hasId: !!q.id, localLinesCount: localLines.filter(ll => !ll.deleted).length });
       // ensure positions reflect current visual order before serializing
       const qNorm = normalizeQuotePositions(q);
       if (!qNorm || !qNorm.days) {
@@ -958,6 +1066,85 @@ export default function QuoteEditor(){
         showNotice("Save failed", "error");
         return false;
       }
+      
+      // Merge localLines into days before saving
+      const daysWithLocalLines = qNorm.days.map((d, idx) => {
+        // Get localLines for this day that are not deleted
+        const dayLocalLines = localLines.filter(ll => ll.dayId === d.id && !ll.deleted);
+        
+        // Convert localLines to normal lines
+        const convertedLocalLines = dayLocalLines.map(convertLocalLineToNormal);
+        
+        // DEBUG: Log converted lines to verify all fields are preserved
+        if (convertedLocalLines.length > 0) {
+          console.log("[saveQuote] Converted localLines:", convertedLocalLines.map(ll => ({
+            category: ll.category,
+            title: ll.title,
+            raw_json_keys: Object.keys(ll.raw_json || {}),
+            raw_json: ll.raw_json
+          })));
+          console.log("[saveQuote] Day", idx, "existing lines count:", (d.lines || []).length);
+          console.log("[saveQuote] Day", idx, "converted localLines count:", convertedLocalLines.length);
+        }
+        
+        // Merge with existing lines (existing lines first, then converted localLines)
+        const allLines = [...(d.lines || []), ...convertedLocalLines];
+        
+        // DEBUG: Verify merge
+        if (convertedLocalLines.length > 0) {
+          console.log("[saveQuote] Day", idx, "total lines after merge:", allLines.length);
+          console.log("[saveQuote] Day", idx, "all lines categories:", allLines.map(l => l.category));
+        }
+        
+        return {
+          position: idx,
+          date: d.date,
+          destination: d.destination,
+          decorative_images: d.decorative_images || [],
+          lines: allLines.map((l, liIdx) => {
+            // For converted localLines, preserve raw_json as-is (don't add fx if it's already there)
+            const rawJson = l.raw_json || {};
+            const finalRawJson = convertedLocalLines.some(cl => cl === l)
+              ? rawJson  // For converted lines, use raw_json as-is
+              : { ...rawJson, fx: (l.fx_rate ?? fxEuroToUsd ?? DEFAULT_FX) };  // For existing lines, add fx
+            
+            return {
+              position: liIdx,
+              service_id: l.service_id,
+              category: l.category,
+              title: l.title,
+              supplier_name: l.supplier_name,
+              visibility: l.visibility || "client",
+              achat_eur: l.achat_eur,
+              achat_usd: l.achat_usd,
+              vente_usd: l.vente_usd,
+              fx_rate: l.fx_rate,
+              currency: l.currency,
+              base_net_amount: l.base_net_amount,
+              raw_json: finalRawJson,
+            };
+          }),
+        };
+      });
+      
+      // DEBUG: Log payload before sending - show full raw_json for Train/Flight/Ferry/Car Rental/Trip info
+      const payloadLines = daysWithLocalLines.flatMap(d => d.lines.map(l => ({
+        category: l.category,
+        title: l.title,
+        raw_json: l.raw_json
+      })));
+      console.log("[saveQuote] Payload lines with raw_json:", JSON.stringify(payloadLines, null, 2));
+      
+      // DEBUG: Show full raw_json for specific categories
+      const specialLines = payloadLines.filter(l => 
+        ["Flight", "Train", "Ferry", "Car Rental", "Trip info"].includes(l.category)
+      );
+      if (specialLines.length > 0) {
+        console.log("[saveQuote] Special lines (Flight/Train/Ferry/Car Rental/Trip info) FULL raw_json:", 
+          JSON.stringify(specialLines, null, 2)
+        );
+      }
+      
       const payload = {
         title: qNorm.title,
         display_title: qNorm.display_title,
@@ -969,27 +1156,7 @@ export default function QuoteEditor(){
         margin_pct: qNorm.margin_pct,
         onspot_manual: qNorm.onspot_manual,
         hassle_manual: qNorm.hassle_manual,
-        days: qNorm.days.map((d, idx) => ({
-          position: idx,
-          date: d.date,
-          destination: d.destination,
-          decorative_images: d.decorative_images || [],
-          lines: (d.lines || []).map((l, liIdx) => ({
-            position: liIdx,
-            service_id: l.service_id,
-            category: l.category,
-            title: l.title,
-            supplier_name: l.supplier_name,
-            visibility: l.visibility || "client",
-            achat_eur: l.achat_eur,
-            achat_usd: l.achat_usd,
-            vente_usd: l.vente_usd,
-            fx_rate: l.fx_rate,
-            currency: l.currency,
-            base_net_amount: l.base_net_amount,
-            raw_json: { ...(l.raw_json || {}), fx: (l.fx_rate ?? fxEuroToUsd ?? DEFAULT_FX) },
-          })),
-        })),
+        days: daysWithLocalLines,
       };
       
       // If no ID, create the quote first
@@ -1003,6 +1170,8 @@ export default function QuoteEditor(){
           quoteId = created.id;
           const createdNorm = normalizeQuotePositions(created);
           setQ({ ...createdNorm, dirty: false });
+          // Clear localLines after successful save (they're now in the database)
+          setLocalLines([]);
           setOpenId(String(created.id));
           try {
             const u = new URL(window.location.href);
@@ -1029,7 +1198,29 @@ export default function QuoteEditor(){
         return false;
       }
       const updatedNorm = normalizeQuotePositions(updated);
+      
+      // DEBUG: Log what the backend returned - show FULL raw_json for Train/Flight/Ferry/Car Rental/Trip info
+      const returnedLines = updatedNorm.days?.flatMap(d => d.lines?.map(l => ({
+        category: l.category,
+        title: l.title,
+        raw_json_keys: l.raw_json ? Object.keys(l.raw_json) : [],
+        raw_json: l.raw_json
+      })) || []) || [];
+      console.log("[saveQuote] Backend returned quote:", JSON.stringify(returnedLines, null, 2));
+      
+      // DEBUG: Show FULL raw_json for specific categories
+      const specialReturned = returnedLines.filter(l => 
+        ["Flight", "Train", "Ferry", "Car Rental", "Trip info"].includes(l.category)
+      );
+      if (specialReturned.length > 0) {
+        console.log("[saveQuote] Backend returned SPECIAL lines FULL raw_json:", 
+          JSON.stringify(specialReturned, null, 2)
+        );
+      }
+      
       setQ({ ...updatedNorm, dirty: false });
+      // Clear localLines after successful save (they're now in the database)
+      setLocalLines([]);
       try {
         const u = new URL(window.location.href);
         u.searchParams.set("quoteId", String(quoteId));
@@ -2499,6 +2690,26 @@ export default function QuoteEditor(){
 
         <button className="btn primary" onClick={() => { console.info("[topbar] Save clicked"); void saveQuote(); }}>Save</button>
 
+        {q?.id && (
+          <button 
+            className="btn primary" 
+            onClick={async () => {
+              if (!q?.id) return;
+              try {
+                showNotice("Exporting Word document...", "info");
+                await api.exportQuoteWord(q.id);
+                showNotice("Word document downloaded", "success");
+              } catch (err) {
+                console.error("Export error:", err);
+                showNotice("Export failed", "error");
+              }
+            }}
+            title="Export to Word"
+          >
+            Export Word
+          </button>
+        )}
+
         <button className="btn secondary" onClick={() => setTrashOpen(!trashOpen)} title="Trash">
           🗑 {trashLines.length > 0 && <span>({trashLines.length})</span>}
         </button>
@@ -2741,7 +2952,7 @@ export default function QuoteEditor(){
                 <div
                   className={`drop-slot ${hoverSlot.day===dayIdx && hoverSlot.index===0 ? 'over' : ''}`}
                   onDragOver={(e)=>{allowDrop(e); setHoverSlot({day:dayIdx,index:0});}}
-                  onDrop={(e)=> dropBefore(e, dayIdx, 0)}
+                  onDrop={(e)=> { dropBefore(e, dayIdx, 0); e.stopPropagation(); }}
                 />
 
                 <div className="day-services">
@@ -2800,7 +3011,7 @@ export default function QuoteEditor(){
                           <div
                             className={`drop-slot ${hoverSlot.day===dayIdx && hoverSlot.index===displayIndex ? 'over':''}`}
                             onDragOver={(e)=>{allowDrop(e); setHoverSlot({day:dayIdx,index:displayIndex});}}
-                            onDrop={(e)=> dropBefore(e, dayIdx, displayIndex)}
+                            onDrop={(e)=> { dropBefore(e, dayIdx, displayIndex); e.stopPropagation(); }}
                           />
                           {/* card wrapper */}
                           <div
@@ -2966,7 +3177,7 @@ export default function QuoteEditor(){
                       <div
                         className={`drop-slot ${hoverSlot.day===dayIdx && hoverSlot.index===endIndex ? 'over':''}`}
                         onDragOver={(e)=>{allowDrop(e); setHoverSlot({day:dayIdx,index:endIndex});}}
-                        onDrop={(e)=> dropBefore(e, dayIdx, endIndex)}
+                        onDrop={(e)=> { dropBefore(e, dayIdx, endIndex); e.stopPropagation(); }}
                       />
                     );
                   })()}
@@ -3357,8 +3568,48 @@ export default function QuoteEditor(){
             };
             setQ(prev => {
               const qn = { ...prev };
+              // En mode edit, rechercher la ligne dans tous les jours (au cas où elle aurait été déplacée)
+              if (mode === 'edit' && lineId) {
+                let found = false;
+                const updatedDays = qn.days.map((day, idx) => {
+                  const hasLine = day.lines?.some(L => L.id === lineId);
+                  if (hasLine) {
+                    found = true;
+                    return {
+                      ...day,
+                      lines: (day.lines || []).map(L => L.id === lineId ? {
+                        ...L,
+                        title,
+                        supplier_name,
+                        raw_json: { ...(L.raw_json||{}), ...baseRaw }
+                      } : L)
+                    };
+                  }
+                  return day;
+                });
+                
+                if (found) {
+                  // La ligne a été trouvée et mise à jour, recalculer les décorations pour le jour concerné
+                  const dayWithLine = updatedDays.find(day => day.lines?.some(L => L.id === lineId));
+                  if (dayWithLine) {
+                    const dayIdx = updatedDays.indexOf(dayWithLine);
+                    const d = addServiceImagesToDay(dayWithLine, svcFull);
+                    updatedDays[dayIdx] = d;
+                    try {
+                      recomputeDayDecorations({ ...qn, days: updatedDays }, dayIdx);
+                    } catch {}
+                  }
+                  const normalized = normalizeQuotePositions({ ...qn, days: updatedDays });
+                  normalized.dirty = true;
+                  return normalized;
+                }
+                // Si la ligne n'a pas été trouvée, créer une nouvelle ligne dans le jour spécifié (fallback)
+              }
+              
+              // Mode create ou fallback
               let d = { ...qn.days[dayIdx] };
               if (mode === 'edit' && lineId) {
+                // Fallback: mettre à jour dans le jour spécifié
                 d.lines = (d.lines || []).map(L => L.id === lineId ? {
                   ...L,
                   title,
