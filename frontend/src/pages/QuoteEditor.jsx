@@ -2068,13 +2068,16 @@ export default function QuoteEditor(){
       const eur = parseLocaleFloat(line.achat_eur);
       const usd = parseLocaleFloat(line.achat_usd);
       const fx  = effectiveFx(parseLocaleFloat(line.fx_rate), fxEuroToUsd);
+      const buff = parseLocaleFloat(line.buff_pct) || 0;
 
       if (lastEdited === "eur") {
-        if (eur != null && fx != null) line.achat_usd = round2(eur * fx);
+        if (eur != null && fx != null) line.achat_usd = round2(eur * (1 + buff / 100) / fx);
       } else if (lastEdited === "fx") {
-        if (eur != null && fx != null) line.achat_usd = round2(eur * fx);
+        if (eur != null && fx != null) line.achat_usd = round2(eur * (1 + buff / 100) / fx);
+      } else if (lastEdited === "buff") {
+        if (eur != null && fx != null) line.achat_usd = round2(eur * (1 + buff / 100) / fx);
       } else if (lastEdited === "usd") {
-        if (eur != null && usd != null && eur !== 0) line.fx_rate = round6(usd / eur);
+        if (eur != null && usd != null && usd !== 0) line.fx_rate = round6(eur * (1 + buff / 100) / usd);
       }
 
       next.dirty = true;
@@ -2554,7 +2557,7 @@ export default function QuoteEditor(){
         const fx  = effectiveFx(line.fx_rate, fxEuroToUsd);
         // si achat_usd vide mais eur>0, on calcule
         const usdRaw  = line.achat_usd;
-        const usdCalc = eur>0 ? round2(eur * fx) : 0;
+        const usdCalc = eur>0 ? round2(eur / fx) : 0;
         const usd = (usdRaw===undefined || usdRaw===null || usdRaw==="") ? usdCalc : round2(parseLocaleFloat(usdRaw));
         const sell = round2(parseLocaleFloat(line.vente_usd));
 
@@ -2578,7 +2581,7 @@ export default function QuoteEditor(){
         const eur = round2(parseLocaleFloat(pricing.purchase_eur || line.data?.purchase_eur));
         const fx  = effectiveFx(pricing.fx_eur_usd || line.data?.fx_eur_usd, fxEuroToUsd);
         const usdRaw  = pricing.purchase_usd || line.data?.purchase_usd;
-        const usdCalc = eur>0 ? round2(eur * fx) : 0;
+        const usdCalc = eur>0 ? round2(eur / fx) : 0;
         const usd = (usdRaw===undefined || usdRaw===null || usdRaw==="") ? usdCalc : round2(parseLocaleFloat(usdRaw));
         const sell = round2(parseLocaleFloat(pricing.sale_usd || line.data?.sale_usd));
 
@@ -3429,9 +3432,11 @@ export default function QuoteEditor(){
                                 onBlur={()=>{
                                   const eurVal = isLocal ? getPrice("purchase_eur") : getPrice("achat_eur");
                                   const fxVal  = isLocal ? getPrice("fx_eur_usd")   : getPrice("fx_rate");
+                                  const buffVal = isLocal ? getPrice("buff_pct") : getPrice("buff_pct");
                                   const eur = round2(parseLocaleFloat(eurVal));
                                   const fx  = effectiveFx(fxVal, fxEuroToUsd);
-                                  const usd = round2(eur * fx);
+                                  const buff = parseLocaleFloat(buffVal) || 0;
+                                  const usd = round2(eur * (1 + buff / 100) / fx);
                                   const usdVal = isLocal ? getPrice("purchase_usd") : getPrice("achat_usd");
                                   updateAnyLine(isLocal ? 
                                     { purchase_eur: eur, purchase_usd: eur>0 ? usd : usdVal } :
@@ -3440,7 +3445,31 @@ export default function QuoteEditor(){
                                 }}
                               />
 
+                              {/* Buff% */}
+                              <span style={{fontSize: '14px', color: '#000000', marginRight: '2px', whiteSpace: 'nowrap'}}>Buff%</span>
+                              <input
+                                className="price-inp buff-pct"
+                                type="text" inputMode="decimal" placeholder="0%"
+                                value={toStr((isLocal ? getPrice("buff_pct") : getPrice("buff_pct")) || "0")}
+                                onChange={(e)=> updateAnyLine(isLocal ? { buff_pct: e.target.value } : { buff_pct: e.target.value })}
+                                onBlur={()=>{
+                                  const buffVal = isLocal ? getPrice("buff_pct") : getPrice("buff_pct");
+                                  const buff = round2(parseLocaleFloat(buffVal) || 0);
+                                  const eurVal = isLocal ? getPrice("purchase_eur") : getPrice("achat_eur");
+                                  const fxVal  = isLocal ? getPrice("fx_eur_usd")   : getPrice("fx_rate");
+                                  const eur = round2(parseLocaleFloat(eurVal));
+                                  const fx  = effectiveFx(fxVal, fxEuroToUsd);
+                                  const usd = eur>0 && fx>0 ? round2(eur * (1 + buff / 100) / fx) : parseLocaleFloat(isLocal ? getPrice("purchase_usd") : getPrice("achat_usd"));
+                                  const usdVal = isLocal ? getPrice("purchase_usd") : getPrice("achat_usd");
+                                  updateAnyLine(isLocal ? 
+                                    { buff_pct: buff, purchase_usd: eur>0 && fx>0 ? usd : usdVal } :
+                                    { buff_pct: buff, achat_usd:   eur>0 && fx>0 ? usd : usdVal }
+                                  );
+                                }}
+                              />
+
                               {/* FX €→$ */}
+                              <span style={{fontSize: '14px', color: '#000000', marginRight: '2px', whiteSpace: 'nowrap'}}>FX</span>
                               <input
                                 className="price-inp fx"
                                 type="text" inputMode="decimal" placeholder="€→$"
@@ -3456,7 +3485,9 @@ export default function QuoteEditor(){
                                   if (!fxVal || fxVal <= 0) fxVal = parseLocaleFloat(fxEuroToUsd);
                                   const fx  = round4(fxVal);
                                   const eur = round2(parseLocaleFloat(isLocal ? getPrice("purchase_eur") : getPrice("achat_eur")));
-                                  const usd = eur>0 ? round2(eur * fx) : parseLocaleFloat(isLocal ? getPrice("purchase_usd") : getPrice("achat_usd"));
+                                  const buffVal = isLocal ? getPrice("buff_pct") : getPrice("buff_pct");
+                                  const buff = parseLocaleFloat(buffVal) || 0;
+                                  const usd = eur>0 ? round2(eur * (1 + buff / 100) / fx) : parseLocaleFloat(isLocal ? getPrice("purchase_usd") : getPrice("achat_usd"));
                                   const usdVal = isLocal ? getPrice("purchase_usd") : getPrice("achat_usd");
                                   updateAnyLine(isLocal ? { fx_eur_usd: fx, purchase_usd: eur>0 ? usd : usdVal }
                                                             : { fx_rate: fx,   achat_usd:    eur>0 ? usd : usdVal });
@@ -3472,7 +3503,10 @@ export default function QuoteEditor(){
                                 onBlur={()=>{
                                   const usd = round2(parseLocaleFloat(isLocal ? getPrice("purchase_usd") : getPrice("achat_usd")));
                                   const eur = round2(parseLocaleFloat(isLocal ? getPrice("purchase_eur") : getPrice("achat_eur")));
-                                  const fx  = eur>0 ? round4(usd / eur)
+                                  const buffVal = isLocal ? getPrice("buff_pct") : getPrice("buff_pct");
+                                  const buff = parseLocaleFloat(buffVal) || 0;
+                                  // Calcul inverse: fx = eur * (1 + buff/100) / usd
+                                  const fx  = usd>0 ? round4(eur * (1 + buff / 100) / usd)
                                                     : round4(parseLocaleFloat(isLocal ? getPrice("fx_eur_usd") : getPrice("fx_rate") ?? fxEuroToUsd));
                                   updateAnyLine(isLocal ? { purchase_usd: usd, fx_eur_usd: fx }
                                                             : { achat_usd: usd,   fx_rate:    fx });

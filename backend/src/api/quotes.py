@@ -20,8 +20,6 @@ from typing import List, Optional, Dict
 
 from ..models.prod_models import ServiceImage
 
-from ..exports.word import build_docx_for_quote
-
 
 
 router = APIRouter(prefix="/quotes", tags=["quotes"])
@@ -199,9 +197,9 @@ def _upd_line(l: QuoteLine, li):
 
     # compute fx if both provided (>0)
 
-    if l.achat_eur and l.achat_usd and l.achat_eur != 0:
+    if l.achat_eur and l.achat_usd and l.achat_usd != 0:
 
-        l.fx_rate = (l.achat_usd / l.achat_eur).quantize(Decimal("0.000001"))
+        l.fx_rate = (l.achat_eur / l.achat_usd).quantize(Decimal("0.000001"))
 
     else:
 
@@ -290,6 +288,9 @@ def export_quote_word(quote_id: int, db: Session = Depends(get_db)):
     Export a quote to Word format (.docx).
     Returns the Word document as a downloadable file.
     """
+    # Import here to avoid circular import
+    from ..exports.word import build_docx_for_quote
+    
     q = db.query(Quote).filter(Quote.id == quote_id).first()
     if not q:
         raise HTTPException(status_code=404, detail="Quote not found")

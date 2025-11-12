@@ -141,7 +141,7 @@ class QuoteLine(Base):
 
     vente_usd = Column(DEC2, nullable=True)       # "Prix de vente"
 
-    fx_rate = Column(DEC6, nullable=True)         # derived = achat_usd / achat_eur (if both present)
+    fx_rate = Column(DEC6, nullable=True)         # derived = achat_eur / achat_usd (if both present)
 
 
 
