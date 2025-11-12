@@ -124,7 +124,7 @@ const cleanRoom = title => {
   return t || title || "Room";
 };
 
-export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onChangeLocalData, onDragFromHandle, showActionIcons = true }) {
+export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onChangeLocalData, onDragFromHandle, showActionIcons = true, showDescriptions = true }) {
   const { category } = line;
   // For backend lines, data is in raw_json; for local lines, it's in line.data
   // Merge raw_json into data for backend lines so all fields are accessible
@@ -441,7 +441,7 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
           </>
         ) : (
           <>
-            {subtitle ? (
+            {subtitle && showDescriptions ? (
               <div className="service-subtitle" style={{ whiteSpace: "pre-line" }}>
                 {subtitle}
               </div>
@@ -451,8 +451,8 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
                 {expanded ? "Show less" : "Show more"}
               </button>
             )}
-            {note && <div className="service-note">{note}</div>}
-            {category === "New Hotel" && data?.hotel_url?.trim() && (
+            {note && showDescriptions && <div className="service-note">{note}</div>}
+            {category === "New Hotel" && data?.hotel_url?.trim() && showDescriptions && (
               <div className="svc-hotel-link">
                 <a
                   href={normalizeUrl(data.hotel_url)}
@@ -476,9 +476,9 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
           <div className="supplier">{line.supplier_name}</div>
         )}
         {/* Description */}
-        {fullDesc ? <p className="desc">{fullDesc}</p> : null}
+        {fullDesc && showDescriptions ? <p className="desc">{fullDesc}</p> : null}
         {/* Hotel: plain URL text, no pills */}
-        {isHotel(line) && hotelUrlText ? (
+        {isHotel(line) && hotelUrlText && showDescriptions ? (
           <div className="hotel-url">
             <a href={hotelUrlText} target="_blank" rel="noreferrer">{hotelUrlText}</a>
           </div>
@@ -498,7 +498,7 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
                 {isNonEmpty(f.hotel_stars) && <span className="chip">{String(f.hotel_stars).trim()}★</span>}
                 {isNonEmpty(f.hotel_check_in_time) && <span className="chip">Check-in {f.hotel_check_in_time}</span>}
                 {isNonEmpty(f.hotel_check_out_time) && <span className="chip">Check-out {f.hotel_check_out_time}</span>}
-                {isNonEmpty(f.hotel_url) && (
+                {isNonEmpty(f.hotel_url) && showDescriptions && (
                   <a className="chip" href={f.hotel_url} target="_blank" rel="noreferrer">Website ↗</a>
                 )}
                 {breakfastIncluded(f.meal_1) && <span className="chip">Breakfast included</span>}

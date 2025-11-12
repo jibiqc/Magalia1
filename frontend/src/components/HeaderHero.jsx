@@ -11,7 +11,7 @@ function Icon({ name, className = "", size = 18 }) {
   return null;
 }
 
-export default function HeaderHero({ quote, setQuote, activeDest }) {
+export default function HeaderHero({ quote, setQuote, activeDest, showActionIcons = true, showImages = true }) {
   const [modalOpen, setModalOpen] = useState(false);
 
   const title = quote?.display_title || "";
@@ -87,6 +87,7 @@ export default function HeaderHero({ quote, setQuote, activeDest }) {
     <>
       <div className="hero-container">
         <div className="hero-title">{title || "Document Title"}</div>
+        {showImages && (
         <div className="hero-photos">
           {/* Photo 1 with container-first placeholder and load gating */}
           <div
@@ -128,16 +129,19 @@ export default function HeaderHero({ quote, setQuote, activeDest }) {
 
           {/* Single edit button overlay for the whole hero block.
               Reuse the same visual class as services: .icon-vert */}
-          <button
-            type="button"
-            className="icon-vert hero-edit"
-            onClick={() => setModalOpen(true)}
-            aria-label="Edit header"
-            title="Edit header"
-          >
-            <Icon name="edit" />
-          </button>
+          {showActionIcons && (
+            <button
+              type="button"
+              className="icon-vert hero-edit"
+              onClick={() => setModalOpen(true)}
+              aria-label="Edit header"
+              title="Edit header"
+            >
+              <Icon name="edit" />
+            </button>
+          )}
         </div>
+        )}
       </div>
 
       {modalOpen && (

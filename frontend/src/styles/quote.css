@@ -1805,7 +1805,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   display: flex;
   justify-content: center;
   gap: 0; /* same as header: photos are adjacent */
-  margin: 8px 0 6px 0;
+  margin: 8px 0 20px 0; /* increased bottom margin for spacing with day title */
   position: relative; /* anchor for edit overlay */
 }
 

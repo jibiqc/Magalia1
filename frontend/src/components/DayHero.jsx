@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 
-export default function DayHero({ day, dayIdx, onEdit }) {
+export default function DayHero({ day, dayIdx, onEdit, showActionIcons = true, showImages = true }) {
   // Exclude first day
   if (dayIdx === 0) return null;
 
@@ -37,6 +37,8 @@ export default function DayHero({ day, dayIdx, onEdit }) {
   const p2 = imgs[1] || "";
   const ph = "https://source.unsplash.com/303x198/?travel";
 
+  if (!showImages) return null;
+
   return (
     <div className="day-hero-wrapper" aria-label={`Day ${dayIdx + 1} photos`}>
       <div className="day-hero-container" style={{ backgroundImage: `url('${ph}')` }}>
@@ -66,18 +68,20 @@ export default function DayHero({ day, dayIdx, onEdit }) {
         )}
       </div>
       {/* Single edit button overlay for the whole hero block */}
-      <button
-        type="button"
-        className="day-hero-edit-btn"
-        onClick={onEdit}
-        aria-label="Edit day photos"
-        title="Edit day photos"
-      >
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M4 20l4.6-1.2 8.9-8.9a2.2 2.2 0 0 0 0-3.1l-.2-.2a2.2 2.2 0 0 0-3.1 0L5.3 15.5 4 20z"/>
-          <path d="M13.5 6.5l4 4"/>
-        </svg>
-      </button>
+      {showActionIcons && (
+        <button
+          type="button"
+          className="day-hero-edit-btn"
+          onClick={onEdit}
+          aria-label="Edit day photos"
+          title="Edit day photos"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4 20l4.6-1.2 8.9-8.9a2.2 2.2 0 0 0 0-3.1l-.2-.2a2.2 2.2 0 0 0-3.1 0L5.3 15.5 4 20z"/>
+            <path d="M13.5 6.5l4 4"/>
+          </svg>
+        </button>
+      )}
     </div>
   );
 }

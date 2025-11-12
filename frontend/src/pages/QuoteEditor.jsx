@@ -574,6 +574,8 @@ export default function QuoteEditor(){
   const [editingLine, setEditingLine] = useState(null);
   const [showCostFields, setShowCostFields] = useState(true); // Toggle pour afficher/masquer les champs de coûts
   const [showActionIcons, setShowActionIcons] = useState(true); // Toggle pour afficher/masquer les icônes d'action
+  const [showDescriptions, setShowDescriptions] = useState(true); // Toggle pour afficher/masquer les descriptions
+  const [showImages, setShowImages] = useState(true); // Toggle pour afficher/masquer toutes les images
   const [trashOpen, setTrashOpen] = useState(false);
 
   // local-only services and trash
@@ -998,6 +1000,11 @@ export default function QuoteEditor(){
     setQ(q1);
     setOpenId("");
     if (q1.days && q1.days.length > 0) setActiveDayId(q1.days[0].id);
+    // Réinitialiser tous les toggles à true (tout visible)
+    setShowCostFields(true);
+    setShowActionIcons(true);
+    setShowDescriptions(true);
+    setShowImages(true);
     showNotice("New quote created", "success");
   };
 
@@ -2965,41 +2972,96 @@ export default function QuoteEditor(){
               </button>
 
               {/* Toggles pour afficher/masquer les champs de coûts et les icônes d'action */}
-              <div style={{display: 'flex', alignItems: 'center', gap: '12px', marginTop: 8}}>
-                <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-                  <span style={{color: 'var(--ink)', fontSize: '24px', fontWeight: 500, lineHeight: '30px', height: '30px'}}>$</span>
-                  <button 
-                    className={`cost-toggle ${showCostFields ? 'active' : ''}`}
-                    onClick={() => setShowCostFields(!showCostFields)}
-                    title={showCostFields ? "Masquer les champs de coûts" : "Afficher les champs de coûts"}
-                    aria-label={showCostFields ? "Masquer les champs de coûts" : "Afficher les champs de coûts"}
-                  />
+              <div style={{display: 'flex', flexDirection: 'column', gap: '8px', marginTop: 8}}>
+                {/* Première ligne: $ et Image */}
+                <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                  <div style={{display: 'flex', alignItems: 'center', gap: '8px', flex: 1}}>
+                    <button 
+                      className={`cost-toggle ${showCostFields ? 'active' : ''}`}
+                      onClick={() => setShowCostFields(!showCostFields)}
+                      title={showCostFields ? "Masquer les champs de coûts" : "Afficher les champs de coûts"}
+                      aria-label={showCostFields ? "Masquer les champs de coûts" : "Afficher les champs de coûts"}
+                    />
+                    <span style={{color: 'var(--ink)', fontSize: '24px', fontWeight: 500, display: 'flex', alignItems: 'center', height: '30px'}}>$</span>
+                  </div>
+                  <div style={{display: 'flex', alignItems: 'center', gap: '8px', flex: 1}}>
+                    <button 
+                      className={`cost-toggle ${showImages ? 'active' : ''}`}
+                      onClick={() => setShowImages(!showImages)}
+                      title={showImages ? "Masquer les images" : "Afficher les images"}
+                      aria-label={showImages ? "Masquer les images" : "Afficher les images"}
+                    />
+                    <svg 
+                      viewBox="0 0 24 24" 
+                      style={{
+                        width: '24px', 
+                        height: '24px', 
+                        stroke: 'var(--ink)', 
+                        fill: 'none', 
+                        strokeWidth: 1.6, 
+                        strokeLinecap: 'round', 
+                        strokeLinejoin: 'round',
+                        flexShrink: 0
+                      }}
+                    >
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                      <path d="M7 15l5-5 5 5H7z"/>
+                      <path d="M9 15h6"/>
+                    </svg>
+                  </div>
                 </div>
-                <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-                  <svg 
-                    viewBox="0 0 24 24" 
-                    style={{
-                      width: '24px', 
-                      height: '24px', 
-                      stroke: 'var(--ink)', 
-                      fill: 'none', 
-                      strokeWidth: 1.6, 
-                      strokeLinecap: 'round', 
-                      strokeLinejoin: 'round',
-                      lineHeight: '30px',
-                      height: '30px'
-                    }}
-                  >
-                    <path d="M4 20l4.6-1.2 8.9-8.9a2.2 2.2 0 0 0 0-3.1l-.2-.2a2.2 2.2 0 0 0-3.1 0L5.3 15.5 4 20z"/>
-                    <path d="M13.5 6.5l4 4"/>
-                    <path d="M4 20h6"/>
-                  </svg>
-                  <button 
-                    className={`cost-toggle ${showActionIcons ? 'active' : ''}`}
-                    onClick={() => setShowActionIcons(!showActionIcons)}
-                    title={showActionIcons ? "Masquer les icônes d'action" : "Afficher les icônes d'action"}
-                    aria-label={showActionIcons ? "Masquer les icônes d'action" : "Afficher les icônes d'action"}
-                  />
+                {/* Deuxième ligne: Edit et Descriptions */}
+                <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                  <div style={{display: 'flex', alignItems: 'center', gap: '8px', flex: 1}}>
+                    <button 
+                      className={`cost-toggle ${showActionIcons ? 'active' : ''}`}
+                      onClick={() => setShowActionIcons(!showActionIcons)}
+                      title={showActionIcons ? "Masquer les icônes d'action" : "Afficher les icônes d'action"}
+                      aria-label={showActionIcons ? "Masquer les icônes d'action" : "Afficher les icônes d'action"}
+                    />
+                    <svg 
+                      viewBox="0 0 24 24" 
+                      style={{
+                        width: '24px', 
+                        height: '24px', 
+                        stroke: 'var(--ink)', 
+                        fill: 'none', 
+                        strokeWidth: 1.6, 
+                        strokeLinecap: 'round', 
+                        strokeLinejoin: 'round',
+                        flexShrink: 0
+                      }}
+                    >
+                      <path d="M4 20l4.6-1.2 8.9-8.9a2.2 2.2 0 0 0 0-3.1l-.2-.2a2.2 2.2 0 0 0-3.1 0L5.3 15.5 4 20z"/>
+                      <path d="M13.5 6.5l4 4"/>
+                      <path d="M4 20h6"/>
+                    </svg>
+                  </div>
+                  <div style={{display: 'flex', alignItems: 'center', gap: '8px', flex: 1}}>
+                    <button 
+                      className={`cost-toggle ${showDescriptions ? 'active' : ''}`}
+                      onClick={() => setShowDescriptions(!showDescriptions)}
+                      title={showDescriptions ? "Masquer les descriptions" : "Afficher les descriptions"}
+                      aria-label={showDescriptions ? "Masquer les descriptions" : "Afficher les descriptions"}
+                    />
+                    <svg 
+                      viewBox="0 0 24 24" 
+                      style={{
+                        width: '24px', 
+                        height: '24px', 
+                        stroke: 'var(--ink)', 
+                        fill: 'none', 
+                        strokeWidth: 1.6, 
+                        strokeLinecap: 'round', 
+                        strokeLinejoin: 'round',
+                        flexShrink: 0
+                      }}
+                    >
+                      <line x1="3" y1="6" x2="21" y2="6"/>
+                      <line x1="3" y1="12" x2="21" y2="12"/>
+                      <line x1="3" y1="18" x2="21" y2="18"/>
+                    </svg>
+                  </div>
                 </div>
               </div>
 
@@ -3019,7 +3081,7 @@ export default function QuoteEditor(){
 
             {/* ---- tout ce qui suit doit être DEDANS ---- */}
 
-            <HeaderHero quote={q} setQuote={setQ} activeDest={activeDest} />
+            <HeaderHero quote={q} setQuote={setQ} activeDest={activeDest} showActionIcons={showActionIcons} showImages={showImages} />
 
             {q.days.map((d, dayIdx)=>(
 
@@ -3030,6 +3092,8 @@ export default function QuoteEditor(){
                   day={d}
                   dayIdx={dayIdx}
                   onEdit={() => setEditingDayHero({ dayId: d.id, dayIdx })}
+                  showActionIcons={showActionIcons}
+                  showImages={showImages}
                 />
 
                 <div className="day-title">
@@ -3120,6 +3184,7 @@ export default function QuoteEditor(){
                           <ServiceCard
                             line={lineData}
                             showActionIcons={showActionIcons}
+                            showDescriptions={showDescriptions}
                             onChangeLocalData={isLocal ? (newData)=>{
                               setLocalLines(prev => prev.map(x => x.id===l.id ? { ...x, data:newData } : x));
                             } : undefined}
