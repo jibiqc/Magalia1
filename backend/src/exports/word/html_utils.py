@@ -81,44 +81,57 @@ def append_sanitized_html_to_docx(paragraph: Paragraph, html_text: str, allow_it
         _add_text_with_formatting(p, tail, allow_italic)
     
     def _add_text_with_formatting(p: Paragraph, text: str, allow_italic: bool = False):
-        """Ajoute du texte en préservant le formatage <strong>/<b> pour le gras."""
+        """Ajoute du texte en préservant le formatage <strong>/<b> pour le gras et <em>/<i> pour l'italique."""
         if not text:
             return
-        # Extraire les segments avec/sans gras
-        pos = 0
-        for m in re.finditer(r'<(strong|b)>(.*?)</(strong|b)>', text, flags=re.I):
-            # Texte avant le gras
-            before = bleach.clean(text[pos:m.start()], tags=[], strip=True)
-            # Décoder les entités HTML comme &amp; en &
-            if before:
-                before = html.unescape(before)
-            if before:
-                run = p.add_run(before)
-                if not allow_italic:
-                    run = _apply_run_defaults(run)
-            # Texte en gras
-            bold_text = bleach.clean(m.group(2), tags=[], strip=True)
-            # Décoder les entités HTML
-            if bold_text:
-                bold_text = html.unescape(bold_text)
-            if bold_text:
-                run = p.add_run(bold_text)
-                run.font.bold = True
-                run.font.name = "Arial"
-                run.font.size = Pt(NORMAL_PT)
-                run.font.color.rgb = TEXT_COLOR
-                if allow_italic:
-                    run.font.italic = True
-            pos = m.end()
-        # Texte restant après le dernier gras
-        remaining = bleach.clean(text[pos:], tags=[], strip=True)
-        # Décoder les entités HTML
-        if remaining:
-            remaining = html.unescape(remaining)
-        if remaining:
-            run = p.add_run(remaining)
-            if not allow_italic:
-                run = _apply_run_defaults(run)
+        
+        # Fonction récursive pour traiter le texte avec formatage imbriqué
+        def _process_text_segment(segment: str, is_bold: bool = False, is_italic: bool = False):
+            """Traite un segment de texte avec formatage."""
+            if not segment:
+                return
+            
+            # Chercher toutes les balises (gras et italique)
+            # Pattern pour trouver toutes les balises d'ouverture et de fermeture
+            pattern = r'<(strong|b|em|i)>(.*?)</(strong|b|em|i)>'
+            matches = list(re.finditer(pattern, segment, flags=re.I))
+            
+            if not matches:
+                # Pas de formatage, ajouter le texte tel quel
+                clean_text = bleach.clean(segment, tags=[], strip=True)
+                if clean_text:
+                    clean_text = html.unescape(clean_text)
+                    if clean_text:
+                        run = p.add_run(clean_text)
+                        run.font.name = "Arial"
+                        run.font.size = Pt(NORMAL_PT)
+                        run.font.color.rgb = TEXT_COLOR
+                        run.font.bold = is_bold
+                        run.font.italic = is_italic or allow_italic
+                return
+            
+            # Traiter la première balise trouvée
+            first_match = matches[0]
+            tag_name = first_match.group(1).lower()
+            
+            # Texte avant la première balise
+            before = segment[:first_match.start()]
+            _process_text_segment(before, is_bold, is_italic)
+            
+            # Déterminer le formatage de la balise
+            new_bold = is_bold or (tag_name in ['strong', 'b'])
+            new_italic = is_italic or (tag_name in ['em', 'i'])
+            
+            # Texte dans la balise (peut contenir d'autres balises imbriquées)
+            inner_text = first_match.group(2)
+            _process_text_segment(inner_text, new_bold, new_italic)
+            
+            # Texte après la première balise
+            after = segment[first_match.end():]
+            _process_text_segment(after, is_bold, is_italic)
+        
+        # Traiter le texte complet
+        _process_text_segment(text)
 
     # Normalize paragraphs and lists
     # Convert </p> to \n markers, strip <p>, handle <br> as line breaks

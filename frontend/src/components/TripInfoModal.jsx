@@ -2,8 +2,9 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 
 export default function TripInfoModal({ open=true, onClose, onSubmit, initialData=null }) {
-  const [title, setTitle] = useState(initialData?.title || "");
-  const [body, setBody]   = useState(initialData?.body  || "");
+  // Initialiser avec des valeurs par défaut, pas avec initialData (pour éviter les duplications)
+  const [title, setTitle] = useState("");
+  const [body, setBody]   = useState("");
 
   // Mettre à jour l'état quand initialData change ou quand le modal s'ouvre (pour l'édition)
   useEffect(() => {

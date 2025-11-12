@@ -698,12 +698,16 @@ def _render_service(doc: Document, line, usable_width_cm: float, skip_blank_line
                     if len(title_words) > 0 and title_words == car_desc_words[:len(title_words)]:
                         car_desc = ""
             
+            additional_items_line = ""
+            if data.get("additional_items_paid_on_site"):
+                additional_items_line = "<em>Items such as additional insurance, GPS devices, child seats, and additional insurance must be paid for on site.</em>"
+            
             licence_line = ""
             if data.get("intl_driver_license"):
                 licence_line = "An international driver's license is mandatory to pick up the car. A physical hard copy is required, as digital copies are not accepted locally. Please note that it may take up to 15 days to obtain the license."
             
             # Construire la description complète comme dans ServiceCard
-            desc_parts = [fee_line, car_desc, licence_line]
+            desc_parts = [fee_line, car_desc, additional_items_line, licence_line]
             desc = "\n\n".join([p for p in desc_parts if p.strip()])
     
         # Pour New Service, la description est déjà dans le sous-titre, donc on ne la répète pas

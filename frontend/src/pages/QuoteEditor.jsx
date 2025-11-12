@@ -4554,8 +4554,28 @@ export default function QuoteEditor(){
             const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
             const dayId = currentDay?.id;
             if (dayId) {
-              // quand on reçoit le payload Car Rental
-              addLocalLine(dayId, "Car Rental", payload);
+              if (editingLine) {
+                // Vérifier si c'est une ligne locale ou backend
+                const isLocal = localLines.some(l => l.id === editingLine.id);
+                if (isLocal) {
+                  // Mettre à jour la ligne locale
+                  setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
+                } else {
+                  // Mettre à jour la ligne backend dans q.days
+                  const dayIdx = q.days.findIndex(d => d.lines?.some(l => l.id === editingLine.id));
+                  if (dayIdx >= 0) {
+                    const lineIdx = q.days[dayIdx].lines.findIndex(l => l.id === editingLine.id);
+                    if (lineIdx >= 0) {
+                      // Construire la ligne mise à jour avec raw_json
+                      const updatedLine = buildLineFromData("Car Rental", payload);
+                      updateLine(dayIdx, lineIdx, { raw_json: updatedLine.raw_json });
+                    }
+                  }
+                }
+              } else {
+                // Créer une nouvelle ligne lors de la création
+                addLocalLine(dayId, "Car Rental", payload);
+              }
             }
             setCarModalOpen(false);
             setEditingLine(null);

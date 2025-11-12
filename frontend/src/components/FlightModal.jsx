@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import "../styles/quote.css";
 import TimeAmPmField from "./TimeAmPmField";
+import RichTextEditor from "./RichTextEditor";
 
 export default function FlightModal({
   open = true,
@@ -9,20 +10,17 @@ export default function FlightModal({
   onSubmit,
   initialData = null,
 }) {
-  const [from, setFrom] = useState(initialData?.from || "");
-  const [to, setTo] = useState(initialData?.to || "");
-  const [airline, setAirline] = useState(initialData?.airline || "");
-  const [class_of_service, setClassOfService] = useState(initialData?.class_of_service || "");
-  const [dep_time, setDepTime] = useState(initialData?.dep_time || "");
-  const [arr_time, setArrTime] = useState(initialData?.arr_time || "");
-  const [description, setDescription] = useState(initialData?.note || initialData?.description || "");
-  const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
+  // Initialiser avec des valeurs par défaut, pas avec initialData (pour éviter les duplications)
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [airline, setAirline] = useState("");
+  const [class_of_service, setClassOfService] = useState("");
+  const [dep_time, setDepTime] = useState("");
+  const [arr_time, setArrTime] = useState("");
+  const [description, setDescription] = useState("");
+  const [internal_note, setInternalNote] = useState("");
   // Seat reservation radio: "with" | "none" (default: with)
-  const [seat_res_opt, setSeatResOpt] = useState(
-    initialData?.seat_res_opt
-      ?? (initialData?.with_seats ? "with" : "none")
-      ?? "with"
-  );
+  const [seat_res_opt, setSeatResOpt] = useState("with");
 
   // Mettre à jour l'état quand initialData change ou quand le modal s'ouvre (pour l'édition)
   useEffect(() => {
@@ -167,18 +165,13 @@ export default function FlightModal({
 
           <div className="field">
             <label>Internal note</label>
-            <textarea
-              className="textarea input-internal-note"
+            <RichTextEditor
               value={internal_note}
-              onChange={(e) => setInternalNote(e.target.value)}
+              onChange={setInternalNote}
               placeholder=""
               rows={3}
               maxLength={1000}
-              aria-describedby="flight-internalnote-counter"
             />
-            <div id="flight-internalnote-counter" className="char-counter">
-              {internal_note?.length || 0}/1000
-            </div>
           </div>
         </div>
 

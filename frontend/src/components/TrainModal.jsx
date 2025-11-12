@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import "../styles/quote.css";
 import TimeAmPmField from "./TimeAmPmField";
+import RichTextEditor from "./RichTextEditor";
 
 export default function TrainModal({
   open = true,
@@ -9,16 +10,16 @@ export default function TrainModal({
   onSubmit,
   initialData = null,
 }) {
-  const [from, setFrom] = useState(initialData?.from || "");
-  const [to, setTo] = useState(initialData?.to || "");
-  const [class_type, setClassType] = useState(initialData?.class_type || "");
-  const [dep_time, setDepTime] = useState(initialData?.dep_time || "");
-  const [arr_time, setArrTime] = useState(initialData?.arr_time || "");
-  const [description, setDescription] = useState(initialData?.note || initialData?.description || "");
-  const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
+  // Initialiser avec des valeurs par défaut, pas avec initialData (pour éviter les duplications)
+  const [from, setFrom] = useState("");
+  const [to, setTo] = useState("");
+  const [class_type, setClassType] = useState("");
+  const [dep_time, setDepTime] = useState("");
+  const [arr_time, setArrTime] = useState("");
+  const [description, setDescription] = useState("");
+  const [internal_note, setInternalNote] = useState("");
   // Tri-state radio: "with" | "without" | "none"
-  const defaultSeat = initialData?.seat_res_choice || (initialData?.seat_res === true ? "with" : initialData?.seat_res === false ? "without" : "with");
-  const [seat_res_choice, setSeatChoice] = useState(defaultSeat);
+  const [seat_res_choice, setSeatChoice] = useState("with");
 
   // Mettre à jour l'état quand initialData change ou quand le modal s'ouvre (pour l'édition)
   useEffect(() => {
@@ -147,10 +148,9 @@ export default function TrainModal({
 
           <div className="field">
             <label>Internal note</label>
-            <textarea
-              className="textarea input-internal-note"
+            <RichTextEditor
               value={internal_note}
-              onChange={(e) => setInternalNote(e.target.value)}
+              onChange={setInternalNote}
               placeholder=""
               rows={3}
             />

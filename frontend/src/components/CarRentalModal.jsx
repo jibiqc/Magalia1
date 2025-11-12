@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import RichTextEditor from "./RichTextEditor";
 
 export default function CarRentalModal({
   open = true,
@@ -8,8 +9,6 @@ export default function CarRentalModal({
   initialData = null,
   startDate = null,
 }) {
-  if (!open) return null;
-
   // --- dates par défaut
   const getInitialDrop = () => {
     return initialData?.dropoff_date || (startDate
@@ -18,30 +17,29 @@ export default function CarRentalModal({
     );
   };
 
-  const [pickup_loc, setPickupLoc]     = useState(initialData?.pickup_loc || "");
-  const [dropoff_loc, setDropoffLoc]   = useState(initialData?.dropoff_loc || "");
-  const [pickup_date, setPickupDate]   = useState(initialData?.pickup_date || startDate || "");
-  const [pickup_time, setPickupTime]   = useState(initialData?.pickup_time || "");
-  const [dropoff_date, setDropoffDate] = useState(getInitialDrop());
-  const [dropoff_time, setDropoffTime] = useState(initialData?.dropoff_time || "");
+  // Initialiser avec des valeurs par défaut, pas avec initialData (pour éviter les duplications)
+  const [pickup_loc, setPickupLoc]     = useState("");
+  const [dropoff_loc, setDropoffLoc]   = useState("");
+  const [pickup_date, setPickupDate]   = useState("");
+  const [pickup_time, setPickupTime]   = useState("");
+  const [dropoff_date, setDropoffDate] = useState("");
+  const [dropoff_time, setDropoffTime] = useState("");
   // par défaut, Expected = Drop-off
-  const [expected_dropoff_date, setExpected] =
-    useState(initialData?.expected_dropoff_date || getInitialDrop());
+  const [expected_dropoff_date, setExpected] = useState("");
 
   // NOTE: "Manual" en majuscule pour que le binding fonctionne
-  const [transmission, setTransmission] = useState(
-    initialData?.transmission || "Automatic"
-  );
-  const [vehicle_type, setVehicleType]  = useState(initialData?.vehicle_type || "");
-  const [one_way_fee, setOneWayFee]     = useState(initialData?.one_way_fee || "");
+  const [transmission, setTransmission] = useState("Automatic");
+  const [vehicle_type, setVehicleType]  = useState("");
+  const [one_way_fee, setOneWayFee]     = useState("");
   // défauts demandés
-  const [mileage, setMileage]           = useState(initialData?.mileage || "unlimited mileage");
-  const [insurance, setInsurance]       = useState(initialData?.insurance || "CDW & theft included");
-  const [description, setDescription]   = useState(initialData?.notes || initialData?.description || "");
-  const [intl_driver_license, setIDL]   = useState(
-    initialData?.intl_driver_license !== undefined ? initialData.intl_driver_license : true
-  );
-  const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
+  const [mileage, setMileage]           = useState("unlimited mileage");
+  const [insurance, setInsurance]       = useState("CDW & theft included");
+  const [description, setDescription]   = useState("");
+  const [intl_driver_license, setIDL]   = useState(true);
+  const [additional_items_paid_on_site, setAdditionalItems] = useState(true);
+  const [internal_note, setInternalNote] = useState("");
+
+  if (!open) return null;
 
   // Mettre à jour l'état quand initialData change ou quand le modal s'ouvre (pour l'édition)
   useEffect(() => {
@@ -69,6 +67,7 @@ export default function CarRentalModal({
         setInsurance(initialData.insurance || "CDW & theft included");
         setDescription(initialData.notes || initialData.description || "");
         setIDL(initialData.intl_driver_license !== undefined ? initialData.intl_driver_license : true);
+        setAdditionalItems(initialData.additional_items_paid_on_site !== undefined ? initialData.additional_items_paid_on_site : true);
         setInternalNote(initialData.internal_note || "");
       } else {
         const initialDrop = calculateInitialDrop();
@@ -86,6 +85,7 @@ export default function CarRentalModal({
         setInsurance("CDW & theft included");
         setDescription("");
         setIDL(true);
+        setAdditionalItems(true);
         setInternalNote("");
       }
     }
@@ -113,6 +113,7 @@ export default function CarRentalModal({
       one_way_fee, mileage, insurance,
       notes: description, description,
       intl_driver_license,
+      additional_items_paid_on_site,
       internal_note,
     });
   };
@@ -342,25 +343,66 @@ export default function CarRentalModal({
           />
         </div>
 
-        <div className="field">
-          <label className="chk">
-            <input type="checkbox" checked={intl_driver_license} onChange={e=>setIDL(e.target.checked)} />
-            International driver licence required
+        <div className="field" style={{ 
+          padding: "12px", 
+          backgroundColor: "rgba(255, 255, 255, 0.03)", 
+          borderRadius: "8px",
+          border: "1px solid rgba(255, 255, 255, 0.1)"
+        }}>
+          <label className="chk" style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            gap: "8px",
+            fontWeight: 500,
+            cursor: "pointer"
+          }}>
+            <input 
+              type="checkbox" 
+              checked={intl_driver_license} 
+              onChange={e=>setIDL(e.target.checked)}
+              style={{
+                width: "18px",
+                height: "18px",
+                cursor: "pointer"
+              }}
+            />
+            <span>International driver licence required</span>
+          </label>
+        </div>
+
+        <div className="field" style={{ 
+          padding: "12px", 
+          backgroundColor: "rgba(255, 255, 255, 0.03)", 
+          borderRadius: "8px",
+          border: "1px solid rgba(255, 255, 255, 0.1)"
+        }}>
+          <label className="chk" style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            gap: "8px",
+            fontWeight: 500,
+            cursor: "pointer"
+          }}>
+            <input 
+              type="checkbox" 
+              checked={additional_items_paid_on_site} 
+              onChange={e=>setAdditionalItems(e.target.checked)}
+              style={{
+                width: "18px",
+                height: "18px",
+                cursor: "pointer"
+              }}
+            />
+            <span>Additional Items (GPS...) paid on site</span>
           </label>
         </div>
 
         <div className="field">
           <label>Internal note</label>
-          <textarea 
-            className="textarea" 
-            rows={2} 
-            value={internal_note} 
-            onChange={e=>setInternalNote(e.target.value)}
-            style={{
-              position: "relative",
-              zIndex: 1,
-              pointerEvents: "auto"
-            }}
+          <RichTextEditor
+            value={internal_note}
+            onChange={setInternalNote}
+            rows={2}
           />
         </div>
 

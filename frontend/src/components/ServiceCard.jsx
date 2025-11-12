@@ -414,12 +414,15 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
 
       // description juste avant la licence
       const desc = l?.description ? l.description : "";
+      const additionalItemsLine = l?.additional_items_paid_on_site
+        ? `<em>Items such as additional insurance, GPS devices, child seats, and additional insurance must be paid for on site.</em>`
+        : "";
       const licenceLine = l?.intl_driver_license
         ? `An international driver's license is mandatory to pick up the car. A physical hard copy is required, as digital copies are not accepted locally. Please note that it may take up to 15 days to obtain the license.`
         : "";
 
       subtitle = ""; // non utilisé
-      note = [feeLine, desc, licenceLine].filter(Boolean).join("\n\n");
+      note = [feeLine, desc, additionalItemsLine, licenceLine].filter(Boolean).join("\n\n");
       break;
     }
   }
@@ -545,7 +548,14 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
                 {expanded ? "Show less" : "Show more"}
               </button>
             )}
-            {note && showDescriptions && <div className="service-note">{note}</div>}
+            {note && showDescriptions && (
+              <div 
+                className="service-note"
+                dangerouslySetInnerHTML={category === "Car Rental" ? { __html: note } : undefined}
+              >
+                {category !== "Car Rental" ? note : null}
+              </div>
+            )}
             {category === "New Hotel" && data?.hotel_url?.trim() && showDescriptions && (
               <div className="svc-hotel-link">
                 <a
