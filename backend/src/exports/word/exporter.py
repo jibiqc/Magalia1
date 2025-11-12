@@ -483,6 +483,11 @@ def _fmt_service_title(line):
 def _is_trip_info(line) -> bool:
     return (_get_attr(line, "category") or "").strip() == "Trip info"
 
+def _is_transport_service(category: str) -> bool:
+    """Vérifie si une catégorie est un service de transport."""
+    transport_categories = ("Private Transfer", "Train", "Ferry", "Flight")
+    return category in transport_categories
+
 def _append_hotel_url_if_any(doc, line):
     raw_json = _get_attr(line, "raw_json", {}) or {}
     url = (raw_json.get("hotel_url") or "").strip()
@@ -496,9 +501,9 @@ def _append_hotel_url_if_any(doc, line):
         r.italic = False
         _set_par_spacing(p, before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_NORMAL_PT)
 
-def _insert_two_heroes(doc: Document, url1: str, url2: str):
+def _insert_two_heroes(doc: Document, url1: str, url2: str, add_blank_after: bool = True):
     if not url1 or not url2:
-        return
+        return None, None
     # Pas d'espace avant la photo
     try:
         jpeg = stitch_side_by_side_to_cm(url1, url2, width_cm=HERO_W_CM, height_cm=HERO_H_CM)
@@ -506,12 +511,16 @@ def _insert_two_heroes(doc: Document, url1: str, url2: str):
         run = p.add_run()
         run.add_picture(BytesIO(jpeg), width=Cm(HERO_W_CM), height=Cm(HERO_H_CM))
         _set_par_spacing(p, before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_ALL_PT)
-        # Un espace (ligne vide) après la photo
-        _blank_line(doc)
+        # Ligne vide après la photo (sauf si add_blank_after est False, pour garder la photo avec la date)
+        blank_para = None
+        if add_blank_after:
+            blank_para = _blank_line(doc)
+        return p, blank_para
     except Exception:
         pass  # Skip if image fetch fails
+    return None, None
 
-def _render_service(doc: Document, line, usable_width_cm: float):
+def _render_service(doc: Document, line, usable_width_cm: float, skip_blank_line_after: bool = False):
     """Rend un service dans le document Word avec gestion d'erreur robuste."""
     try:
         cat = (_get_attr(line, "category") or "").strip()
@@ -704,14 +713,15 @@ def _render_service(doc: Document, line, usable_width_cm: float):
             para_count_before = len(doc.paragraphs)
             p_desc = doc.add_paragraph()
             if cat == "Trip info":
-                # Description en italique (pas de gras)
+                # Description en italique (pas de gras) et en bleu
                 append_sanitized_html_to_docx(p_desc, desc, allow_italic=True)
-                # Forcer italique et pas de gras pour tous les runs
+                # Forcer italique, pas de gras et couleur bleue pour tous les runs
                 para_count_after = len(doc.paragraphs)
                 for i in range(para_count_before, para_count_after):
                     for run in doc.paragraphs[i].runs:
                         run.font.italic = True
                         run.font.bold = False
+                        run.font.color.rgb = TEXT_COLOR  # Forcer la couleur bleue
                     _set_par_spacing(doc.paragraphs[i], before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_NORMAL_PT)
             else:
                 # Autres catégories : italique autorisé seulement pour Trip info (mais on est déjà dans le else)
@@ -852,8 +862,9 @@ def _render_service(doc: Document, line, usable_width_cm: float):
         # C'est le dernier paragraphe qui fait partie du service (titre, sous-titre, description, URL)
         service_end_para_idx = len(doc.paragraphs) - 1
         
-        # 4) Saut de ligne après le dernier élément du service
-        _blank_line(doc)
+        # 4) Saut de ligne après le dernier élément du service (sauf si skip_blank_line_after est True)
+        if not skip_blank_line_after:
+            _blank_line(doc)
         
         # Appliquer keep_with_next et keep_together sur tous les paragraphes du service pour éviter les coupures
         # Cela garantit que le titre, sous-titre, description et URL restent ensemble sur la même page
@@ -890,20 +901,43 @@ def _render_day_services(doc: Document, day, usable_w_cm: float = None) -> None:
         _blank_line(doc)
         return
 
+    # Filtrer les lignes pour exclure les Internal info
+    visible_lines = []
     for line in lines:
-        # On ignore seulement les Internal info / placeholders, pas les vraies catégories
         cat = (_get_attr(line, "category") or "").strip()
-        if cat.lower().startswith("internal"):
-            continue
-        _render_service(doc, line, usable_w_cm or 0)
+        if not cat.lower().startswith("internal"):
+            visible_lines.append(line)
+    
+    # Rendre chaque service en vérifiant si le suivant est aussi un transport ou un hotel
+    for i, line in enumerate(visible_lines):
+        current_cat = (_get_attr(line, "category") or "").strip()
+        is_current_transport = _is_transport_service(current_cat)
+        
+        # Vérifier si le service suivant est aussi un transport ou un hotel (pour Private Transfer)
+        skip_blank = False
+        if i + 1 < len(visible_lines):
+            next_line = visible_lines[i + 1]
+            next_cat = (_get_attr(next_line, "category") or "").strip()
+            
+            # Cas 1: Service de transport suivi d'un autre transport
+            if is_current_transport and _is_transport_service(next_cat):
+                skip_blank = True
+            # Cas 2: Private Transfer suivi d'un Hotel
+            elif current_cat == "Private Transfer" and next_cat in ("Hotel", "New Hotel"):
+                skip_blank = True
+        
+        _render_service(doc, line, usable_w_cm or 0, skip_blank_line_after=skip_blank)
 
 def _insert_day_block(doc: Document, qout, day, day_idx, usable_width_cm: float):
     # Jamais d'image hero pour le premier jour
+    photo_para = None
+    blank_para = None
     if day_idx > 0:
         decorative_images = _get_attr(day, "decorative_images", []) or []
         if len(decorative_images) >= 2:
             imgs = decorative_images[:2]
-            _insert_two_heroes(doc, imgs[0], imgs[1])
+            # Garder un espace entre la photo et la date, mais s'assurer qu'ils ne sont pas séparés
+            photo_para, blank_para = _insert_two_heroes(doc, imgs[0], imgs[1], add_blank_after=True)
 
     # Ligne de date
     date_iso = _get_attr(day, "date")
@@ -913,7 +947,15 @@ def _insert_day_block(doc: Document, qout, day, day_idx, usable_width_cm: float)
         dest = (_get_attr(day, "destination") or "").strip()
         if dest and n > 0:
             base = f"{base} {dest} for {n} night{'s' if n > 1 else ''}"
-    _add_date_line(doc, base)
+    date_para = _add_date_line(doc, base)
+    
+    # S'assurer que la photo, la ligne vide et la date restent ensemble (pas de séparation)
+    if photo_para is not None:
+        photo_para.paragraph_format.keep_with_next = True
+        if blank_para is not None:
+            blank_para.paragraph_format.keep_with_next = True
+        # S'assurer aussi que la date reste avec la photo
+        date_para.paragraph_format.keep_with_next = True
 
     # Utiliser _render_day_services pour rendre tous les services (inclut Flight, Train, etc.)
     _render_day_services(doc, day, usable_width_cm)
@@ -996,7 +1038,7 @@ def build_docx_for_quote(db: Session, quote_id: int) -> BytesIO:
         global_heroes = [_get_attr(qout, "hero_photo_1"), _get_attr(qout, "hero_photo_2")]
         global_heroes = [u for u in global_heroes if u]
         if len(global_heroes) >= 2:
-            _insert_two_heroes(doc, global_heroes[0], global_heroes[1])
+            _insert_two_heroes(doc, global_heroes[0], global_heroes[1])  # Ignore returned tuple for global photos
         # Days
         for i, day in enumerate(qout.days or []):
             _insert_day_block(doc, qout, day, i, usable_width_cm)
@@ -1020,7 +1062,7 @@ def build_docx_for_quote(db: Session, quote_id: int) -> BytesIO:
         global_heroes = [_get_attr(qout, "hero_photo_1"), _get_attr(qout, "hero_photo_2")]
         global_heroes = [u for u in global_heroes if u]
         if len(global_heroes) >= 2:
-            _insert_two_heroes(doc, global_heroes[0], global_heroes[1])
+            _insert_two_heroes(doc, global_heroes[0], global_heroes[1])  # Ignore returned tuple for global photos
         # Days
         for i, day in enumerate(qout.days or []):
             _insert_day_block(doc, qout, day, i, usable_width_cm)

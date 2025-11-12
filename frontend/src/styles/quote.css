@@ -1225,7 +1225,11 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 }
 
 /* allow Trip info title, body and subtitle to be italic */
-.service-card.tripinfo .service-title,
+/* Trip info title should NOT be bold */
+.service-card.tripinfo .service-title {
+  font-style: italic;
+  font-weight: normal;
+}
 .service-card.tripinfo .service-note,
 .service-card.tripinfo .service-sub {
   font-style: italic;
