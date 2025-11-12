@@ -45,6 +45,11 @@ export const api = {
     return apiCall("GET", `/quotes/${quoteId}`);
   },
 
+  async searchQuotes(query, limit = 10) {
+    if (!query || !query.trim()) return [];
+    return apiCall("GET", `/quotes/search?query=${encodeURIComponent(query.trim())}&limit=${limit}`);
+  },
+
   async patchQuoteDays(quoteId, payload) {
     return apiCall("PATCH", `/quotes/${quoteId}/days`, payload);
   },

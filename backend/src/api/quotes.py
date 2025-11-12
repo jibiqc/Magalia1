@@ -308,6 +308,50 @@ def recent_quotes(limit: int = Query(10, ge=1, le=50), db: Session = Depends(get
                       "updated_at":(q.updated_at.isoformat() if q.updated_at else None)} for q in qs]}
 
 
+@router.get("/search")
+def search_quotes(
+    query: str = Query(..., description="Search query for quote title"),
+    limit: int = Query(10, ge=1, le=50),
+    db: Session = Depends(get_db)
+):
+    """
+    Search quotes by title (case-insensitive, prefix and word fragment matching).
+    """
+    if not query or not query.strip():
+        return []
+    
+    search_term = query.strip().lower()
+    
+    # Search by prefix first (most relevant)
+    prefix_matches = db.query(Quote).filter(
+        Quote.title.ilike(f"{search_term}%")
+    ).order_by(desc(Quote.updated_at)).limit(limit).all()
+    
+    # If we have fewer results than limit, also search by word fragments
+    results = {q.id: q for q in prefix_matches}
+    
+    if len(results) < limit:
+        # Search for quotes where title contains the search term as a word fragment
+        fragment_matches = db.query(Quote).filter(
+            Quote.title.ilike(f"%{search_term}%")
+        ).order_by(desc(Quote.updated_at)).limit(limit * 2).all()
+        
+        for q in fragment_matches:
+            if q.id not in results:
+                results[q.id] = q
+                if len(results) >= limit:
+                    break
+    
+    return [
+        {
+            "id": q.id,
+            "name": q.title or f"quote_{q.id}",
+            "created_at": q.created_at.isoformat() if q.created_at else None,
+            "updated_at": q.updated_at.isoformat() if q.updated_at else None,
+        }
+        for q in list(results.values())[:limit]
+    ]
+
 
 @router.get("/{quote_id}/export/word")
 def export_quote_word(quote_id: int, db: Session = Depends(get_db)):
@@ -317,6 +361,7 @@ def export_quote_word(quote_id: int, db: Session = Depends(get_db)):
     """
     # Import here to avoid circular import
     from ..exports.word import build_docx_for_quote
+    import re
     
     q = db.query(Quote).filter(Quote.id == quote_id).first()
     if not q:
@@ -324,11 +369,12 @@ def export_quote_word(quote_id: int, db: Session = Depends(get_db)):
     
     try:
         buf = build_docx_for_quote(db, quote_id)
-        # Generate filename from quote start_date if available
-        filename = f"quote_{quote_id}"
-        if q.start_date:
-            filename = f"quote_{q.start_date.isoformat()}"
-        filename = f"{filename}.docx"
+        # Generate filename from quote title only (no date)
+        base_name = q.title or f"quote_{quote_id}"
+        # Clean filename: remove invalid characters
+        safe_name = re.sub(r'[<>:"/\\|?*]', '_', base_name)
+        safe_name = safe_name.strip()[:200]  # Limit length
+        filename = f"{safe_name}.docx"
         
         return Response(
             content=buf.getvalue(),
@@ -351,6 +397,7 @@ def export_quote_excel(quote_id: int, db: Session = Depends(get_db)):
     Returns the Excel file as a downloadable file.
     """
     from ..exports.excel import build_xlsx_for_quote
+    import re
     
     q = db.query(Quote).filter(Quote.id == quote_id).first()
     if not q:
@@ -358,11 +405,12 @@ def export_quote_excel(quote_id: int, db: Session = Depends(get_db)):
     
     try:
         buf = build_xlsx_for_quote(db, quote_id)
-        # Generate filename from quote start_date if available
-        filename = f"quote_{quote_id}"
-        if q.start_date:
-            filename = f"quote_{q.start_date.isoformat()}"
-        filename = f"{filename}.xlsx"
+        # Generate filename from quote title only (no date)
+        base_name = q.title or f"quote_{quote_id}"
+        # Clean filename: remove invalid characters
+        safe_name = re.sub(r'[<>:"/\\|?*]', '_', base_name)
+        safe_name = safe_name.strip()[:200]  # Limit length
+        filename = f"{safe_name}.xlsx"
         
         return Response(
             content=buf.getvalue(),

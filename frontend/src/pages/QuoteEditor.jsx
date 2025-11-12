@@ -585,6 +585,20 @@ export default function QuoteEditor(){
   const [localLines, setLocalLines] = useState([]);      // LocalLine[]
   const [trashLines, setTrashLines] = useState([]);    // LocalLine[]
 
+  // Search states
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchHighlightedIndex, setSearchHighlightedIndex] = useState(-1);
+  const searchTimeoutRef = useRef(null);
+  const searchInputRef = useRef(null);
+  const searchDropdownRef = useRef(null);
+  
+  // Rename state
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState("");
+  const renameInputRef = useRef(null);
+
   // S'assurer que les liens dans les tooltips de l'aperçu Excel s'ouvrent dans un nouvel onglet
   useEffect(() => {
     if (!totalsRef.current) return;
@@ -1186,6 +1200,7 @@ export default function QuoteEditor(){
     const q1 = {
       ...q0,
       title: data.internalName,
+      display_title: data.internalName, // Synchroniser display_title avec title
       pax: data.numberOfPax,
       start_date: data.startDate,
       end_date: data.endDate,
@@ -1205,6 +1220,8 @@ export default function QuoteEditor(){
     
     setQ(q1);
     setOpenId("");
+    // Clear search query when creating new quote
+    setSearchQuery("");
     if (q1.days && q1.days.length > 0) setActiveDayId(q1.days[0].id);
     setShowCostFields(true);
     setShowActionIcons(true);
@@ -1604,6 +1621,211 @@ export default function QuoteEditor(){
     window.__lastQuote = q;
   }, [q]);
 
+  // Search functions
+  const performSearch = useCallback(async (query) => {
+    if (!query || !query.trim()) {
+      setSearchResults([]);
+      return;
+    }
+    try {
+      const results = await api.searchQuotes(query.trim(), 10);
+      setSearchResults(results || []);
+    } catch (err) {
+      console.error("Search error:", err);
+      setSearchResults([]);
+    }
+  }, []);
+
+  const handleSearchChange = useCallback((value) => {
+    setSearchQuery(value);
+    setSearchHighlightedIndex(-1);
+    
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+    
+    searchTimeoutRef.current = setTimeout(() => {
+      performSearch(value);
+    }, 250);
+  }, [performSearch]);
+
+  const handleSearchSelect = useCallback(async (quote) => {
+    setSearchQuery(""); // Clear search after selection
+    setSearchResults([]);
+    setSearchOpen(false);
+    await fetchQuote(quote.id);
+    searchInputRef.current?.blur();
+  }, [fetchQuote]);
+
+  const validateAndSaveTitle = useCallback(async (newTitle) => {
+    if (!q?.id) return;
+    
+    // Si vide, restaurer le nom par défaut
+    if (!newTitle || !newTitle.trim()) {
+      const defaultTitle = `quote_${q.id}`;
+      setQ(prev => ({ ...prev, title: defaultTitle, display_title: defaultTitle }));
+      return;
+    }
+    
+    const trimmedTitle = newTitle.trim();
+    
+    // Vérifier si un autre quote a déjà ce nom
+    try {
+      const searchResults = await api.searchQuotes(trimmedTitle, 50);
+      const conflictingQuote = searchResults.find(
+        result => result.name === trimmedTitle && result.id !== q.id
+      );
+      
+      if (conflictingQuote) {
+        const proceed = window.confirm(
+          `Quote name already exists\n\nA quote with this name already exists (ID #${conflictingQuote.id}). Do you still want to use this name?`
+        );
+        
+        if (!proceed) {
+          // Restaurer l'ancien nom (annuler le rename)
+          handleCancelRename();
+          return;
+        }
+      }
+      
+      // Sauvegarder le nouveau titre et synchroniser display_title
+      setQ(prev => ({ ...prev, title: trimmedTitle, display_title: trimmedTitle, dirty: true }));
+    } catch (err) {
+      console.error("Title validation error:", err);
+      showNotice("Failed to validate title", "error");
+    }
+  }, [q, showNotice]);
+
+  const handleNewQuote = useCallback(async () => {
+    // Check if current quote has unsaved changes
+    if (q?.dirty) {
+      const proceed = window.confirm(
+        "You have unsaved changes. Do you want to discard them and create a new quote?"
+      );
+      if (!proceed) return;
+    }
+    
+    try {
+      // Create new quote with default title
+      const newQuote = await api.createOrSaveQuote({
+        title: "", // Will be set to quote_<id> after creation
+        pax: 0,
+        margin_pct: DEFAULT_MARGIN,
+        days: [],
+      });
+      
+      if (newQuote && newQuote.id) {
+        // Set default title and synchronize display_title
+        const defaultTitle = `quote_${newQuote.id}`;
+        const updatedQuote = await api.saveQuote(newQuote.id, {
+          ...newQuote,
+          title: defaultTitle,
+          display_title: defaultTitle,
+        });
+        
+        const quoteNorm = normalizeQuotePositions(updatedQuote);
+        setQ({ ...quoteNorm, dirty: false });
+        setOpenId(String(newQuote.id));
+        setSearchQuery(defaultTitle);
+        
+        // Update URL
+        try {
+          const u = new URL(window.location.href);
+          u.searchParams.set("quoteId", String(newQuote.id));
+          window.history.replaceState(null, "", u.toString());
+        } catch {}
+        
+        // Focus the search input
+        setTimeout(() => {
+          searchInputRef.current?.focus();
+          searchInputRef.current?.select();
+        }, 100);
+        
+        showNotice("New quote created", "success");
+      }
+    } catch (err) {
+      console.error("Create quote error:", err);
+      showNotice("Failed to create quote", "error");
+    }
+  }, [q, showNotice]);
+
+  // Clear search query when quote changes (don't sync with title)
+  useEffect(() => {
+    if (q?.id) {
+      setSearchQuery("");
+    }
+  }, [q?.id]);
+
+  // Handle rename
+  const handleStartRename = useCallback(() => {
+    if (!q?.id) return;
+    setRenameValue(q.title || `quote_${q.id}`);
+    setIsRenaming(true);
+    setTimeout(() => {
+      renameInputRef.current?.focus();
+      renameInputRef.current?.select();
+    }, 100);
+  }, [q]);
+
+  const handleCancelRename = useCallback(() => {
+    setIsRenaming(false);
+    setRenameValue("");
+  }, []);
+
+  const handleSaveRename = useCallback(async () => {
+    if (!q?.id) return;
+    const trimmed = renameValue.trim();
+    if (!trimmed) {
+      const defaultTitle = `quote_${q.id}`;
+      setQ(prev => ({ ...prev, title: defaultTitle }));
+      setSearchQuery(defaultTitle);
+      setIsRenaming(false);
+      return;
+    }
+    
+    // Check for conflicts
+    try {
+      const searchResults = await api.searchQuotes(trimmed, 50);
+      const conflictingQuote = searchResults.find(
+        result => result.name === trimmed && result.id !== q.id
+      );
+      
+      if (conflictingQuote) {
+        const proceed = window.confirm(
+          `Quote name already exists\n\nA quote with this name already exists (ID #${conflictingQuote.id}). Do you still want to use this name?`
+        );
+        
+        if (!proceed) {
+          handleCancelRename();
+          return;
+        }
+      }
+      
+      setQ(prev => ({ ...prev, title: trimmed, display_title: trimmed, dirty: true }));
+      setIsRenaming(false);
+    } catch (err) {
+      console.error("Rename error:", err);
+      showNotice("Failed to rename", "error");
+    }
+  }, [q, renameValue, showNotice, handleCancelRename]);
+
+  // Handle clicks outside search dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        searchDropdownRef.current &&
+        !searchDropdownRef.current.contains(event.target) &&
+        searchInputRef.current &&
+        !searchInputRef.current.contains(event.target)
+      ) {
+        setSearchOpen(false);
+      }
+    };
+    
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // Navigation requests with dirty-check
   const requestNew = () => {
     if (q?.dirty) {
@@ -1660,7 +1882,7 @@ export default function QuoteEditor(){
       setConfirmNav({ visible:false, busy:false, action:null });
       console.log("[RIBBON AFTER SET]", { confirmNav: { visible:false, busy:false, action:null } });
       console.info("[nav] proceeding after save", a);
-      if (a.type === "new") handleNew();
+      if (a.type === "new") setNewQuoteModalOpen(true);
       if (a.type === "open" && a.id) fetchQuote(a.id);
     } catch (e) {
       console.error("[nav] saveAndProceed error", e);
@@ -3069,87 +3291,234 @@ export default function QuoteEditor(){
     <div className="app">
 
       {/* TOP BAR */}
-
       <div className="topbar">
-
+        {/* Logo */}
         <div className="brand">Magal'IA</div>
 
-
-
-        <button onClick={requestNew} className="btn">New</button>
-
-
-
-        <input
-          className="id-input"
-          placeholder="id…"
-          value={openId}
-          onChange={e=>setOpenId(e.target.value)}
-          onKeyDown={(e)=>{ if(e.key==="Enter" && openId.trim()) { e.preventDefault(); requestOpen(openId.trim()); } }}
-        />
-        <div style={{display:"flex",gap:8}}>
-          <button
-            className={`id-badge ${q?.id ? "" : "ghost"}`}
-            title={q?.id ? "Copy quote ID" : "Draft: save to get an ID"}
-            disabled={!q?.id}
-            onClick={()=>{
-              const v = String(q.id);
-              navigator.clipboard?.writeText(v).then(()=>showNotice(`Copied #${v}`, "success"));
-            }}
-          >
-            {q?.id ? `#${String(q.id)}` : "Draft"}
-          </button>
-          <button
-            className="id-badge"
-            title="Copy open link"
-            onClick={()=>{
-              const u = new URL(window.location.href);
-              if (q?.id) u.searchParams.set("quoteId", String(q.id));
-              navigator.clipboard?.writeText(u.toString()).then(()=>showNotice("Link copied", "success"));
-            }}
-          >
-            Copy link
-          </button>
-        </div>
-        <button
-          className="btn"
-          onClick={()=> openId.trim() ? requestOpen(openId.trim()) : showNotice("Enter an ID", "info")}
-          title="Open by ID"
-        >
-          Open
+        {/* New button */}
+        <button onClick={requestNew} className="btn primary" title="Create new quote">
+          New
         </button>
 
+        {/* Search Field */}
+        <div style={{ position: "relative", width: "200px" }}>
+          <input
+            ref={searchInputRef}
+            className="title-input"
+            placeholder="Search quotes..."
+            value={searchQuery}
+            onChange={(e) => {
+              handleSearchChange(e.target.value);
+              setSearchOpen(true);
+            }}
+            onFocus={() => setSearchOpen(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                if (searchHighlightedIndex >= 0 && searchResults[searchHighlightedIndex]) {
+                  handleSearchSelect(searchResults[searchHighlightedIndex]);
+                } else if (searchResults.length === 1) {
+                  handleSearchSelect(searchResults[0]);
+                }
+                e.preventDefault();
+              } else if (e.key === "ArrowDown") {
+                e.preventDefault();
+                setSearchHighlightedIndex(prev => 
+                  prev < searchResults.length - 1 ? prev + 1 : prev
+                );
+              } else if (e.key === "ArrowUp") {
+                e.preventDefault();
+                setSearchHighlightedIndex(prev => prev > 0 ? prev - 1 : -1);
+              } else if (e.key === "Escape") {
+                setSearchOpen(false);
+                searchInputRef.current?.blur();
+              }
+            }}
+            onBlur={() => {
+              setTimeout(() => {
+                setSearchOpen(false);
+              }, 200);
+            }}
+            style={{ width: "100%" }}
+          />
+          
+            {/* Search Dropdown */}
+            {searchOpen && searchResults.length > 0 && (
+              <div
+                ref={searchDropdownRef}
+                style={{
+                  position: "absolute",
+                  top: "100%",
+                  left: 0,
+                  right: 0,
+                  marginTop: "6px",
+                  background: "var(--card)",
+                  border: "1px solid rgba(255,255,255,.15)",
+                  borderRadius: "10px",
+                  maxHeight: "400px",
+                  overflowY: "auto",
+                  zIndex: 1000,
+                  boxShadow: "0 8px 24px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2)",
+                  backdropFilter: "blur(10px)",
+                }}
+              >
+                {searchResults.map((result, idx) => (
+                  <div
+                    key={result.id}
+                    onClick={() => handleSearchSelect(result)}
+                    onMouseEnter={() => setSearchHighlightedIndex(idx)}
+                    style={{
+                      padding: "12px 16px",
+                      cursor: "pointer",
+                      background: searchHighlightedIndex === idx 
+                        ? "linear-gradient(90deg, rgba(110,168,255,0.15) 0%, rgba(110,168,255,0.05) 100%)" 
+                        : "transparent",
+                      borderLeft: searchHighlightedIndex === idx ? "3px solid var(--accent)" : "3px solid transparent",
+                      borderBottom: idx < searchResults.length - 1 ? "1px solid rgba(255,255,255,.08)" : "none",
+                      transition: "all 0.15s ease",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "12px",
+                    }}
+                  >
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ 
+                        fontWeight: 600, 
+                        color: "var(--ink)", 
+                        fontSize: "14px",
+                        marginBottom: "4px",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap"
+                      }}>
+                        {result.name}
+                      </div>
+                      <div style={{ 
+                        display: "flex", 
+                        alignItems: "center", 
+                        gap: "8px",
+                        fontSize: "11px", 
+                        color: "var(--ink-dim)" 
+                      }}>
+                        <span style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          padding: "2px 6px",
+                          background: "rgba(110,168,255,0.15)",
+                          borderRadius: "4px",
+                          color: "var(--accent-2)",
+                          fontWeight: 600,
+                          fontSize: "10px",
+                          letterSpacing: "0.5px"
+                        }}>
+                          ID #{result.id}
+                        </span>
+                        {result.updated_at && (
+                          <span style={{ opacity: 0.7 }}>
+                            {new Date(result.updated_at).toLocaleDateString('fr-FR', { 
+                              day: 'numeric', 
+                              month: 'short',
+                              year: 'numeric'
+                            })}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div style={{
+                      opacity: searchHighlightedIndex === idx ? 1 : 0.3,
+                      transition: "opacity 0.15s ease",
+                      color: "var(--accent)"
+                    }}>
+                      <svg 
+                        width="16" 
+                        height="16" 
+                        viewBox="0 0 24 24" 
+                        fill="none" 
+                        stroke="currentColor" 
+                        strokeWidth="2" 
+                        strokeLinecap="round" 
+                        strokeLinejoin="round"
+                      >
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                      </svg>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+        </div>
 
+        {/* Center: Quote title with rename button */}
+        <div style={{ 
+          flex: 1, 
+          display: "flex", 
+          alignItems: "center", 
+          justifyContent: "center",
+          gap: "8px",
+          minWidth: 0,
+          padding: "0 12px"
+        }}>
+          {q?.title || q?.id ? (
+            isRenaming ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flex: 1, maxWidth: "600px" }}>
+                <input
+                  ref={renameInputRef}
+                  className="title-input"
+                  style={{ flex: 1 }}
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      handleSaveRename();
+                    } else if (e.key === "Escape") {
+                      handleCancelRename();
+                    }
+                  }}
+                  onBlur={handleSaveRename}
+                />
+                <button className="btn" onClick={handleSaveRename} title="Save">
+                  ✓
+                </button>
+                <button className="btn" onClick={handleCancelRename} title="Cancel">
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div style={{ 
+                  fontWeight: 600, 
+                  fontSize: "16px", 
+                  color: "var(--ink)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  maxWidth: "500px"
+                }}>
+                  {q.title || (q.id ? `quote_${q.id}` : "New Quote")}
+                </div>
+                {q?.id && (
+                  <button 
+                    className="btn" 
+                    onClick={handleStartRename}
+                    title="Rename quote"
+                    style={{ padding: "4px 8px", height: "28px", fontSize: "12px" }}
+                  >
+                    Rename
+                  </button>
+                )}
+              </div>
+            )
+          ) : null}
+        </div>
 
-        {/* >>> élargir le titre : il prend la place restante */}
-
-        <input
-
-          className="title-input"
-
-          placeholder="Quote title"
-
-          value={q.title||""}
-
-          onChange={e=>setQ(p=>({...p,title:e.target.value}))}
-
-        />
-
-
-
-        {/* le reste: pax, dates, fx, Save… */}
-
-        <input className="pax-input" type="number" value={q.pax||0} onChange={e=>setQ(p=>({...p,pax: Number(e.target.value||0)}))} />
-
-        <input type="date" className="date-input" value={startDateStr} onChange={onStartDateChange}/>
-
-        <input type="date" className="date-input" value={endDateStr} onChange={onEndDateChange}/>
-
-        <div className="fx-wrap"><span>€→$</span><input className="fx-global-inp" type="text" inputMode="decimal" placeholder="€→$" value={toStr(fxEuroToUsd)} onChange={(e)=> setFxEuroToUsd(e.target.value)} onBlur={()=> setFxEuroToUsd(round2(parseLocaleFloat(fxEuroToUsd)))} /></div>
-
-
-
-        <button className="btn primary" onClick={() => { console.info("[topbar] Save clicked"); void saveQuote(); }}>Save</button>
+        {/* Right side: Action buttons */}
+        <button 
+          className="btn primary" 
+          onClick={() => { console.info("[topbar] Save clicked"); void saveQuote(); }}
+          disabled={!q?.dirty}
+        >
+          Save
+        </button>
 
         {q?.id && (
           <button 
@@ -3190,11 +3559,6 @@ export default function QuoteEditor(){
             Export Excel
           </button>
         )}
-
-        <button className="btn secondary" onClick={() => setTrashOpen(!trashOpen)} title="Trash">
-          🗑 {trashLines.length > 0 && <span>({trashLines.length})</span>}
-        </button>
-
       </div>
       {/* Dirty navigation ribbon: fixed wrapper (non-blocking) + inner (clickable) */}
       {confirmNav.visible && (
@@ -3261,10 +3625,63 @@ export default function QuoteEditor(){
       <div className="shell">
 
         {/* Left rail */}
-
         <div className="rail">
-
           <div className="left-list">
+            {/* Meta fields at the top */}
+            <div className="left-group" style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+              <div style={{ fontWeight: 700, marginBottom: "8px", fontSize: "14px" }}>Quote Details</div>
+              
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <label style={{ minWidth: "80px", fontSize: "12px", color: "var(--ink-dim)" }}>Start Date:</label>
+                  <input 
+                    type="date" 
+                    className="date-input" 
+                    style={{ flex: 1, height: "32px" }}
+                    value={startDateStr} 
+                    onChange={onStartDateChange}
+                  />
+                </div>
+                
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <label style={{ minWidth: "80px", fontSize: "12px", color: "var(--ink-dim)" }}>End Date:</label>
+                  <input 
+                    type="date" 
+                    className="date-input" 
+                    style={{ flex: 1, height: "32px" }}
+                    value={endDateStr} 
+                    onChange={onEndDateChange}
+                  />
+                </div>
+                
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <label style={{ minWidth: "80px", fontSize: "12px", color: "var(--ink-dim)" }}>Pax:</label>
+                  <input 
+                    className="pax-input" 
+                    type="number" 
+                    style={{ flex: 1, height: "32px" }}
+                    value={q.pax||0} 
+                    onChange={e=>setQ(p=>({...p,pax: Number(e.target.value||0)}))} 
+                  />
+                </div>
+                
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <label style={{ minWidth: "80px", fontSize: "12px", color: "var(--ink-dim)" }}>FX (€→$):</label>
+                  <div className="fx-wrap" style={{ flex: 1 }}>
+                    <input 
+                      className="fx-global-inp" 
+                      type="text" 
+                      inputMode="decimal" 
+                      placeholder="€→$" 
+                      style={{ width: "100%", height: "32px" }}
+                      value={toStr(fxEuroToUsd)} 
+                      onChange={(e)=> setFxEuroToUsd(e.target.value)} 
+                      onBlur={()=> setFxEuroToUsd(round2(parseLocaleFloat(fxEuroToUsd)))} 
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div className="left-group">
               {/* Global date shift controls */}
@@ -3843,8 +4260,18 @@ export default function QuoteEditor(){
 
 
         {/* Right rail */}
-
         <div className="rail right">
+          {/* Trash button at the top */}
+          <div style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+            <button 
+              className="btn secondary" 
+              onClick={() => setTrashOpen(!trashOpen)} 
+              title="Trash"
+              style={{ width: "100%", color: "#fff" }}
+            >
+              🗑 Trash {trashLines.length > 0 && <span>({trashLines.length})</span>}
+            </button>
+          </div>
 
           <div className="catalog">
 
