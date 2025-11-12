@@ -572,6 +572,8 @@ export default function QuoteEditor(){
   const [newServiceOpen, setNewServiceOpen] = useState(false);
   const [catalogActivityOpen, setCatalogActivityOpen] = useState(false);
   const [editingLine, setEditingLine] = useState(null);
+  const [showCostFields, setShowCostFields] = useState(true); // Toggle pour afficher/masquer les champs de coûts
+  const [showActionIcons, setShowActionIcons] = useState(true); // Toggle pour afficher/masquer les icônes d'action
   const [trashOpen, setTrashOpen] = useState(false);
 
   // local-only services and trash
@@ -2962,6 +2964,45 @@ export default function QuoteEditor(){
                 <span>Total: <span className="total-amt">{money(totalsForBadge.grandTotal,{digits:2})}</span></span>
               </button>
 
+              {/* Toggles pour afficher/masquer les champs de coûts et les icônes d'action */}
+              <div style={{display: 'flex', alignItems: 'center', gap: '12px', marginTop: 8}}>
+                <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                  <span style={{color: 'var(--ink)', fontSize: '24px', fontWeight: 500, lineHeight: '30px', height: '30px'}}>$</span>
+                  <button 
+                    className={`cost-toggle ${showCostFields ? 'active' : ''}`}
+                    onClick={() => setShowCostFields(!showCostFields)}
+                    title={showCostFields ? "Masquer les champs de coûts" : "Afficher les champs de coûts"}
+                    aria-label={showCostFields ? "Masquer les champs de coûts" : "Afficher les champs de coûts"}
+                  />
+                </div>
+                <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                  <svg 
+                    viewBox="0 0 24 24" 
+                    style={{
+                      width: '24px', 
+                      height: '24px', 
+                      stroke: 'var(--ink)', 
+                      fill: 'none', 
+                      strokeWidth: 1.6, 
+                      strokeLinecap: 'round', 
+                      strokeLinejoin: 'round',
+                      lineHeight: '30px',
+                      height: '30px'
+                    }}
+                  >
+                    <path d="M4 20l4.6-1.2 8.9-8.9a2.2 2.2 0 0 0 0-3.1l-.2-.2a2.2 2.2 0 0 0-3.1 0L5.3 15.5 4 20z"/>
+                    <path d="M13.5 6.5l4 4"/>
+                    <path d="M4 20h6"/>
+                  </svg>
+                  <button 
+                    className={`cost-toggle ${showActionIcons ? 'active' : ''}`}
+                    onClick={() => setShowActionIcons(!showActionIcons)}
+                    title={showActionIcons ? "Masquer les icônes d'action" : "Afficher les icônes d'action"}
+                    aria-label={showActionIcons ? "Masquer les icônes d'action" : "Afficher les icônes d'action"}
+                  />
+                </div>
+              </div>
+
             </div>
 
           </div>
@@ -3078,6 +3119,7 @@ export default function QuoteEditor(){
                           >
                           <ServiceCard
                             line={lineData}
+                            showActionIcons={showActionIcons}
                             onChangeLocalData={isLocal ? (newData)=>{
                               setLocalLines(prev => prev.map(x => x.id===l.id ? { ...x, data:newData } : x));
                             } : undefined}
@@ -3142,7 +3184,7 @@ export default function QuoteEditor(){
                               }
                             }}
                           />
-                          {isPaidCategory(l.category) && (
+                          {isPaidCategory(l.category) && showCostFields && (
                             <div className="price-row-one">
                               {/* Prix d'achat € */}
                               <input

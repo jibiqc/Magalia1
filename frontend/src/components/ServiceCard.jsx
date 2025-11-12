@@ -124,7 +124,7 @@ const cleanRoom = title => {
   return t || title || "Room";
 };
 
-export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onChangeLocalData, onDragFromHandle }) {
+export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onChangeLocalData, onDragFromHandle, showActionIcons = true }) {
   const { category } = line;
   // For backend lines, data is in raw_json; for local lines, it's in line.data
   // Merge raw_json into data for backend lines so all fields are accessible
@@ -415,21 +415,23 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
               {inlineBadges?.length ? <span className="title-badges">{inlineBadges}</span> : null}
               {isInternal && <span className="badge-internal">INTERNAL ONLY</span>}
             </div>
-            <div className="svc-actions-inline" aria-label="Card actions">
-              {/* Order: Edit, Move, Duplicate, Delete */}
-              <button className="icon-vert" aria-label="Edit" onClick={onEdit}><Icon name="edit" /></button>
-              <button
-                className="icon-vert drag-handle"
-                aria-label="Move"
-                title="Drag to move"
-                draggable
-                onDragStart={(e)=> onDragFromHandle && onDragFromHandle(e)}
-              >
-                <Icon name="move" />
-              </button>
-              <button className="icon-vert" aria-label="Duplicate" onClick={onDuplicate}><Icon name="duplicate" /></button>
-              <button className="icon-vert" aria-label="Delete" onClick={onDelete}><Icon name="delete" /></button>
-            </div>
+            {showActionIcons && (
+              <div className="svc-actions-inline" aria-label="Card actions">
+                {/* Order: Edit, Move, Duplicate, Delete */}
+                <button className="icon-vert" aria-label="Edit" onClick={onEdit}><Icon name="edit" /></button>
+                <button
+                  className="icon-vert drag-handle"
+                  aria-label="Move"
+                  title="Drag to move"
+                  draggable
+                  onDragStart={(e)=> onDragFromHandle && onDragFromHandle(e)}
+                >
+                  <Icon name="move" />
+                </button>
+                <button className="icon-vert" aria-label="Duplicate" onClick={onDuplicate}><Icon name="duplicate" /></button>
+                <button className="icon-vert" aria-label="Delete" onClick={onDelete}><Icon name="delete" /></button>
+              </div>
+            )}
           </div>
         ) : null}
         {/* For internal info, show body directly */}

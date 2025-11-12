@@ -1707,6 +1707,41 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 
 .muted{opacity:.8}
 
+/* Toggle switch style Apple */
+.cost-toggle {
+  position: relative;
+  width: 50px;
+  height: 30px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 15px;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.cost-toggle.active {
+  background: #34c759; /* Vert Apple */
+}
+
+.cost-toggle::before {
+  content: '';
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #ffffff;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.cost-toggle.active::before {
+  transform: translateX(20px);
+}
+
 /* Header Hero Styles */
 .hero-container {
   text-align: center;
