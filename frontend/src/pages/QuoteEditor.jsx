@@ -583,6 +583,38 @@ export default function QuoteEditor(){
   const [localLines, setLocalLines] = useState([]);      // LocalLine[]
   const [trashLines, setTrashLines] = useState([]);    // LocalLine[]
 
+  // S'assurer que les liens dans les tooltips de l'aperçu Excel s'ouvrent dans un nouvel onglet
+  useEffect(() => {
+    if (!totalsRef.current) return;
+    
+    const updateLinks = () => {
+      const tooltips = totalsRef.current?.querySelectorAll(".supplier-tooltip-content");
+      tooltips?.forEach(tooltip => {
+        const links = tooltip.querySelectorAll("a");
+        links.forEach(link => {
+          if (!link.target) {
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+          }
+        });
+      });
+    };
+    
+    // Mettre à jour immédiatement
+    updateLinks();
+    
+    // Observer les changements dans le DOM pour mettre à jour les nouveaux tooltips
+    const observer = new MutationObserver(updateLinks);
+    if (totalsRef.current) {
+      observer.observe(totalsRef.current, {
+        childList: true,
+        subtree: true
+      });
+    }
+    
+    return () => observer.disconnect();
+  }, [q, localLines]); // Re-exécuter quand les données changent
+
   // ---- Services (right rail): Popular (Activity only)
   const [svcPopular, setSvcPopular] = useState([]);
   const [svcLoading, setSvcLoading] = useState(false);
@@ -2592,12 +2624,21 @@ export default function QuoteEditor(){
         const usdCalc = eur>0 ? round2(eur / fx) : 0;
         const usd = (usdRaw===undefined || usdRaw===null || usdRaw==="") ? usdCalc : round2(parseLocaleFloat(usdRaw));
         const sell = round2(parseLocaleFloat(line.vente_usd));
+        const buff_pct = parseLocaleFloat(line.buff_pct) || 0;
+        const supplier_name = line.supplier_name || "";
+        const internal_note = line.raw_json?.internal_note || "";
+        const category = line.category || "";
 
         rows.push({
           dest: printedDest ? "" : destOf(day, line),
           name: excelServiceName(line),
           eur, fx, usd, sell,
-          lineId: line.id
+          lineId: line.id,
+          buff_pct,
+          supplier_name,
+          internal_note,
+          category,
+          line
         });
         printedDest = true;
       });
@@ -2616,6 +2657,10 @@ export default function QuoteEditor(){
         const usdCalc = eur>0 ? round2(eur / fx) : 0;
         const usd = (usdRaw===undefined || usdRaw===null || usdRaw==="") ? usdCalc : round2(parseLocaleFloat(usdRaw));
         const sell = round2(parseLocaleFloat(pricing.sale_usd || line.data?.sale_usd));
+        const buff_pct = parseLocaleFloat(pricing.buff_pct || line.data?.buff_pct) || 0;
+        const supplier_name = line.data?.supplier_name || line.supplier_name || "";
+        const internal_note = line.data?.internal_note || "";
+        const category = line.category || "";
 
         // Build a line-like object for excelServiceName helper
         // Pour les lignes locales, les données sont dans line.data, mais on peut aussi avoir raw_json
@@ -2633,7 +2678,12 @@ export default function QuoteEditor(){
           dest: destOf(day, lineForDest), // if needed we can wire active day destination later
           name: excelServiceName(lineForName),
           eur, fx, usd, sell,
-          lineId: line.id
+          lineId: line.id,
+          buff_pct,
+          supplier_name,
+          internal_note,
+          category,
+          line
         });
       });
     });
@@ -2690,106 +2740,194 @@ export default function QuoteEditor(){
 
               <th>Prix de vente $</th>
 
+              <th>Supplier</th>
+
             </tr>
 
           </thead>
 
           <tbody>
 
-            {rows.map((r, i) => (
+            {rows.map((r, i) => {
+              // Récupérer les données de la ligne - chercher aussi dans la ligne originale si disponible
+              let originalLine = null;
+              if (r.lineId) {
+                for (const day of q.days || []) {
+                  const found = (day.lines || []).find(l => l.id === r.lineId);
+                  if (found) {
+                    originalLine = found;
+                    break;
+                  }
+                }
+                if (!originalLine) {
+                  originalLine = localLines.find(l => l.id === r.lineId);
+                }
+              }
+              
+              const buff_pct = r.buff_pct || (originalLine?.buff_pct ? parseLocaleFloat(originalLine.buff_pct) : 0) || 0;
+              const supplier_name = r.supplier_name || originalLine?.supplier_name || "";
+              // Chercher internal_note dans plusieurs endroits
+              const internal_note = r.internal_note || 
+                originalLine?.raw_json?.internal_note || 
+                originalLine?.data?.internal_note || 
+                originalLine?.data?.pricing?.internal_note || 
+                "";
+              const category = r.category || originalLine?.category || "";
+              const isActivity = norm(category) === "activity";
+              const isTransport = norm(category) === "private transfer";
+              const hasCost = r.eur > 0 || r.usd > 0;
+              
+              // Tronquer le supplier si nécessaire
+              const truncateSupplier = (s, n = 30) => {
+                const t = String(s || "").trim();
+                return t.length > n ? t.slice(0, n - 1) + "…" : t;
+              };
+              
+              // Déterminer ce qui doit être affiché dans la colonne Supplier
+              const showSupplier = (isActivity || isTransport) && supplier_name;
+              const showInternalNote = hasCost && internal_note && internal_note.trim().length > 0;
+              const displaySupplier = showSupplier ? truncateSupplier(supplier_name) : "";
 
-              <tr key={i} className={r.kind==="meta" ? "row-meta" : ""}>
+              return (
+                <tr key={i} className={r.kind==="meta" ? "row-meta" : ""}>
 
-                <td>{r.dest}</td>
+                  <td>{r.dest}</td>
 
-                <td>
-                  {r.lineId
-                    ? (
-                      <button
-                        className="link-like"
-                        title="Scroll to service"
-                        onClick={() => scrollToLine(r.lineId)}
-                      >
-                        {r.name}
-                      </button>
-                    )
-                    : r.name}
-                </td>
+                  <td>
+                    {r.lineId
+                      ? (
+                        <button
+                          className="link-like"
+                          title="Scroll to service"
+                          onClick={() => scrollToLine(r.lineId)}
+                        >
+                          {r.name}
+                        </button>
+                      )
+                      : r.name}
+                  </td>
 
-                <td className="num">{r.eur ? r.eur.toFixed(2) : ""}</td>
+                  <td className="num">{r.eur ? r.eur.toFixed(2) : ""}</td>
 
-                <td className="num">{r.fx !== "" ? Number(r.fx).toFixed(4) : ""}</td>
+                  <td className="num">
+                    {r.fx !== "" ? (
+                      <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                        {Number(r.fx).toFixed(4)}
+                        {buff_pct > 0 && (
+                          <span 
+                            className="buffer-tooltip" 
+                            title={`(+Buffer ${buff_pct.toFixed(1)}%)`}
+                            style={{ 
+                              cursor: "help", 
+                              color: "#666", 
+                              fontSize: "11px",
+                              textDecoration: "underline",
+                              textDecorationStyle: "dotted"
+                            }}
+                          >
+                            ℹ️
+                          </span>
+                        )}
+                      </span>
+                    ) : ""}
+                  </td>
 
+                  {/* USD: vide pour Hassle, input pour Onspot */}
+                  <td className={r.name === "Onspot" ? "cell-right" : "num"}>
+                    {r.name === "Onspot" ? (
+                      <input
+                        className="money-cell"
+                        value={q.onspot_manual != null ? q.onspot_manual : onspotBase}
+                        onChange={(e) => {
+                          setQ(prev => ({ ...prev, onspot_manual: e.target.value }));
+                        }}
+                        onBlur={(e) => {
+                          const v = parseLocaleFloat(e.target.value);
+                          setQ(prev => {
+                            const next = structuredClone(prev);
+                            next.onspot_manual = v != null ? round2(v) : null;
+                            next.dirty = true;
+                            return next;
+                          });
+                        }}
+                        inputMode="decimal"
+                      />
+                    ) : r.name === "Hassle" ? "" : `$${r.usd.toFixed(2)}`}
+                  </td>
 
+                  {/* Vente: vide pour Onspot, input pour Hassle */}
+                  <td className={r.name === "Hassle" ? "cell-right" : "num"}>
+                    {r.name === "Hassle" ? (
+                      <input
+                        className="money-cell"
+                        value={q.hassle_manual != null ? q.hassle_manual : hassleDefault}
+                        onChange={(e) => {
+                          setQ(prev => ({ ...prev, hassle_manual: e.target.value }));
+                        }}
+                        onBlur={(e) => {
+                          const v = parseLocaleFloat(e.target.value);
+                          setQ(prev => {
+                            const next = structuredClone(prev);
+                            next.hassle_manual = v != null ? round2(v) : null;
+                            next.dirty = true;
+                            return next;
+                          });
+                        }}
+                        inputMode="decimal"
+                      />
+                    ) : r.name === "Onspot" ? "" : `$${r.sell.toFixed(2)}`}
+                  </td>
 
-                {/* USD: vide pour Hassle, input pour Onspot */}
-                <td className={r.name === "Onspot" ? "cell-right" : "num"}>
-                  {r.name === "Onspot" ? (
-                    <input
-                      className="money-cell"
-                      value={q.onspot_manual != null ? q.onspot_manual : onspotBase}
-                      onChange={(e) => {
-                        setQ(prev => ({ ...prev, onspot_manual: e.target.value }));
-                      }}
-                      onBlur={(e) => {
-                        const v = parseLocaleFloat(e.target.value);
-                        setQ(prev => {
-                          const next = structuredClone(prev);
-                          next.onspot_manual = v != null ? round2(v) : null;
-                          next.dirty = true;
-                          return next;
-                        });
-                      }}
-                      inputMode="decimal"
-                    />
-                  ) : r.name === "Hassle" ? "" : `$${r.usd.toFixed(2)}`}
-                </td>
+                  {/* Colonne Supplier */}
+                  <td className="supplier-cell">
+                    {showSupplier && showInternalNote ? (
+                      <span className="supplier-with-tooltip">
+                        {displaySupplier}
+                        <span 
+                          className="supplier-note-indicator"
+                          style={{
+                            marginLeft: "4px",
+                            color: "#6b7280",
+                            cursor: "help",
+                            fontSize: "12px",
+                            verticalAlign: "middle"
+                          }}
+                        >
+                          ℹ️
+                        </span>
+                        <span 
+                          className="supplier-tooltip-content svc-internal-note-rich"
+                          dangerouslySetInnerHTML={{ __html: internal_note }}
+                        />
+                      </span>
+                    ) : showSupplier ? (
+                      <span>{displaySupplier}</span>
+                    ) : showInternalNote ? (
+                      <span className="supplier-tooltip-only">
+                        ℹ️
+                        <span 
+                          className="supplier-tooltip-content svc-internal-note-rich"
+                          dangerouslySetInnerHTML={{ __html: internal_note }}
+                        />
+                      </span>
+                    ) : ""}
+                  </td>
 
-                {/* Vente: vide pour Onspot, input pour Hassle */}
-                <td className={r.name === "Hassle" ? "cell-right" : "num"}>
-                  {r.name === "Hassle" ? (
-                    <input
-                      className="money-cell"
-                      value={q.hassle_manual != null ? q.hassle_manual : hassleDefault}
-                      onChange={(e) => {
-                        setQ(prev => ({ ...prev, hassle_manual: e.target.value }));
-                      }}
-                      onBlur={(e) => {
-                        const v = parseLocaleFloat(e.target.value);
-                        setQ(prev => {
-                          const next = structuredClone(prev);
-                          next.hassle_manual = v != null ? round2(v) : null;
-                          next.dirty = true;
-                          return next;
-                        });
-                      }}
-                      inputMode="decimal"
-                    />
-                  ) : r.name === "Onspot" ? "" : `$${r.sell.toFixed(2)}`}
-                </td>
-
-              </tr>
-
-            ))}
+                </tr>
+              );
+            })}
 
           </tbody>
 
             <tfoot>
-
               <tr className="totals">
-
                 <td colSpan={2}>Totaux</td>
-
                 <td className="num">${totalEur.toFixed(2)}</td>
-
                 <td />
-
                 <td className="num">${totalUsd.toFixed(2)}</td>
-
                 <td className="num">${totalSell.toFixed(2)}</td>
-
+                <td />
               </tr>
-
             </tfoot>
 
           </table>
