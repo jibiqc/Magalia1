@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import RichTextEditor from "./RichTextEditor";
 
 export default function InternalInfoModal({ open=true, onClose, onSubmit, initialData=null }) {
   const [body, setBody] = useState(initialData?.body || "");
@@ -52,17 +53,11 @@ export default function InternalInfoModal({ open=true, onClose, onSubmit, initia
 
         <div className="field">
           <label>Body</label>
-          <textarea 
-            className="textarea" 
-            rows={8} 
-            value={body} 
-            onChange={e=>setBody(e.target.value)} 
+          <RichTextEditor 
+            value={body}
+            onChange={setBody}
             placeholder="Notes for internal use only"
-            style={{
-              position: "relative",
-              zIndex: 1,
-              pointerEvents: "auto"
-            }}
+            rows={8}
           />
         </div>
 

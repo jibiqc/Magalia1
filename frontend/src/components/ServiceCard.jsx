@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { fmtAMPM } from "../utils/timeFmt";
 
 const isNonEmpty = v => v !== undefined && v !== null && String(v).trim() !== "";
@@ -171,6 +171,8 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
   let isInternal = false;
   const inlineBadges = [];
   const [expanded, setExpanded] = useState(false);
+  const tooltipRef = useRef(null);
+  const noteRef = useRef(null);
 
   const f = getF(line);
   const s = getS(line);
@@ -428,6 +430,24 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
   // Prefer internal_note from raw_json when present (for catalog hotels)
   const internalNote = line?.raw_json?.internal_note || (data && (data.internal_note || data.internalNote)) || line.internal_note || "";
 
+  // S'assurer que les liens dans les notes internes s'ouvrent dans un nouvel onglet
+  useEffect(() => {
+    const updateLinks = (container) => {
+      if (container) {
+        const links = container.querySelectorAll("a");
+        links.forEach(link => {
+          if (!link.target) {
+            link.target = "_blank";
+            link.rel = "noopener noreferrer";
+          }
+        });
+      }
+    };
+    
+    updateLinks(tooltipRef.current);
+    updateLinks(noteRef.current);
+  }, [internalNote, note]);
+
   const meta = [];
   if (category !== "Cost" && category !== "Trip info" && category !== "Internal info") {
     if (data?.amount != null && data.amount !== "")
@@ -448,7 +468,12 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
               {internalNote ? (
                 <span className="svc-note-tip" tabIndex={0} aria-haspopup="dialog" aria-expanded="false" aria-label="Show internal note">
                   <Icon name="info" className="svc-note-icon" />
-                  <span className="svc-note-tooltip" role="tooltip">{internalNote}</span>
+                  <span 
+                    ref={tooltipRef}
+                    className="svc-note-tooltip svc-internal-note-rich" 
+                    role="tooltip"
+                    dangerouslySetInnerHTML={{ __html: internalNote }}
+                  />
                 </span>
               ) : null}
               {inlineBadges?.length ? <span className="title-badges">{inlineBadges}</span> : null}
@@ -476,7 +501,13 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
         {/* For internal info, show body directly */}
         {category === "Internal info" ? (
           <>
-            {note && <div className="service-note svc-internal-note">{note}</div>}
+            {note && (
+              <div 
+                ref={noteRef}
+                className="service-note svc-internal-note svc-internal-note-rich"
+                dangerouslySetInnerHTML={{ __html: note }}
+              />
+            )}
           </>
         ) : (
           <>
