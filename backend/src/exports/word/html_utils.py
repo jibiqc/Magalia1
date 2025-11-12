@@ -1,4 +1,5 @@
 import bleach
+import html
 from docx.text.paragraph import Paragraph
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -49,14 +50,14 @@ def add_hyperlink(paragraph: Paragraph, url: str, text: str) -> None:
     hyperlink.append(new_run)
     paragraph._p.append(hyperlink)
 
-def append_sanitized_html_to_docx(paragraph: Paragraph, html: str, allow_italic: bool = False) -> None:
+def append_sanitized_html_to_docx(paragraph: Paragraph, html_text: str, allow_italic: bool = False) -> None:
     """
     Minimal HTML → Word:
     - <p>/<br>: new paragraphs only when needed (no duplicates)
     - <a>: clickable hyperlink runs
     - <ul>/<ol>/<li>: plain paragraphs with simple bullet/number prefix to avoid template style drift
     """
-    safe = sanitize_html(html)
+    safe = sanitize_html(html_text)
     import re
 
     def _emit_text_or_link(p: Paragraph, chunk: str, allow_italic: bool = False):
@@ -69,6 +70,9 @@ def append_sanitized_html_to_docx(paragraph: Paragraph, html: str, allow_italic:
             _add_text_with_formatting(p, before, allow_italic)
             # Lien
             url, text = m.group(1), bleach.clean(m.group(2), tags=[], strip=True)
+            # Décoder les entités HTML
+            if text:
+                text = html.unescape(text)
             if url and text:
                 add_hyperlink(p, url, text)
             pos = m.end()
@@ -85,12 +89,18 @@ def append_sanitized_html_to_docx(paragraph: Paragraph, html: str, allow_italic:
         for m in re.finditer(r'<(strong|b)>(.*?)</(strong|b)>', text, flags=re.I):
             # Texte avant le gras
             before = bleach.clean(text[pos:m.start()], tags=[], strip=True)
+            # Décoder les entités HTML comme &amp; en &
+            if before:
+                before = html.unescape(before)
             if before:
                 run = p.add_run(before)
                 if not allow_italic:
                     run = _apply_run_defaults(run)
             # Texte en gras
             bold_text = bleach.clean(m.group(2), tags=[], strip=True)
+            # Décoder les entités HTML
+            if bold_text:
+                bold_text = html.unescape(bold_text)
             if bold_text:
                 run = p.add_run(bold_text)
                 run.font.bold = True
@@ -102,6 +112,9 @@ def append_sanitized_html_to_docx(paragraph: Paragraph, html: str, allow_italic:
             pos = m.end()
         # Texte restant après le dernier gras
         remaining = bleach.clean(text[pos:], tags=[], strip=True)
+        # Décoder les entités HTML
+        if remaining:
+            remaining = html.unescape(remaining)
         if remaining:
             run = p.add_run(remaining)
             if not allow_italic:

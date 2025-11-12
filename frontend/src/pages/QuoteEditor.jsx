@@ -839,12 +839,60 @@ export default function QuoteEditor(){
 
       if (!meta.isLocal) {
         // backend → backend
-        const fromIdx = meta.fromBackendIndex;
-        if (fromIdx < 0) return prev;
+        let fromIdx = meta.fromBackendIndex;
+        
+        // Si fromBackendIndex est -1, chercher le service par ID
+        if (fromIdx < 0) {
+          const lineId = meta.lineId;
+          const foundIdx = srcBack.findIndex(l => l.id === lineId);
+          if (foundIdx < 0) {
+            // Le service n'est pas dans les lignes backend, peut-être qu'il est local
+            // mais n'a pas été correctement détecté comme tel
+            console.warn('[dnd] Backend line not found in source day, trying local fallback');
+            
+            // Fallback: traiter comme local
+            const dstBackLen = dstBack.length;
+            const insertLocalIdx = Math.max(0, toDispIndex - dstBackLen);
+            
+            setTimeout(() => {
+              setLocalLines(prevLL => {
+                const all = [...prevLL];
+                const old = all.findIndex(x => x.id === meta.lineId);
+                if (old < 0) {
+                  console.warn('[dnd] Line not found in localLines either, cannot move');
+                  return prevLL;
+                }
+                const [moved] = all.splice(old, 1);
+                moved.dayId = dstDay.id;
+
+                const dstLocals = all.filter(x => x.dayId === dstDay.id && !x.deleted);
+                const anchorId = dstLocals[insertLocalIdx]?.id;
+                if (anchorId) {
+                  const anchorIdx = all.findIndex(x => x.id === anchorId);
+                  all.splice(anchorIdx, 0, moved);
+                } else {
+                  all.push(moved);
+                }
+                console.log('[dnd] drop local (fallback)', {insertLocalIdx, toDispIndex, dstBackLen});
+                return all;
+              });
+            }, 0);
+            
+            const norm = normalizeQuotePositions(next);
+            try {
+              if (typeof meta.fromDay === "number") recomputeDayDecorations(norm, meta.fromDay);
+              if (typeof toDay === "number") recomputeDayDecorations(norm, toDay);
+            } catch {}
+            norm.dirty = true;
+            return norm;
+          }
+          fromIdx = foundIdx;
+        }
 
         // Vérifier que la ligne n'existe pas déjà dans le jour destination
+        // Seulement si on déplace vers un jour différent (pas pour réordonner dans le même jour)
         const lineId = srcBack[fromIdx]?.id;
-        if (lineId && dstBack.some(l => l.id === lineId)) {
+        if (lineId && meta.fromDay !== toDay && dstBack.some(l => l.id === lineId)) {
           // La ligne existe déjà dans le jour destination, ne pas dupliquer
           console.warn('[dnd] Line already exists in destination day, skipping duplicate');
           return prev;
@@ -2254,14 +2302,20 @@ export default function QuoteEditor(){
     const clamp50 = (s) => (s || "").length > 50 ? (s.slice(0,50) + "…") : (s || "");
     function excelServiceName(line){
       const cat = (line.category || "").toLowerCase();
-      const d = line.data || line;
+      // Pour les lignes backend, les données sont dans raw_json, pour les lignes locales dans data
+      const rawJson = line.raw_json || {};
+      const data = line.data || rawJson || {};
+      const d = { ...rawJson, ...data }; // Fusionner raw_json et data pour avoir toutes les données
+      
       if (cat === "flight")  return clamp50(`Flight ${d.from || "?"}->${d.to || "?"}`);
       if (cat === "train")   return clamp50(`Train ${d.from || "?"}->${d.to || "?"}`);
       if (cat === "ferry")   return clamp50(`Ferry ${d.from || "?"}->${d.to || "?"}`);
-      if (cat === "new hotel" || cat === "hotel") return clamp50(d.hotel_name || line.hotel_name || "Hotel");
-      if (cat === "new service" || cat === "activity") return clamp50(d.title || line.title || "Service");
+      if (cat === "new hotel") return clamp50(d.hotel_name || rawJson.hotel_name || data.hotel_name || "Hotel");
+      if (cat === "hotel") return clamp50(rawJson.hotel_name || data.hotel_name || line.hotel_name || line.title || "Hotel");
+      if (cat === "new service") return clamp50(d.title || rawJson.title || data.title || line.title || "Service");
+      if (cat === "activity") return clamp50(d.title || rawJson.title || data.title || line.title || "Service");
       if (cat === "car rental") return "Car Rental";
-      if (cat === "cost") return clamp50(d.title || line.title || "Cost");
+      if (cat === "cost") return clamp50(d.title || rawJson.title || data.title || line.title || "Cost");
       // Trip info / Internal info exclus
       return clamp50(line.title || line.service_name || "—");
     }
@@ -2380,11 +2434,14 @@ export default function QuoteEditor(){
         const sell = round2(parseLocaleFloat(pricing.sale_usd || line.data?.sale_usd));
 
         // Build a line-like object for excelServiceName helper
+        // Pour les lignes locales, les données sont dans line.data, mais on peut aussi avoir raw_json
         const lineForName = { 
           category: line.category, 
           data: line.data || {},
+          raw_json: line.data || {}, // Pour les lignes locales, data contient les mêmes infos que raw_json
           title: line.data?.title, 
-          service_name: line.data?.service_name
+          service_name: line.data?.service_name,
+          hotel_name: line.data?.hotel_name
         };
         // Build a line-like object for destOf helper (local lines don't have destination directly)
         const lineForDest = { destination: line.data?.destination, city: line.data?.city, data: line.data };

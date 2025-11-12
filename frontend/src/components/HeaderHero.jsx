@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from "react";
+import React, { useState, useCallback, useEffect, useRef } from "react";
 import HeaderHeroModal from "./modals/HeaderHeroModal";
 import { api } from "../lib/api";
 
@@ -23,12 +23,26 @@ export default function HeaderHero({ quote, setQuote, activeDest }) {
   const [img2Loaded, setImg2Loaded] = useState(false);
   const [img1Error, setImg1Error] = useState(false);
   const [img2Error, setImg2Error] = useState(false);
+  const img1Ref = useRef(null);
+  const img2Ref = useRef(null);
 
   // Reset flags when URL changes
   const safeSet1 = useCallback(() => { setImg1Loaded(false); setImg1Error(false); }, []);
   const safeSet2 = useCallback(() => { setImg2Loaded(false); setImg2Error(false); }, []);
   useEffect(() => { safeSet1(); }, [p1, safeSet1]);
   useEffect(() => { safeSet2(); }, [p2, safeSet2]);
+
+  // Check if images are already loaded (cached)
+  useEffect(() => {
+    if (img1Ref.current && img1Ref.current.complete && img1Ref.current.naturalWidth > 0 && !img1Loaded) {
+      setImg1Loaded(true);
+    }
+  }, [p1, img1Loaded]);
+  useEffect(() => {
+    if (img2Ref.current && img2Ref.current.complete && img2Ref.current.naturalWidth > 0 && !img2Loaded) {
+      setImg2Loaded(true);
+    }
+  }, [p2, img2Loaded]);
 
   // Suggest up to 2 photos when both empty: resolve dest_id(s) then GET /destinations/photos
   useEffect(() => {
@@ -82,6 +96,7 @@ export default function HeaderHero({ quote, setQuote, activeDest }) {
           >
             {p1 && !img1Error && (
               <img
+                ref={img1Ref}
                 className="hero-photo"
                 src={p1}
                 alt=""
@@ -100,6 +115,7 @@ export default function HeaderHero({ quote, setQuote, activeDest }) {
           >
             {p2 && !img2Error && (
               <img
+                ref={img2Ref}
                 className="hero-photo"
                 src={p2}
                 alt=""

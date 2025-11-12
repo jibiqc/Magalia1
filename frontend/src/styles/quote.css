@@ -1750,6 +1750,8 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   object-position: center;
   border-radius: 0 !important; /* no rounded corners */
   transition: opacity 0ms; /* avoid flash animations */
+  position: relative;
+  z-index: 1;
 }
 
 /* Single edit overlay positioned relative to the hero-photos wrapper */
@@ -1790,6 +1792,8 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   object-position: center;
   border-radius: 0 !important;
   transition: opacity 0ms; /* avoid flash */
+  position: relative;
+  z-index: 1;
 }
 
 .day-hero-edit-btn {

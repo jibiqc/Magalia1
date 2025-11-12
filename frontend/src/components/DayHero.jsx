@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 export default function DayHero({ day, dayIdx, onEdit }) {
   // Exclude first day
@@ -14,10 +14,24 @@ export default function DayHero({ day, dayIdx, onEdit }) {
   const [l2, setL2] = useState(false);
   const [e1, setE1] = useState(false);
   const [e2, setE2] = useState(false);
+  const img1Ref = useRef(null);
+  const img2Ref = useRef(null);
 
   // Reset when urls change
   useEffect(() => { setL1(false); setE1(false); }, [imgs[0]]);
   useEffect(() => { setL2(false); setE2(false); }, [imgs[1]]);
+
+  // Check if images are already loaded (cached)
+  useEffect(() => {
+    if (img1Ref.current && img1Ref.current.complete && img1Ref.current.naturalWidth > 0 && !l1) {
+      setL1(true);
+    }
+  }, [imgs[0], l1]);
+  useEffect(() => {
+    if (img2Ref.current && img2Ref.current.complete && img2Ref.current.naturalWidth > 0 && !l2) {
+      setL2(true);
+    }
+  }, [imgs[1], l2]);
 
   const p1 = imgs[0] || "";
   const p2 = imgs[1] || "";
@@ -28,6 +42,7 @@ export default function DayHero({ day, dayIdx, onEdit }) {
       <div className="day-hero-container" style={{ backgroundImage: `url('${ph}')` }}>
         {p1 && !e1 && (
           <img
+            ref={img1Ref}
             className="day-hero-img"
             src={p1}
             alt=""
@@ -40,6 +55,7 @@ export default function DayHero({ day, dayIdx, onEdit }) {
       <div className="day-hero-container" style={{ backgroundImage: `url('${ph}')` }}>
         {p2 && !e2 && (
           <img
+            ref={img2Ref}
             className="day-hero-img"
             src={p2}
             alt=""
