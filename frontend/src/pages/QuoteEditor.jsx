@@ -664,6 +664,14 @@ export default function QuoteEditor(){
   // ---- Service tabs (Activities | Hotels | Transport)
   const [svcTab, setSvcTab] = useState("Activities"); // "Activities" | "Hotels" | "Transport"
   
+  // ---- Right rail destination filter (modifiable, pre-filled from active day)
+  const [rightRailDestination, setRightRailDestination] = useState("");
+  const [rightRailDestSuggestions, setRightRailDestSuggestions] = useState([]);
+  const [rightRailDestLoading, setRightRailDestLoading] = useState(false);
+  const [rightRailDestShowMenu, setRightRailDestShowMenu] = useState(false);
+  const rightRailDestDebounceRef = useRef(null);
+  const rightRailDestWrapRef = useRef(null);
+  
   // --- Helpers: normalize transport title & stars
   function normTransportTitle(name='') {
     return name
@@ -1928,6 +1936,56 @@ export default function QuoteEditor(){
     return i >= 0 ? (q?.days?.[i]?.destination || "") : "";
   }, [q, findActiveIndex]);
 
+  // Initialize right rail destination from active day (only if empty or when active day changes)
+  useEffect(() => {
+    if (activeDest && (!rightRailDestination || rightRailDestination === "")) {
+      setRightRailDestination(activeDest);
+    }
+  }, [activeDest]); // Only sync when activeDest changes, not when rightRailDestination changes
+
+  // Debounced fetch destinations for right rail
+  useEffect(() => {
+    if (rightRailDestDebounceRef.current) {
+      clearTimeout(rightRailDestDebounceRef.current);
+    }
+    rightRailDestDebounceRef.current = setTimeout(async () => {
+      const query = rightRailDestination.trim();
+      if (query.length === 0) {
+        setRightRailDestSuggestions([]);
+        setRightRailDestShowMenu(false);
+        return;
+      }
+      setRightRailDestLoading(true);
+      try {
+        const results = await api.getDestinations(query);
+        setRightRailDestSuggestions(results || []);
+        if (query.length > 0) {
+          setRightRailDestShowMenu(true);
+        }
+      } catch (err) {
+        console.error("Failed to fetch destinations:", err);
+        setRightRailDestSuggestions([]);
+      } finally {
+        setRightRailDestLoading(false);
+      }
+    }, 300);
+    return () => {
+      if (rightRailDestDebounceRef.current) clearTimeout(rightRailDestDebounceRef.current);
+    };
+  }, [rightRailDestination]);
+
+  // Close menu on click-outside for right rail destination
+  useEffect(() => {
+    const onDocClick = (e) => {
+      if (!rightRailDestWrapRef.current) return;
+      if (!rightRailDestWrapRef.current.contains(e.target)) {
+        setRightRailDestShowMenu(false);
+      }
+    };
+    document.addEventListener("mousedown", onDocClick);
+    return () => document.removeEventListener("mousedown", onDocClick);
+  }, []);
+
   // Ensure we always have an active day when days exist
   useEffect(() => {
     if (!activeDayId && (q?.days?.length || 0) > 0) {
@@ -1946,7 +2004,7 @@ export default function QuoteEditor(){
       try{
         const res = await api.searchServices({
           q: qstr,
-          dest: (activeDest || "").trim(),
+          dest: (rightRailDestination || "").trim(),
           limit: 50
         });
         if (!abort.v) {
@@ -1960,7 +2018,7 @@ export default function QuoteEditor(){
       }
     }, 300);
     return () => { abort.v = true; clearTimeout(t); };
-  }, [svcQuery, activeDest, svcTab]);
+  }, [svcQuery, rightRailDestination, svcTab]);
 
   function lineFromCatalog(svc) {
     const supplier_name =
@@ -2165,7 +2223,7 @@ export default function QuoteEditor(){
 
   // Load "Popular" for Activity when destination changes
   useEffect(() => {
-    if (!activeDest) return;
+    if (!rightRailDestination) return;
     let cancelled = false;
     (async () => {
       setSvcLoading(true); setSvcError(null);
@@ -2175,7 +2233,7 @@ export default function QuoteEditor(){
         const category = svcTab === "Hotels" ? "Hotel" : 
                         svcTab === "Transport" ? "Private Transfer" : 
                         "Activity";
-        const base = await api.getPopularServices({ dest: activeDest, category, limit: 50 });
+        const base = await api.getPopularServices({ dest: rightRailDestination, category, limit: 50 });
         let out = (base || []).filter(r => inTab(r, svcTab));
 
         // Helper pour extraire le supplier (utilisé pour la déduplication des hôtels)
@@ -2206,7 +2264,7 @@ export default function QuoteEditor(){
           const extra = [];
 
           for (const q of seeds) {
-            const r = await api.searchServices({ q, dest: activeDest, limit: 50 });
+            const r = await api.searchServices({ q, dest: rightRailDestination, limit: 50 });
             extra.push(...(r||[]));
           }
 
@@ -2238,7 +2296,7 @@ export default function QuoteEditor(){
       }
     })();
     return () => { cancelled = true; };
-  }, [activeDest, svcTab]);
+  }, [rightRailDestination, svcTab]);
 
   function makeNewDay(protoDest = "", dateISO) {
     return {
@@ -4286,6 +4344,87 @@ export default function QuoteEditor(){
             >
               🗑 Trash {trashLines.length > 0 && <span>({trashLines.length})</span>}
             </button>
+          </div>
+
+          {/* Destination filter */}
+          <div style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
+            <div style={{ fontWeight: 700, opacity: 0.9, marginBottom: 6 }}>Destination</div>
+            <div ref={rightRailDestWrapRef} style={{ position: "relative" }}>
+              <input
+                type="text"
+                value={rightRailDestination}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setRightRailDestination(v);
+                  setRightRailDestShowMenu(!!v.trim());
+                }}
+                onFocus={() => setRightRailDestShowMenu(!!rightRailDestination?.trim())}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && rightRailDestSuggestions.length > 0) {
+                    e.preventDefault();
+                    setRightRailDestination(rightRailDestSuggestions[0].name);
+                    setRightRailDestShowMenu(false);
+                  }
+                }}
+                placeholder="Type a destination"
+                style={{
+                  width: "100%",
+                  height: 36,
+                  padding: "0 10px",
+                  border: "1px solid rgba(255,255,255,.12)",
+                  borderRadius: 8,
+                  background: "#0f1c33",
+                  color: "#e6edf7"
+                }}
+              />
+              {rightRailDestLoading && (
+                <div style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", opacity: 0.8, fontSize: 12 }}>
+                  Loading...
+                </div>
+              )}
+              {rightRailDestShowMenu && rightRailDestSuggestions.length > 0 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "100%",
+                    left: 0,
+                    right: 0,
+                    marginTop: 4,
+                    background: "#1a2d4a",
+                    border: "1px solid rgba(255,255,255,.12)",
+                    borderRadius: 8,
+                    maxHeight: 200,
+                    overflowY: "auto",
+                    zIndex: 1000,
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.3)"
+                  }}
+                >
+                  {rightRailDestSuggestions.map((dest, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => {
+                        setRightRailDestination(dest.name);
+                        setRightRailDestShowMenu(false);
+                      }}
+                      style={{
+                        padding: "8px 12px",
+                        cursor: "pointer",
+                        borderBottom: idx < rightRailDestSuggestions.length - 1 ? "1px solid rgba(255,255,255,.06)" : "none",
+                        color: "#e6edf7"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background = "rgba(255,255,255,.1)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = "transparent";
+                      }}
+                    >
+                      {dest.name}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div className="catalog">
