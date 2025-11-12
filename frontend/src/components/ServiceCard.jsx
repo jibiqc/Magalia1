@@ -161,7 +161,7 @@ function formatOrdinals(text) {
   return parts.length > 0 ? <>{parts}</> : text;
 }
 
-export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onChangeLocalData, onDragFromHandle, showActionIcons = true, showDescriptions = true }) {
+export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onChangeLocalData, onDragStart, showActionIcons = true, showDescriptions = true }) {
   const { category } = line;
   // For backend lines, data is in raw_json; for local lines, it's in line.data
   // Merge raw_json into data for backend lines so all fields are accessible
@@ -457,7 +457,11 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
   }
 
   return (
-    <div className={wrapperCls}>
+    <div 
+      className={`${wrapperCls} ${onDragStart ? 'draggable-card' : ''}`}
+      draggable={!!onDragStart}
+      onDragStart={onDragStart}
+    >
       <div className="svc-body">
         {/* Head row */}
         {title ? (
@@ -480,20 +484,40 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
               {isInternal && <span className="badge-internal">INTERNAL ONLY</span>}
             </div>
             {showActionIcons && (
-              <div className="svc-actions-inline" aria-label="Card actions">
-                {/* Order: Edit, Move, Duplicate, Delete */}
-                <button className="icon-vert" aria-label="Edit" onClick={onEdit}><Icon name="edit" /></button>
-                <button
-                  className="icon-vert drag-handle"
-                  aria-label="Move"
-                  title="Drag to move"
-                  draggable
-                  onDragStart={(e)=> onDragFromHandle && onDragFromHandle(e)}
+              <div 
+                className="svc-actions-inline" 
+                aria-label="Card actions"
+                onMouseDown={(e) => e.stopPropagation()}
+                onDragStart={(e) => e.stopPropagation()}
+              >
+                {/* Order: Edit, Duplicate, Delete */}
+                <button 
+                  className="icon-vert" 
+                  aria-label="Edit" 
+                  onClick={onEdit}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onDragStart={(e) => e.stopPropagation()}
                 >
-                  <Icon name="move" />
+                  <Icon name="edit" />
                 </button>
-                <button className="icon-vert" aria-label="Duplicate" onClick={onDuplicate}><Icon name="duplicate" /></button>
-                <button className="icon-vert" aria-label="Delete" onClick={onDelete}><Icon name="delete" /></button>
+                <button 
+                  className="icon-vert" 
+                  aria-label="Duplicate" 
+                  onClick={onDuplicate}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onDragStart={(e) => e.stopPropagation()}
+                >
+                  <Icon name="duplicate" />
+                </button>
+                <button 
+                  className="icon-vert" 
+                  aria-label="Delete" 
+                  onClick={onDelete}
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onDragStart={(e) => e.stopPropagation()}
+                >
+                  <Icon name="delete" />
+                </button>
               </div>
             )}
           </div>

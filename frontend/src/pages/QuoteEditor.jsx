@@ -1136,6 +1136,7 @@ export default function QuoteEditor(){
     });
 
     setHoverSlot({ day:-1, index:-1 });
+    setDragging(null);
   };
 
 
@@ -4022,9 +4023,13 @@ export default function QuoteEditor(){
                           />
                           {/* card wrapper */}
                           <div
-                            className="draggable-wrap"
+                            className={`draggable-wrap ${dragging?.lineId === l.id ? 'dragging' : ''}`}
                             id={`line-${l.id}`}
                             onDragOver={allowDrop}
+                            onDragEnd={() => {
+                              setDragging(null);
+                              setHoverSlot({ day: -1, index: -1 });
+                            }}
                           >
                           <ServiceCard
                             line={lineData}
@@ -4033,20 +4038,21 @@ export default function QuoteEditor(){
                             onChangeLocalData={isLocal ? (newData)=>{
                               setLocalLines(prev => prev.map(x => x.id===l.id ? { ...x, data:newData } : x));
                             } : undefined}
-                              onDragFromHandle={(e)=>{
-                                const meta = {
-                                  fromDay: dayIdx,
-                                  fromBackendIndex: lineIdx,    // -1 if local
-                                  isLocal,
-                                  lineId: l.id,
-                                  fromDayId: d.id,
-                                  category: l.category, // Ajouter category pour debug
-                                };
-                                e.dataTransfer.effectAllowed = 'move';
-                                e.dataTransfer.setData('application/json', JSON.stringify(meta));
-                                e.dataTransfer.setData('text/plain', JSON.stringify(meta)); // fallback
-                                console.log('[dnd] dragstart', { ...meta, lineCategory: l.category, serviceId: l.service_id });
-                              }}
+                            onDragStart={(e)=>{
+                              const meta = {
+                                fromDay: dayIdx,
+                                fromBackendIndex: lineIdx,    // -1 if local
+                                isLocal,
+                                lineId: l.id,
+                                fromDayId: d.id,
+                                category: l.category, // Ajouter category pour debug
+                              };
+                              e.dataTransfer.effectAllowed = 'move';
+                              e.dataTransfer.setData('application/json', JSON.stringify(meta));
+                              e.dataTransfer.setData('text/plain', JSON.stringify(meta)); // fallback
+                              setDragging({ day: dayIdx, index: displayIndex, lineId: l.id });
+                              console.log('[dnd] dragstart', { ...meta, lineCategory: l.category, serviceId: l.service_id });
+                            }}
                             onEdit={() => {
                               if (isLocal) {
                                 openEditModal(l);

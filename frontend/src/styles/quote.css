@@ -618,6 +618,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   flex: 1;
 }
 
+/* Legacy drag-handle styles - kept for backward compatibility but not used */
 .drag-handle {
   user-select: none;
   cursor: grab;
@@ -775,10 +776,15 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 
 /* Draggable wrapper to avoid text selection issues */
 .draggable-wrap {
-  -webkit-user-drag: element;
-  user-select: none;
   margin-top: 2px;
   margin-bottom: 2px;
+  position: relative;
+}
+
+/* Visual feedback when dragging */
+.draggable-wrap.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
 }
 
 .modal-overlay {
@@ -1204,6 +1210,30 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   background: #ffffff;
   font-family: Arial, Helvetica, sans-serif;
   font-size: 10pt;
+  transition: opacity 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Draggable service card styles */
+.service-card.draggable-card {
+  cursor: grab;
+  user-select: none;
+}
+
+.service-card.draggable-card:active {
+  cursor: grabbing;
+  opacity: 0.6;
+  transform: scale(0.98);
+}
+
+/* Prevent drag on action buttons */
+.service-card .svc-actions-inline,
+.service-card .svc-actions-inline button {
+  cursor: pointer;
+  user-select: auto;
+}
+
+.service-card .svc-actions-inline button:active {
+  cursor: pointer;
 }
 
 .service-card * {
@@ -1866,12 +1896,41 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .service-title{flex:1 1 auto;min-width:0}
 
 /* Insertion bar between cards and at head/end of day */
-.drop-slot{height:14px; transition:all .12s ease}
+.drop-slot{
+  height: 4px;
+  margin: 2px 0;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 8px;
+  background: transparent;
+  position: relative;
+}
+
 .drop-slot.over{
-  height:22px;               /* was 10px */
-  border-top:2px solid #E5EAF0;
-  background:#F5F7FA;        /* light hint behind the bar */
-  border-radius:2px;
+  height: auto;
+  min-height: 80px;
+  margin: 8px 0;
+  border: 2px solid #3b82f6;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.06);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.15), 
+              0 0 0 4px rgba(59, 130, 246, 0.08);
+  /* Créer un espace pour simuler la taille d'une carte */
+  padding: 12px;
+  box-sizing: border-box;
+}
+
+/* Indicateur visuel au centre de la zone de drop */
+.drop-slot.over::before {
+  content: '';
+  display: block;
+  width: 100%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #3b82f6, transparent);
+  position: absolute;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+  border-radius: 1px;
 }
 
 .page .service-card{grid-template-columns:1fr !important}

@@ -946,6 +946,9 @@ def _render_day_services(doc: Document, day, usable_w_cm: float = None) -> None:
         _blank_line(doc)
         return
 
+    # Trier les lignes par position pour respecter l'ordre visuel
+    lines = sorted(lines, key=lambda l: _get_attr(l, "position") or 0)
+
     # Filtrer les lignes pour exclure les Internal info
     visible_lines = []
     for line in lines:
@@ -1084,8 +1087,9 @@ def build_docx_for_quote(db: Session, quote_id: int) -> BytesIO:
         global_heroes = [u for u in global_heroes if u]
         if len(global_heroes) >= 2:
             _insert_two_heroes(doc, global_heroes[0], global_heroes[1])  # Ignore returned tuple for global photos
-        # Days
-        for i, day in enumerate(qout.days or []):
+        # Days - trier par position pour respecter l'ordre visuel
+        days = sorted(qout.days or [], key=lambda d: _get_attr(d, "position") or 0)
+        for i, day in enumerate(days):
             _insert_day_block(doc, qout, day, i, usable_width_cm)
     else:
         # Start a fresh doc with same section settings
@@ -1108,8 +1112,9 @@ def build_docx_for_quote(db: Session, quote_id: int) -> BytesIO:
         global_heroes = [u for u in global_heroes if u]
         if len(global_heroes) >= 2:
             _insert_two_heroes(doc, global_heroes[0], global_heroes[1])  # Ignore returned tuple for global photos
-        # Days
-        for i, day in enumerate(qout.days or []):
+        # Days - trier par position pour respecter l'ordre visuel
+        days = sorted(qout.days or [], key=lambda d: _get_attr(d, "position") or 0)
+        for i, day in enumerate(days):
             _insert_day_block(doc, qout, day, i, usable_width_cm)
         # Page break then re-add T&C with specific style
         doc.add_page_break()
