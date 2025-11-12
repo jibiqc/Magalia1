@@ -708,17 +708,26 @@ def _render_service(doc: Document, line, usable_width_cm: float, skip_blank_line
             if not desc and title and not has_subtitle:
                 desc = title
 
+        # Mémoriser l'index du premier paragraphe de la description (si elle existe)
+        desc_start_para_idx = None
+        desc_end_para_idx = None
+        
         if desc:
+            # Mémoriser l'index du premier paragraphe de la description
+            desc_start_para_idx = len(doc.paragraphs)
+            
             # Pour Trip info, description en italique
             para_count_before = len(doc.paragraphs)
             p_desc = doc.add_paragraph()
             if cat == "Trip info":
                 # Description en italique (pas de gras) et en bleu
                 append_sanitized_html_to_docx(p_desc, desc, allow_italic=True)
-                # Forcer italique, pas de gras et couleur bleue pour tous les runs
+                # Forcer italique, pas de gras, couleur bleue, police Arial taille 10 pour tous les runs
                 para_count_after = len(doc.paragraphs)
                 for i in range(para_count_before, para_count_after):
                     for run in doc.paragraphs[i].runs:
+                        run.font.name = "Arial"
+                        run.font.size = Pt(NORMAL_PT)  # NORMAL_PT = 10
                         run.font.italic = True
                         run.font.bold = False
                         run.font.color.rgb = TEXT_COLOR  # Forcer la couleur bleue
@@ -731,6 +740,9 @@ def _render_service(doc: Document, line, usable_width_cm: float, skip_blank_line
                 for i in range(para_count_before, para_count_after):
                     _set_par_spacing(doc.paragraphs[i], before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_NORMAL_PT)
             added_any = True
+            
+            # Mémoriser l'index du dernier paragraphe de la description
+            desc_end_para_idx = len(doc.paragraphs) - 1
 
         # 3) Sous-titre pour Activity (catalogue) avec duration
         if cat in ("Activity", "Small Group", "Private"):
@@ -866,17 +878,35 @@ def _render_service(doc: Document, line, usable_width_cm: float, skip_blank_line
         if not skip_blank_line_after:
             _blank_line(doc)
         
-        # Appliquer keep_with_next et keep_together sur tous les paragraphes du service pour éviter les coupures
-        # Cela garantit que le titre, sous-titre, description et URL restent ensemble sur la même page
-        # Si le service ne tient pas sur la page, Word le déplacera entièrement sur la page suivante
+        # Appliquer keep_with_next et keep_together de manière sélective
+        # Pour les activités et hôtels, permettre les sauts de page entre les paragraphes de description
+        # pour éviter trop d'espace vide en bas de page
         if service_start_para_idx <= service_end_para_idx and service_end_para_idx < len(doc.paragraphs):
+            # Déterminer si on doit permettre les sauts de page dans la description
+            allow_page_breaks_in_desc = cat in ("Activity", "Small Group", "Private", "Hotel", "New Hotel")
+            
             for para_idx in range(service_start_para_idx, service_end_para_idx + 1):
                 para = doc.paragraphs[para_idx]
-                # keep_with_next garde le paragraphe avec le suivant
-                # En l'appliquant à tous les paragraphes du service, on garantit qu'ils restent ensemble
-                para.paragraph_format.keep_with_next = True
-                # keep_together empêche le paragraphe d'être divisé sur plusieurs pages
-                para.paragraph_format.keep_together = True
+                
+                # Si c'est un paragraphe de description pour activités/hôtels, permettre les sauts de page
+                if (allow_page_breaks_in_desc and 
+                    desc_start_para_idx is not None and 
+                    desc_end_para_idx is not None and
+                    desc_start_para_idx <= para_idx <= desc_end_para_idx):
+                    # Pour les paragraphes de description (sauf le premier), ne pas forcer keep_with_next
+                    # Cela permet à Word de faire des sauts de page entre les paragraphes si nécessaire
+                    if para_idx == desc_start_para_idx:
+                        # Le premier paragraphe de description reste avec le sous-titre (si existe)
+                        para.paragraph_format.keep_with_next = True
+                    else:
+                        # Les autres paragraphes de description peuvent être séparés par un saut de page
+                        para.paragraph_format.keep_with_next = False
+                    # Toujours empêcher la division d'un paragraphe sur plusieurs pages
+                    para.paragraph_format.keep_together = True
+                else:
+                    # Pour le titre, sous-titre, URL et autres éléments : garder ensemble
+                    para.paragraph_format.keep_with_next = True
+                    para.paragraph_format.keep_together = True
     except Exception as e:
         # En cas d'erreur, logger et ajouter un message d'erreur dans le document
         import traceback
