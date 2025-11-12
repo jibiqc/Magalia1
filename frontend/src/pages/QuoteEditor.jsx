@@ -24,6 +24,7 @@ import DayHeroModal from "../components/modals/DayHeroModal";
 import { api } from "../lib/api";
 import { fmtDateShortISO, fmtDateLongISO } from "../utils/dateFmt";
 import { uid } from "../utils/localId";
+import { fmtHm } from "../utils/duration";
 
 // Debug helper (gated by window.__ET_DEBUG)
 window.__ET_DEBUG = window.__ET_DEBUG ?? false;
@@ -674,6 +675,12 @@ export default function QuoteEditor(){
     }
 
     const hoverText = (fields.full_description || fields['Full Description'] || info?.description || '').trim();
+    
+    // Récupérer la durée depuis fields ou info
+    const duration = fields?.duration || fields?.activity_duration || (info?.duration_minutes != null ? fmtHm(info.duration_minutes) : '') || '';
+    
+    // Récupérer l'image depuis info ou fields
+    const imageUrl = info?.images?.[0]?.url || fields?.image_url || '';
 
     return (
       <button
@@ -689,10 +696,33 @@ export default function QuoteEditor(){
         {svcHoverId === s.id && hoverText && createPortal(
           <div className="svc-hover"
                style={{ left: hoverPos.x - 16, top: hoverPos.y + 16, transform: 'translateX(-100%)' }}>
-            <div style={{fontWeight:600, marginBottom:6}}>
-              {(typeof title==='string') ? title : (s.supplier_name || s.company || s.name)}
+            <div style={{display: 'flex', gap: '12px', alignItems: 'flex-start'}}>
+              {imageUrl && (
+                <img 
+                  src={imageUrl} 
+                  alt=""
+                  style={{
+                    width: '120px',
+                    height: '120px',
+                    objectFit: 'cover',
+                    borderRadius: '8px',
+                    flexShrink: 0
+                  }}
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              )}
+              <div style={{flex: 1, minWidth: 0}}>
+                <div style={{fontWeight:600, marginBottom:6}}>
+                  {(typeof title==='string') ? title : (s.supplier_name || s.company || s.name)}
+                </div>
+                {duration && (
+                  <div style={{marginBottom:6, opacity:0.9, fontSize:'0.95em'}}>
+                    Duration: {duration}
+                  </div>
+                )}
+                <div>{hoverText}</div>
+              </div>
             </div>
-            <div>{hoverText}</div>
           </div>,
           document.body
         )}
@@ -1129,7 +1159,7 @@ export default function QuoteEditor(){
         else if (d.seat_res_choice === "without") suffix = " without seat reservations (open seating)";
         else if (d.seat_res === true) suffix = " with seat reservations";
         else if (d.seat_res === false) suffix = " without seat reservations (open seating)";
-        title = `${classType} Train from ${d.from || "?"} to ${d.to || "?"}${suffix}`;
+        title = `${classType} train from ${d.from || "?"} to ${d.to || "?"}${suffix}`;
         // Ensure description field is set (for export compatibility)
         if (rawJson.description === null || rawJson.description === undefined) {
           rawJson.description = d.note || d.description || null;
@@ -1761,7 +1791,7 @@ export default function QuoteEditor(){
               description: (fields?.full_description || full?.full_description || '') || '',
               start_time: (fields?.start_time || '') || '',
               end_time: (fields?.end_time || '') || '',
-              duration: (fields?.duration || '') || '',
+              duration: (fields?.duration || fields?.activity_duration || (full?.duration_minutes != null ? fmtHm(full.duration_minutes) : '')) || '',
               internal_note: ''
             }
           };
