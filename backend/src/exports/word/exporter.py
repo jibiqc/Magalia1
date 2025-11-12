@@ -8,8 +8,9 @@ from datetime import datetime
 
 from docx import Document
 from docx.shared import Cm, Pt, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.text.paragraph import Paragraph
+from docx.oxml.ns import qn
 
 from sqlalchemy.orm import Session
 
@@ -917,6 +918,36 @@ def _insert_day_block(doc: Document, qout, day, day_idx, usable_width_cm: float)
     # Utiliser _render_day_services pour rendre tous les services (inclut Flight, Train, etc.)
     _render_day_services(doc, day, usable_width_cm)
 
+def _apply_terms_conditions_style(para: Paragraph):
+    """
+    Applique le style spécifique aux termes et conditions :
+    - Police Arial 8
+    - Alignement : Gauche
+    - Espacement avant : 0 pt
+    - Espacement après : 0 pt
+    - Interligne : Multiple 1.08
+    - Mise en retrait : 0" avant et après
+    - Gestion des veuves et des orphelins activée
+    """
+    # Alignement à gauche
+    para.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    
+    # Formatage du paragraphe
+    pf = para.paragraph_format
+    pf.space_before = Pt(0)
+    pf.space_after = Pt(0)
+    pf.left_indent = None
+    pf.right_indent = None
+    pf.first_line_indent = None
+    
+    # Interligne Multiple 1.08
+    # python-docx utilise line_spacing_rule et line_spacing pour le multiple
+    pf.line_spacing_rule = WD_LINE_SPACING.MULTIPLE
+    pf.line_spacing = 1.08
+    
+    # Gestion des veuves et des orphelins (widow/orphan control)
+    para._element.get_or_add_pPr().set(qn('w:widowControl'), '1')
+
 def _find_terms_heading_index(doc: Document) -> Optional[int]:
     """
     Find the index of the 'Essential Travel Terms and Conditions' heading.
@@ -970,9 +1001,6 @@ def build_docx_for_quote(db: Session, quote_id: int) -> BytesIO:
         for i, day in enumerate(qout.days or []):
             _insert_day_block(doc, qout, day, i, usable_width_cm)
     else:
-        # Snapshot T&C texts (plain) to re-add at the end
-        tc_paragraphs = doc.paragraphs[tc_idx:]
-        tc_texts = [p.text for p in tc_paragraphs]
         # Start a fresh doc with same section settings
         doc = Document()
         new_sec = doc.sections[0]
@@ -996,16 +1024,34 @@ def build_docx_for_quote(db: Session, quote_id: int) -> BytesIO:
         # Days
         for i, day in enumerate(qout.days or []):
             _insert_day_block(doc, qout, day, i, usable_width_cm)
-        # Page break then re-add T&C heading and texts
+        # Page break then re-add T&C with specific style
         doc.add_page_break()
-        # Heading
-        h = doc.add_paragraph()
-        hr = h.add_run("Essential Travel Terms and Conditions")
-        hr.bold = True
-        hr.font.size = Pt(18)
-        # Body as plain paragraphs (template had fixed text)
-        for txt in tc_texts[1:] if len(tc_texts) > 1 else []:
-            doc.add_paragraph(txt or "")
+        # Recharger le template pour récupérer le texte des termes et conditions
+        template_doc = Document(str(WORD_TEMPLATE_PATH))
+        template_tc_paragraphs = template_doc.paragraphs[tc_idx:]
+        # Copier le texte et appliquer le style spécifique
+        for source_para in template_tc_paragraphs:
+            target_para = doc.add_paragraph()
+            # Copier le texte en préservant les runs (pour garder gras/italique si nécessaire)
+            if source_para.runs:
+                for source_run in source_para.runs:
+                    target_run = target_para.add_run(source_run.text)
+                    # Préserver le formatage de base (gras, italique) mais appliquer Arial 8
+                    target_run.bold = source_run.bold
+                    target_run.italic = source_run.italic
+                    target_run.underline = source_run.underline
+                    target_run.font.name = 'Arial'
+                    target_run.font.size = Pt(8)
+                    # Préserver la couleur si elle existe
+                    if source_run.font.color and source_run.font.color.rgb:
+                        target_run.font.color.rgb = source_run.font.color.rgb
+            else:
+                # Paragraphe vide, ajouter un run vide avec Arial 8
+                target_run = target_para.add_run("")
+                target_run.font.name = 'Arial'
+                target_run.font.size = Pt(8)
+            # Appliquer le style de paragraphe spécifique
+            _apply_terms_conditions_style(target_para)
 
     # Save to memory
     out = BytesIO()
