@@ -6,8 +6,9 @@ export default function DayHero({ day, dayIdx, onEdit, showActionIcons = true, s
 
   const imgs = Array.isArray(day?.decorative_images) ? day.decorative_images.slice(0, 2) : [];
   const hasAny = imgs.length > 0;
-  // If no images, do not render container (per spec: show nothing on empty days)
-  if (!hasAny) return null;
+  // Always render if showActionIcons is true, even without images
+  // This allows users to add images even when none exist yet
+  if (!hasAny && !showActionIcons) return null;
 
   // Local anti-flicker flags
   const [l1, setL1] = useState(false);
@@ -38,6 +39,28 @@ export default function DayHero({ day, dayIdx, onEdit, showActionIcons = true, s
   const ph = "https://source.unsplash.com/303x198/?travel";
 
   if (!showImages) return null;
+
+  // If no images, show compact version with just the edit icon
+  if (!hasAny) {
+    return (
+      <div className="day-hero-wrapper day-hero-wrapper-compact" aria-label={`Day ${dayIdx + 1} photos`}>
+        {showActionIcons && (
+          <button
+            type="button"
+            className="day-hero-edit-btn"
+            onClick={onEdit}
+            aria-label="Edit day photos"
+            title="Edit day photos"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M4 20l4.6-1.2 8.9-8.9a2.2 2.2 0 0 0 0-3.1l-.2-.2a2.2 2.2 0 0 0-3.1 0L5.3 15.5 4 20z"/>
+              <path d="M13.5 6.5l4 4"/>
+            </svg>
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="day-hero-wrapper" aria-label={`Day ${dayIdx + 1} photos`}>

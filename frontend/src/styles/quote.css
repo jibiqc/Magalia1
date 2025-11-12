@@ -1829,6 +1829,12 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   position: relative; /* anchor for edit overlay */
 }
 
+.day-hero-wrapper-compact {
+  height: 32px; /* minimal height for just the icon */
+  margin: 4px 0 8px 0; /* reduced margins */
+  justify-content: flex-end; /* align icon to the right */
+}
+
 .day-hero-container {
   width: 303px;
   height: 198px;
