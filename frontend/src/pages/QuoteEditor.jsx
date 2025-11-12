@@ -561,7 +561,14 @@ export default function QuoteEditor(){
 
   // Destination modal state
 
-  const [destModal, setDestModal] = useState({ open: false, quoteId: null, startDate: null });
+  const [destModal, setDestModal] = useState({ 
+    open: false, 
+    quoteId: null, 
+    startDate: null,
+    dayId: null,
+    initialDestination: "",
+    initialNights: 1
+  });
   // Car Rental modal state
   const [carModalOpen, setCarModalOpen] = useState(false);
   // Other modals state
@@ -3733,6 +3740,7 @@ export default function QuoteEditor(){
                       onClick={(e) => {
                         e.stopPropagation(); // don't change selection
                         const qid = (q && q.id) || null;
+                        const dayId = d?.id || null; // Utiliser l'ID du jour pour identification fiable
                         // Compute initial destination and contiguous nights starting at this day
                         const startISO = d?.date || null;
                         const initialDestination = (d && d.destination) ? d.destination : "";
@@ -3760,6 +3768,7 @@ export default function QuoteEditor(){
                         setDestModal({
                           open: true,
                           quoteId: qid,
+                          dayId: dayId,
                           startDate: startISO,
                           initialDestination,
                           initialNights
@@ -4353,15 +4362,32 @@ export default function QuoteEditor(){
         <DestinationRangeModal
           open={destModal.open}
           quoteId={destModal.quoteId ?? ((q && q.id) || null)}
+          dayId={destModal.dayId}
           startDate={destModal.startDate}
           initialDestination={destModal.initialDestination || ""}
           initialNights={destModal.initialNights || 1}
           ensureQuoteId={ensureQuoteId}
-          onClose={() => setDestModal({ open: false, quoteId: null, startDate: null })}
+          onClose={() => setDestModal({ 
+            open: false, 
+            quoteId: null, 
+            startDate: null,
+            dayId: null,
+            initialDestination: "",
+            initialNights: 1
+          })}
           onApplied={async () => {
             const qid = destModal.quoteId ?? ((q && q.id) || null);
-            setDestModal({ open: false, quoteId: null, startDate: null, initialDestination: "", initialNights: 1 });
+            setDestModal({ 
+              open: false, 
+              quoteId: null, 
+              startDate: null,
+              dayId: null,
+              initialDestination: "", 
+              initialNights: 1 
+            });
             if (qid) {
+              // Petit délai pour laisser le backend se synchroniser
+              await new Promise(resolve => setTimeout(resolve, 150));
               await fetchQuote(qid);
               try {
                 await api.repriceQuote(qid);

@@ -623,10 +623,29 @@ def patch_days_by_range(
             db.flush()
             dest_name = new_dest.name
         
+        # Determine start date: use day_id if provided, otherwise use start_date
+        start_date = None
+        if payload.day_id:
+            # Find the day by ID and get its date
+            start_day = db.query(QuoteDay).filter(
+                QuoteDay.id == payload.day_id,
+                QuoteDay.quote_id == quote_id
+            ).first()
+            if not start_day:
+                raise HTTPException(status_code=404, detail=f"Day with ID {payload.day_id} not found in quote {quote_id}")
+            start_date = start_day.date
+        elif payload.start_date:
+            start_date = payload.start_date
+        else:
+            raise HTTPException(status_code=400, detail="Either day_id or start_date must be provided")
+        
+        if not start_date:
+            raise HTTPException(status_code=400, detail="Cannot determine start date: day has no date and start_date not provided")
+        
         # Query days where date >= start_date, ordered by date
         days_to_update = db.query(QuoteDay).filter(
             QuoteDay.quote_id == quote_id,
-            QuoteDay.date >= payload.start_date
+            QuoteDay.date >= start_date
         ).order_by(QuoteDay.date).limit(payload.nights).all()
         
         # Update each day

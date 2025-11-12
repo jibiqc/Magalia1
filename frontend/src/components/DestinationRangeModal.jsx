@@ -5,6 +5,7 @@ import { api } from "../lib/api";
 export default function DestinationRangeModal({
   open = true,
   quoteId,
+  dayId = null,
   startDate,
   initialDestination = "",
   initialNights = 1,
@@ -137,6 +138,13 @@ export default function DestinationRangeModal({
         return;
       }
       
+      // Validation: s'assurer qu'on a dayId ou startDate
+      if (!dayId && !startDate) {
+        setError("Day ID or start date is required");
+        setApplying(false);
+        return;
+      }
+      
       const finalName = destInput.trim();
       if (!finalName) {
         setError("Destination name is required");
@@ -175,13 +183,20 @@ export default function DestinationRangeModal({
           destinationName = selectedDest.name;
         }
 
-        // Patch days
+        // Patch days - utiliser dayId en priorité si disponible
         const payload = {
-          start_date: startDate,
           nights,
           destination: destinationName,
           overwrite: true,
         };
+        
+        // Utiliser dayId en priorité, sinon startDate
+        if (dayId) {
+          payload.day_id = dayId;
+        } else if (startDate) {
+          payload.start_date = startDate;
+        }
+        
         await api.patchQuoteDays(qid, payload);
 
         // Success - call parent callback
