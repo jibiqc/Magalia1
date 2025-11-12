@@ -12,6 +12,7 @@ export default function FlightModal({
   const [from, setFrom] = useState(initialData?.from || "");
   const [to, setTo] = useState(initialData?.to || "");
   const [airline, setAirline] = useState(initialData?.airline || "");
+  const [class_of_service, setClassOfService] = useState(initialData?.class_of_service || "");
   const [dep_time, setDepTime] = useState(initialData?.dep_time || "");
   const [arr_time, setArrTime] = useState(initialData?.arr_time || "");
   const [description, setDescription] = useState(initialData?.note || initialData?.description || "");
@@ -30,6 +31,7 @@ export default function FlightModal({
         setFrom(initialData.from || "");
         setTo(initialData.to || "");
         setAirline(initialData.airline || "");
+        setClassOfService(initialData.class_of_service || "");
         setDepTime(initialData.dep_time || "");
         setArrTime(initialData.arr_time || "");
         setDescription(initialData.note || initialData.description || "");
@@ -40,6 +42,7 @@ export default function FlightModal({
         setFrom("");
         setTo("");
         setAirline("");
+        setClassOfService("");
         setDepTime("");
         setArrTime("");
         setDescription("");
@@ -53,7 +56,7 @@ export default function FlightModal({
 
   const handleSubmit = () => {
     onSubmit({
-      from, to, airline, dep_time, arr_time,
+      from, to, airline, class_of_service, dep_time, arr_time,
       seat_res_opt,                    // persisted choice
       note: description, description, internal_note
     });
@@ -114,6 +117,17 @@ export default function FlightModal({
               value={airline}
               onChange={(e) => setAirline(e.target.value)}
               placeholder=""
+            />
+          </div>
+
+          <div className="field">
+            <label>Class of service</label>
+            <input
+              type="text"
+              className="input"
+              value={class_of_service}
+              onChange={(e) => setClassOfService(e.target.value)}
+              placeholder="e.g., Business, Economy, 1st, 2nd"
             />
           </div>
 

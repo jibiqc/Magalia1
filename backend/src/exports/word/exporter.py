@@ -412,7 +412,22 @@ def _fmt_service_title(line):
         elif data.get("seat_res") is False:
             suffix = " without seat reservations (open seating)"
         title = f"{cls_prefix}Ferry from {from_loc} to {to_loc}{suffix}"
-    elif cat in ("Private Transfer", "Flight"):
+    elif cat == "Flight":
+        # Reconstruire le titre comme dans ServiceCard avec class_of_service
+        data = rj
+        airline = data.get("airline") or "Airline"
+        cls = (data.get("class_of_service") or "").strip()
+        cls_prefix = f"{cls} " if cls else ""
+        from_loc = data.get("from") or "?"
+        to_loc = data.get("to") or "?"
+        suffix = ""
+        choice = data.get("seat_res_opt")
+        if choice == "with":
+            suffix = " with seat reservations"
+        elif data.get("seat_res") is True or data.get("with_seats") is True:
+            suffix = " with seat reservations"
+        title = f"{cls_prefix}{airline} flight from {from_loc} to {to_loc}{suffix}"
+    elif cat == "Private Transfer":
         # Afficher tel quel, pas de normalisation destructrice
         title = _get_attr(line, "title") or title
     # CAR RENTAL - construire le titre comme dans ServiceCard

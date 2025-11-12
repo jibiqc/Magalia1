@@ -124,6 +124,43 @@ const cleanRoom = title => {
   return t || title || "Room";
 };
 
+// Helper function to convert ordinal suffixes (1st, 2nd, 3rd, etc.) to superscript
+function formatOrdinals(text) {
+  if (typeof text !== 'string') return text;
+  
+  // Pattern to match ordinal numbers: 1st, 2nd, 3rd, 4th, etc.
+  const ordinalPattern = /(\d+)(st|nd|rd|th)/gi;
+  
+  const parts = [];
+  let lastIndex = 0;
+  let match;
+  
+  while ((match = ordinalPattern.exec(text)) !== null) {
+    // Add text before the match
+    if (match.index > lastIndex) {
+      parts.push(text.slice(lastIndex, match.index));
+    }
+    
+    // Add number with superscript suffix
+    parts.push(
+      <React.Fragment key={match.index}>
+        {match[1]}
+        <sup>{match[2]}</sup>
+      </React.Fragment>
+    );
+    
+    lastIndex = ordinalPattern.lastIndex;
+  }
+  
+  // Add remaining text
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  
+  // If no matches found, return original text
+  return parts.length > 0 ? <>{parts}</> : text;
+}
+
 export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onChangeLocalData, onDragFromHandle, showActionIcons = true, showDescriptions = true }) {
   const { category } = line;
   // For backend lines, data is in raw_json; for local lines, it's in line.data
@@ -253,15 +290,17 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
       } else if (data?.seat_res === true || data?.with_seats === true) {
         suffix = " with seat reservations";
       }
-      title = `${data?.airline||"Airline"} flight from ${data?.from||"?"} to ${data?.to||"?"}${suffix}`;
+      const cls = data?.class_of_service ? `${data.class_of_service} ` : "";
+      const airline = data?.airline || "Airline";
+      title = formatOrdinals(`${cls}${airline} flight from ${data?.from||"?"} to ${data?.to||"?"}${suffix}`);
       subtitle = `Departure at ${fmtAMPM(data?.dep_time)}; arrival at ${fmtAMPM(data?.arr_time)} – Schedule subject to change`;
       note = data?.note || "";
       break;
     }
     case "Train": {
-      // Afficher "Train" juste après le class_type
+      // Afficher "train" en minuscule après le class_type
       const classType = data?.class_type || "First Class";
-      const base = `${classType} Train from ${data?.from||"?"} to ${data?.to||"?"}`;
+      const base = `${classType} train from ${data?.from||"?"} to ${data?.to||"?"}`;
       // Back-compat: legacy boolean seat_res
       let suffix = "";
       const choice = data?.seat_res_choice;
@@ -270,7 +309,7 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
       else if (choice === "none")    suffix = "";
       else if (data?.seat_res === true)  suffix = " with seat reservations";
       else if (data?.seat_res === false) suffix = " without seat reservations (open seating)";
-      title = base + suffix;
+      title = formatOrdinals(base + suffix);
       subtitle = `Departure at ${fmtAMPM(data?.dep_time)}; arrival at ${fmtAMPM(data?.arr_time)} – Schedule subject to change`;
       note = data?.note || "";
       break;
@@ -285,7 +324,7 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
       else if (choice === "none")    suffix = "";
       else if (data?.seat_res === true)  suffix = " with seat reservations";
       else if (data?.seat_res === false) suffix = " without seat reservations (open seating)";
-      title = `${cls}Ferry from ${data?.from||"?"} to ${data?.to||"?"}${suffix}`;
+      title = formatOrdinals(`${cls}Ferry from ${data?.from||"?"} to ${data?.to||"?"}${suffix}`);
       subtitle = `Departure ${fmtAMPM(data?.dep_time)}; Arrival ${fmtAMPM(data?.arr_time)} – Schedule subject to change`;
       note = data?.note || "";
       break;

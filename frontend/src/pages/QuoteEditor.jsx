@@ -1145,7 +1145,9 @@ export default function QuoteEditor(){
         if (d.seat_res_opt === "with" || d.seat_res === true || d.with_seats === true) {
           suffix = " with seat reservations";
         }
-        title = `${d.airline || "Airline"} flight from ${d.from || "?"} to ${d.to || "?"}${suffix}`;
+        const cls = d.class_of_service ? `${d.class_of_service} ` : "";
+        const airline = d.airline || "Airline";
+        title = `${cls}${airline} flight from ${d.from || "?"} to ${d.to || "?"}${suffix}`;
         // Ensure description field is set (for export compatibility)
         if (rawJson.description === null || rawJson.description === undefined) {
           rawJson.description = d.note || d.description || null;
