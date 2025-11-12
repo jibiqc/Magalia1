@@ -7,7 +7,7 @@ import calendar
 from datetime import datetime
 
 from docx import Document
-from docx.shared import Cm, Pt
+from docx.shared import Cm, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.text.paragraph import Paragraph
 
@@ -88,15 +88,55 @@ def _add_date_line(doc: Document, text: str):
     _set_par_spacing(p, before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_ALL_PT)
     return p
 
+def _add_title_with_ordinals(p: Paragraph, text: str):
+    """Ajoute un titre avec conversion des ordinaux (1st, 2nd, 3rd, etc.) en exposants."""
+    if not text or not isinstance(text, str):
+        return
+    
+    # Pattern pour détecter les ordinaux: 1st, 2nd, 3rd, 4th, etc.
+    ordinal_pattern = re.compile(r'(\d+)(st|nd|rd|th)', re.IGNORECASE)
+    
+    parts = []
+    last_index = 0
+    
+    for match in ordinal_pattern.finditer(text):
+        # Texte avant l'ordinal
+        if match.start() > last_index:
+            parts.append(('normal', text[last_index:match.start()]))
+        
+        # Nombre et suffixe ordinal
+        parts.append(('number', match.group(1)))
+        parts.append(('superscript', match.group(2)))
+        
+        last_index = match.end()
+    
+    # Texte restant après le dernier ordinal
+    if last_index < len(text):
+        parts.append(('normal', text[last_index:]))
+    
+    # Si aucun ordinal trouvé, ajouter tout le texte normalement
+    if not parts:
+        parts.append(('normal', text))
+    
+    # Créer les runs Word
+    for part_type, part_text in parts:
+        if not part_text:
+            continue
+        
+        run = p.add_run(part_text)
+        run.font.name = "Arial"
+        run.font.size = Pt(DAY_PT)
+        run.font.bold = True
+        run.font.color.rgb = TEXT_COLOR
+        run.font.italic = False
+        
+        if part_type == 'superscript':
+            run.font.superscript = True
+
 def _add_day_title(doc: Document, text: str):
     # Day/service titles: Arial 10, bold, color; after 0
     p = doc.add_paragraph()
-    r = p.add_run(text)
-    r.font.name = "Arial"
-    r.font.size = Pt(DAY_PT)
-    r.font.bold = True
-    r.font.color.rgb = TEXT_COLOR
-    r.italic = False
+    _add_title_with_ordinals(p, text)
     _set_par_spacing(p, before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_ALL_PT)
     return p
 
@@ -120,67 +160,91 @@ def _add_title_with_html_formatting(p: Paragraph, html_text: str):
     """Ajoute un titre avec formatage HTML (gras pour <strong>/<b>)."""
     import bleach
     
-    # S'assurer que html_text est une chaîne
-    if not html_text or not isinstance(html_text, str):
-        return
-    
-    # Vérifier s'il y a des balises HTML
-    has_html_tags = bool(re.search(r'<(strong|b)>', html_text, flags=re.I))
-    
-    if has_html_tags:
-        # Extraire les segments avec/sans gras
-        pos = 0
-        for m in re.finditer(r'<(strong|b)>(.*?)</(strong|b)>', html_text, flags=re.I):
-            # Texte avant le gras
-            before = bleach.clean(html_text[pos:m.start()], tags=[], strip=True)
-            # Décoder les entités HTML comme &amp; en &
-            if before:
-                before = html.unescape(before)
-            if before:
-                run = p.add_run(before)
+    try:
+        # S'assurer que html_text est une chaîne
+        if not html_text or not isinstance(html_text, str):
+            return
+        
+        # Vérifier s'il y a des balises HTML
+        has_html_tags = bool(re.search(r'<(strong|b)>', html_text, flags=re.I))
+        
+        if has_html_tags:
+            # Extraire les segments avec/sans gras
+            pos = 0
+            for m in re.finditer(r'<(strong|b)>(.*?)</(strong|b)>', html_text, flags=re.I):
+                # Texte avant le gras
+                before = bleach.clean(html_text[pos:m.start()], tags=[], strip=True)
+                # Décoder les entités HTML comme &amp; en &
+                if before:
+                    before = html.unescape(before)
+                if before:
+                    run = p.add_run(before)
+                    run.font.name = "Arial"
+                    run.font.size = Pt(DAY_PT)
+                    run.font.bold = True  # Titre en gras par défaut
+                    run.font.color.rgb = TEXT_COLOR
+                    run.font.italic = False
+                # Texte en gras (déjà en gras, donc on garde)
+                bold_text = bleach.clean(m.group(2), tags=[], strip=True)
+                # Décoder les entités HTML
+                if bold_text:
+                    bold_text = html.unescape(bold_text)
+                if bold_text:
+                    run = p.add_run(bold_text)
+                    run.font.bold = True
+                    run.font.name = "Arial"
+                    run.font.size = Pt(DAY_PT)
+                    run.font.color.rgb = TEXT_COLOR
+                    run.font.italic = False
+                pos = m.end()
+            # Texte restant après le dernier gras
+            remaining = bleach.clean(html_text[pos:], tags=[], strip=True)
+            # Décoder les entités HTML
+            if remaining:
+                remaining = html.unescape(remaining)
+            if remaining:
+                run = p.add_run(remaining)
                 run.font.name = "Arial"
                 run.font.size = Pt(DAY_PT)
                 run.font.bold = True  # Titre en gras par défaut
                 run.font.color.rgb = TEXT_COLOR
                 run.font.italic = False
-            # Texte en gras (déjà en gras, donc on garde)
-            bold_text = bleach.clean(m.group(2), tags=[], strip=True)
+        else:
+            # Si pas de HTML, ajouter tout le texte en gras
+            clean_text = bleach.clean(html_text, tags=[], strip=True)
             # Décoder les entités HTML
-            if bold_text:
-                bold_text = html.unescape(bold_text)
-            if bold_text:
-                run = p.add_run(bold_text)
-                run.font.bold = True
+            if clean_text:
+                clean_text = html.unescape(clean_text)
+            if clean_text:
+                run = p.add_run(clean_text)
                 run.font.name = "Arial"
                 run.font.size = Pt(DAY_PT)
+                run.font.bold = True
                 run.font.color.rgb = TEXT_COLOR
                 run.font.italic = False
-            pos = m.end()
-        # Texte restant après le dernier gras
-        remaining = bleach.clean(html_text[pos:], tags=[], strip=True)
-        # Décoder les entités HTML
-        if remaining:
-            remaining = html.unescape(remaining)
-        if remaining:
-            run = p.add_run(remaining)
-            run.font.name = "Arial"
-            run.font.size = Pt(DAY_PT)
-            run.font.bold = True  # Titre en gras par défaut
-            run.font.color.rgb = TEXT_COLOR
-            run.font.italic = False
-    else:
-        # Si pas de HTML, ajouter tout le texte en gras
-        clean_text = bleach.clean(html_text, tags=[], strip=True)
-        # Décoder les entités HTML
-        if clean_text:
-            clean_text = html.unescape(clean_text)
-        if clean_text:
-            run = p.add_run(clean_text)
-            run.font.name = "Arial"
-            run.font.size = Pt(DAY_PT)
-            run.font.bold = True
-            run.font.color.rgb = TEXT_COLOR
-            run.font.italic = False
+    except Exception as e:
+        # En cas d'erreur, ajouter le texte brut sans formatage HTML
+        print(f"WARNING: Error parsing HTML in title: {e}, using plain text")
+        try:
+            clean_text = bleach.clean(str(html_text), tags=[], strip=True) if html_text else ""
+            if clean_text:
+                clean_text = html.unescape(clean_text)
+            if clean_text:
+                run = p.add_run(clean_text)
+                run.font.name = "Arial"
+                run.font.size = Pt(DAY_PT)
+                run.font.bold = True
+                run.font.color.rgb = TEXT_COLOR
+                run.font.italic = False
+        except Exception:
+            # Dernier recours : texte brut
+            if html_text:
+                run = p.add_run(str(html_text))
+                run.font.name = "Arial"
+                run.font.size = Pt(DAY_PT)
+                run.font.bold = True
+                run.font.color.rgb = TEXT_COLOR
+                run.font.italic = False
 
 # --- Helper pour accéder aux attributs (dict ou objet) ---
 def _get_attr(obj, key, default=None):
@@ -221,6 +285,58 @@ def _fmt_ampm(hhmm: str) -> str:
     h = (h % 12) or 12
     return f"{h}:{m} {suf}"
 
+def _pretty_duration(duration_str: str) -> str:
+    """Formate une durée comme dans ServiceCard (prettyDur)."""
+    if not duration_str:
+        return ""
+    duration_str = str(duration_str).strip()
+    if not duration_str:
+        return ""
+    
+    # Pattern: 3h30 ou 3:30 ou "3 30"
+    m = re.match(r'^(\d+)\s*(?:h|:|\s)\s*(\d{1,2})$', duration_str, re.I)
+    if m:
+        total_mins = int(m.group(1)) * 60 + int(m.group(2))
+        h = total_mins // 60
+        m = total_mins % 60
+        if h and m:
+            return f"{h}h {m}m"
+        if h:
+            return f"{h}h"
+        return f"{m}m"
+    
+    # Pattern: 3h
+    m = re.match(r'^(\d+)\s*h$', duration_str, re.I)
+    if m:
+        h = int(m.group(1))
+        return f"{h}h"
+    
+    # Pattern: 90m / 90min
+    m = re.match(r'^(\d+)\s*m(?:in)?$', duration_str, re.I)
+    if m:
+        total_mins = int(m.group(1))
+        h = total_mins // 60
+        m = total_mins % 60
+        if h and m:
+            return f"{h}h {m}m"
+        if h:
+            return f"{h}h"
+        return f"{m}m"
+    
+    # Pattern: plain minutes "150"
+    if re.match(r'^\d+$', duration_str):
+        total_mins = int(duration_str)
+        h = total_mins // 60
+        m = total_mins % 60
+        if h and m:
+            return f"{h}h {m}m"
+        if h:
+            return f"{h}h"
+        return f"{m}m"
+    
+    # Sinon, retourner tel quel
+    return duration_str
+
 def _fmt_service_title(line):
     cat = (_get_attr(line, "category") or "").strip()
     title = _get_attr(line, "title") or cat or "Service"
@@ -256,7 +372,46 @@ def _fmt_service_title(line):
             title = f"{title} at {st_formatted}"
 
     # TRANSPORTS
-    elif cat in ("Private Transfer", "Flight", "Train", "Ferry"):
+    elif cat == "Train":
+        # Reconstruire le titre comme dans ServiceCard avec "train" en minuscule
+        data = rj
+        class_type = data.get("class_type") or "First Class"
+        from_loc = data.get("from") or "?"
+        to_loc = data.get("to") or "?"
+        suffix = ""
+        choice = data.get("seat_res_choice")
+        if choice == "with":
+            suffix = " with seat reservations"
+        elif choice == "without":
+            suffix = " without seat reservations (open seating)"
+        elif choice == "none":
+            suffix = ""
+        elif data.get("seat_res") is True:
+            suffix = " with seat reservations"
+        elif data.get("seat_res") is False:
+            suffix = " without seat reservations (open seating)"
+        title = f"{class_type} train from {from_loc} to {to_loc}{suffix}"
+    elif cat == "Ferry":
+        # Reconstruire le titre comme dans ServiceCard
+        data = rj
+        cls = (data.get("class_type") or "").strip()
+        cls_prefix = f"{cls} " if cls else ""
+        from_loc = data.get("from") or "?"
+        to_loc = data.get("to") or "?"
+        suffix = ""
+        choice = data.get("seat_res_choice")
+        if choice == "with":
+            suffix = " with seat reservations"
+        elif choice == "without":
+            suffix = " without seat reservations (open seating)"
+        elif choice == "none":
+            suffix = ""
+        elif data.get("seat_res") is True:
+            suffix = " with seat reservations"
+        elif data.get("seat_res") is False:
+            suffix = " without seat reservations (open seating)"
+        title = f"{cls_prefix}Ferry from {from_loc} to {to_loc}{suffix}"
+    elif cat in ("Private Transfer", "Flight"):
         # Afficher tel quel, pas de normalisation destructrice
         title = _get_attr(line, "title") or title
     # CAR RENTAL - construire le titre comme dans ServiceCard
@@ -356,255 +511,376 @@ def _insert_two_heroes(doc: Document, url1: str, url2: str):
         pass  # Skip if image fetch fails
 
 def _render_service(doc: Document, line, usable_width_cm: float):
-    cat = (_get_attr(line, "category") or "").strip()
-    rj = _get_attr(line, "raw_json", {}) or {}
-    
-    # Mémoriser l'index du premier paragraphe du service pour gérer les sauts de page
-    # Cela permet de garder tous les éléments du service (titre, sous-titre, description, URL) ensemble
-    service_start_para_idx = len(doc.paragraphs)
-    
-    # 1) Titre - toujours affiché
-    title = _fmt_service_title(line)
-    if title:
-        # Pour Trip info, titre en gras
-        if cat == "Trip info":
-            p = doc.add_paragraph()
-            r = p.add_run(title)
-            r.font.name = "Arial"
-            r.font.size = Pt(DAY_PT)
-            r.font.bold = True  # Gras pour Trip info
-            r.font.italic = False  # Pas d'italique pour Trip info
-            r.font.color.rgb = TEXT_COLOR
-            _set_par_spacing(p, before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_ALL_PT)
-        # Pour Car Rental, parser le HTML pour préserver le formatage (gras pour SUV, CDW, etc.)
-        elif cat == "Car Rental":
-            p = doc.add_paragraph()
-            # Le titre peut contenir du HTML avec <strong> pour SUV, CDW, etc.
-            # Utiliser une fonction spéciale pour préserver le formatage
-            _add_title_with_html_formatting(p, title)
-            _set_par_spacing(p, before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_ALL_PT)
-        else:
-            _add_day_title(doc, title)
-    added_any = False
+    """Rend un service dans le document Word avec gestion d'erreur robuste."""
+    try:
+        cat = (_get_attr(line, "category") or "").strip()
+        rj = _get_attr(line, "raw_json", {}) or {}
+        
+        # Mémoriser l'index du premier paragraphe du service pour gérer les sauts de page
+        # Cela permet de garder tous les éléments du service (titre, sous-titre, description, URL) ensemble
+        service_start_para_idx = len(doc.paragraphs)
+        
+        # 1) Titre - toujours affiché
+        title = _fmt_service_title(line)
+        if title:
+            # Pour Trip info, titre en italique (pas de gras)
+            if cat == "Trip info":
+                p = doc.add_paragraph()
+                # Utiliser _add_title_with_ordinals mais avec italique au lieu de gras
+                if title:
+                    ordinal_pattern = re.compile(r'(\d+)(st|nd|rd|th)', re.IGNORECASE)
+                    parts = []
+                    last_index = 0
+                    
+                    for match in ordinal_pattern.finditer(title):
+                        if match.start() > last_index:
+                            parts.append(('normal', title[last_index:match.start()]))
+                        parts.append(('number', match.group(1)))
+                        parts.append(('superscript', match.group(2)))
+                        last_index = match.end()
+                    
+                    if last_index < len(title):
+                        parts.append(('normal', title[last_index:]))
+                    
+                    if not parts:
+                        parts.append(('normal', title))
+                    
+                    for part_type, part_text in parts:
+                        if not part_text:
+                            continue
+                        r = p.add_run(part_text)
+                        r.font.name = "Arial"
+                        r.font.size = Pt(DAY_PT)
+                        r.font.bold = False
+                        r.font.italic = True
+                        r.font.color.rgb = TEXT_COLOR
+                        if part_type == 'superscript':
+                            r.font.superscript = True
+                _set_par_spacing(p, before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_ALL_PT)
+            # Pour Car Rental, parser le HTML pour préserver le formatage (gras pour SUV, CDW, etc.)
+            elif cat == "Car Rental":
+                p = doc.add_paragraph()
+                # Le titre peut contenir du HTML avec <strong> pour SUV, CDW, etc.
+                # Utiliser une fonction spéciale pour préserver le formatage
+                _add_title_with_html_formatting(p, title)
+                _set_par_spacing(p, before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_ALL_PT)
+            else:
+                _add_day_title(doc, title)
+        added_any = False
 
-    # 2) Sous-titre pour Flight, Train, Ferry (heures de départ/arrivée)
-    if cat == "Flight":
-        dep_time = rj.get("dep_time") or ""
-        arr_time = rj.get("arr_time") or ""
-        if dep_time or arr_time:
-            subtitle_parts = []
-            if dep_time:
-                subtitle_parts.append(f"Departure at {_fmt_ampm(dep_time)}")
-            if arr_time:
-                subtitle_parts.append(f"arrival at {_fmt_ampm(arr_time)}")
-            if subtitle_parts:
-                subtitle = f"{'; '.join(subtitle_parts)} – Schedule subject to change"
-                _add_normal(doc, subtitle)
-                added_any = True
+        # 2) Sous-titre pour Flight, Train, Ferry (heures de départ/arrivée)
+        if cat == "Flight":
+            dep_time = rj.get("dep_time") or ""
+            arr_time = rj.get("arr_time") or ""
+            if dep_time or arr_time:
+                subtitle_parts = []
+                if dep_time:
+                    subtitle_parts.append(f"Departure at {_fmt_ampm(dep_time)}")
+                if arr_time:
+                    subtitle_parts.append(f"arrival at {_fmt_ampm(arr_time)}")
+                if subtitle_parts:
+                    subtitle = f"{'; '.join(subtitle_parts)} – Schedule subject to change"
+                    _add_normal(doc, subtitle)
+                    added_any = True
     
-    elif cat == "Train":
-        dep_time = rj.get("dep_time") or ""
-        arr_time = rj.get("arr_time") or ""
-        if dep_time or arr_time:
-            subtitle_parts = []
-            if dep_time:
-                subtitle_parts.append(f"Departure at {_fmt_ampm(dep_time)}")
-            if arr_time:
-                subtitle_parts.append(f"arrival at {_fmt_ampm(arr_time)}")
-            if subtitle_parts:
-                subtitle = f"{'; '.join(subtitle_parts)} – Schedule subject to change"
-                _add_normal(doc, subtitle)
-                added_any = True
-    
-    elif cat == "Ferry":
-        dep_time = rj.get("dep_time") or ""
-        arr_time = rj.get("arr_time") or ""
-        if dep_time or arr_time:
-            subtitle_parts = []
-            if dep_time:
-                subtitle_parts.append(f"Departure {_fmt_ampm(dep_time)}")
-            if arr_time:
-                subtitle_parts.append(f"Arrival {_fmt_ampm(arr_time)}")
-            if subtitle_parts:
-                subtitle = f"{'; '.join(subtitle_parts)} – Schedule subject to change"
-                _add_normal(doc, subtitle)
-                added_any = True
+        elif cat == "Train":
+            dep_time = rj.get("dep_time") or ""
+            arr_time = rj.get("arr_time") or ""
+            if dep_time or arr_time:
+                subtitle_parts = []
+                if dep_time:
+                    subtitle_parts.append(f"Departure at {_fmt_ampm(dep_time)}")
+                if arr_time:
+                    subtitle_parts.append(f"arrival at {_fmt_ampm(arr_time)}")
+                if subtitle_parts:
+                    subtitle = f"{'; '.join(subtitle_parts)} – Schedule subject to change"
+                    _add_normal(doc, subtitle)
+                    added_any = True
+        
+        elif cat == "Ferry":
+            dep_time = rj.get("dep_time") or ""
+            arr_time = rj.get("arr_time") or ""
+            if dep_time or arr_time:
+                subtitle_parts = []
+                if dep_time:
+                    subtitle_parts.append(f"Departure {_fmt_ampm(dep_time)}")
+                if arr_time:
+                    subtitle_parts.append(f"Arrival {_fmt_ampm(arr_time)}")
+                if subtitle_parts:
+                    subtitle = f"{'; '.join(subtitle_parts)} – Schedule subject to change"
+                    _add_normal(doc, subtitle)
+                    added_any = True
 
-    # 3) Corps - description
-    fields = rj.get("fields", {}) or {}
-    desc = fields.get("full_description") or rj.get("description") or rj.get("note") or _get_attr(line, "description", "") or ""
-    
-    # Pour Car Rental, construire la description comme dans ServiceCard (feeLine + desc + licenceLine)
-    if cat == "Car Rental":
-        data = rj  # raw_json contient les données du modal
-        fee_line = ""
-        one_way_fee = data.get("one_way_fee")
-        if one_way_fee and float(str(one_way_fee).replace(",", ".") or "0") > 0:
-            try:
-                fee_value = float(str(one_way_fee).replace(",", "."))
-                fee_line = f"Estimate One Way Fee: ${int(fee_value)} – to be paid locally"
-            except (ValueError, TypeError):
-                pass
+        # Description (corps) - affichée après les sous-titres
+        fields = rj.get("fields", {}) or {}
+        desc = fields.get("full_description") or rj.get("description") or rj.get("note") or _get_attr(line, "description", "") or ""
         
-        car_desc = data.get("description") or data.get("notes") or desc or ""
-        
-        # Fonction helper pour normaliser et comparer les textes
-        def _normalize_for_comparison(text):
-            """Normalise le texte pour la comparaison : supprime HTML, normalise espaces, en minuscules"""
-            if not text:
-                return ""
-            # Supprimer HTML
-            text_no_html = re.sub(r'<[^>]+>', '', text)
-            # Normaliser espaces
-            text_normalized = re.sub(r'\s+', ' ', text_no_html.strip())
-            return text_normalized.lower()
-        
-        # Éviter la duplication : si car_desc contient le titre (ou est identique au titre), ne pas l'inclure
-        # Le titre est déjà affiché séparément, donc on ne veut pas le répéter dans la description
-        if title and car_desc:
-            title_norm = _normalize_for_comparison(title)
-            car_desc_norm = _normalize_for_comparison(car_desc)
-            
-            # Si car_desc est identique au titre ou contient le titre, le vider
-            if car_desc_norm == title_norm or title_norm in car_desc_norm:
-                car_desc = ""
-            # Vérifier aussi si le titre commence par "pick up car" et si car_desc commence de la même manière
-            elif title_norm.startswith("pick up car") and car_desc_norm.startswith("pick up car"):
-                # Si les deux commencent par "pick up car", comparer les premiers mots (jusqu'à 10 mots pour être sûr)
-                title_words = title_norm.split()[:10]  # Premiers 10 mots
-                car_desc_words = car_desc_norm.split()[:10]
-                # Comparer si les mots sont identiques
-                if len(title_words) > 0 and title_words == car_desc_words[:len(title_words)]:
-                    car_desc = ""
-        
-        licence_line = ""
-        if data.get("intl_driver_license"):
-            licence_line = "An international driver's license is mandatory to pick up the car. A physical hard copy is required, as digital copies are not accepted locally. Please note that it may take up to 15 days to obtain the license."
-        
-        # Construire la description complète comme dans ServiceCard
-        desc_parts = [fee_line, car_desc, licence_line]
-        desc = "\n\n".join([p for p in desc_parts if p.strip()])
-    
-    # Pour New Service, la description est déjà dans le sous-titre, donc on ne la répète pas
-    # Pour New Hotel, utiliser description depuis raw_json
-    elif cat == "New Hotel":
-        desc = rj.get("description") or ""
-    elif cat == "New Service":
-        # La description est déjà dans le sous-titre, donc on ne l'affiche pas ici
-        desc = ""
-    
-    # Pour ces catégories spécifiques, on s'assure d'exporter le texte même s'il est dans le titre
-    # MAIS: pour Flight/Train/Ferry, si on a déjà affiché le sous-titre avec les heures, on n'utilise PAS le titre comme description
-    has_subtitle = cat in ("Flight", "Train", "Ferry") and (rj.get("dep_time") or rj.get("arr_time"))
-    
-    if cat in ("Flight", "Train", "Ferry", "Trip info"):
-        # Si pas de description et qu'on n'a pas de sous-titre, on peut utiliser le titre comme description (fallback)
-        if not desc and title and not has_subtitle:
-            desc = title
-
-    if desc:
-        # Pour Trip info, description en italique
-        para_count_before = len(doc.paragraphs)
-        p_desc = doc.add_paragraph()
-        if cat == "Trip info":
-            # Description en italique (pas de gras)
-            append_sanitized_html_to_docx(p_desc, desc, allow_italic=True)
-            # Forcer italique et pas de gras pour tous les runs
-            para_count_after = len(doc.paragraphs)
-            for i in range(para_count_before, para_count_after):
-                for run in doc.paragraphs[i].runs:
-                    run.font.italic = True
-                    run.font.bold = False
-                _set_par_spacing(doc.paragraphs[i], before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_NORMAL_PT)
-        else:
-            # Autres catégories : italique autorisé seulement pour Trip info (mais on est déjà dans le else)
-            append_sanitized_html_to_docx(p_desc, desc, allow_italic=False)
-            # Apply spacing to all generated paragraphs
-            para_count_after = len(doc.paragraphs)
-            for i in range(para_count_before, para_count_after):
-                _set_par_spacing(doc.paragraphs[i], before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_NORMAL_PT)
-        added_any = True
-
-    # 3) Sous-titre pour New Service (duration et description)
-    if cat == "New Service":
-        data = rj  # raw_json contient les données du modal
-        start_time = data.get("start_time") or ""
-        end_time = data.get("end_time") or ""
-        duration = data.get("duration") or ""
-        
-        subtitle_parts = []
-        # Calculer la durée si start_time et end_time sont disponibles
-        if start_time and end_time and ":" in start_time and ":" in end_time:
-            try:
-                start_parts = start_time.split(":")
-                end_parts = end_time.split(":")
-                start_mins = int(start_parts[0]) * 60 + int(start_parts[1] if len(start_parts) > 1 else 0)
-                end_mins = int(end_parts[0]) * 60 + int(end_parts[1] if len(end_parts) > 1 else 0)
-                diff_mins = ((end_mins - start_mins + 1440) % 1440)
-                if diff_mins > 0:
-                    hours = diff_mins // 60
-                    mins = diff_mins % 60
-                    if mins > 0:
-                        duration_str = f"{hours}h{mins:02d}"
+        # Pour les activités, ajouter la duration au début de la description si elle existe
+        # (pour l'export Excel, même si elle est déjà dans le sous-titre)
+        if cat in ("Activity", "Small Group", "Private"):
+            # Chercher la duration dans raw_json ou fields
+            duration = rj.get("duration") or fields.get("activity_duration") or ""
+            if duration and str(duration).strip():
+                duration_formatted = _pretty_duration(str(duration))
+                if duration_formatted:
+                    # Si la description existe, ajouter la duration au début avec un saut de ligne
+                    if desc:
+                        desc = f"Duration: {duration_formatted}\n{desc}"
                     else:
-                        duration_str = f"{hours}h"
+                        # Si pas de description, créer une description avec juste la duration
+                        desc = f"Duration: {duration_formatted}"
+        
+        # Pour Car Rental, construire la description comme dans ServiceCard (feeLine + desc + licenceLine)
+        if cat == "Car Rental":
+            data = rj  # raw_json contient les données du modal
+            fee_line = ""
+            one_way_fee = data.get("one_way_fee")
+            if one_way_fee and float(str(one_way_fee).replace(",", ".") or "0") > 0:
+                try:
+                    fee_value = float(str(one_way_fee).replace(",", "."))
+                    fee_line = f"Estimate One Way Fee: ${int(fee_value)} – to be paid locally"
+                except (ValueError, TypeError):
+                    pass
+            
+            car_desc = data.get("description") or data.get("notes") or desc or ""
+            
+            # Fonction helper pour normaliser et comparer les textes
+            def _normalize_for_comparison(text):
+                """Normalise le texte pour la comparaison : supprime HTML, normalise espaces, en minuscules"""
+                if not text:
+                    return ""
+                # Supprimer HTML
+                text_no_html = re.sub(r'<[^>]+>', '', text)
+                # Normaliser espaces
+                text_normalized = re.sub(r'\s+', ' ', text_no_html.strip())
+                return text_normalized.lower()
+            
+            # Éviter la duplication : si car_desc contient le titre (ou est identique au titre), ne pas l'inclure
+            # Le titre est déjà affiché séparément, donc on ne veut pas le répéter dans la description
+            if title and car_desc:
+                title_norm = _normalize_for_comparison(title)
+                car_desc_norm = _normalize_for_comparison(car_desc)
+                
+                # Si car_desc est identique au titre ou contient le titre, le vider
+                if car_desc_norm == title_norm or title_norm in car_desc_norm:
+                    car_desc = ""
+                # Vérifier aussi si le titre commence par "pick up car" et si car_desc commence de la même manière
+                elif title_norm.startswith("pick up car") and car_desc_norm.startswith("pick up car"):
+                    # Si les deux commencent par "pick up car", comparer les premiers mots (jusqu'à 10 mots pour être sûr)
+                    title_words = title_norm.split()[:10]  # Premiers 10 mots
+                    car_desc_words = car_desc_norm.split()[:10]
+                    # Comparer si les mots sont identiques
+                    if len(title_words) > 0 and title_words == car_desc_words[:len(title_words)]:
+                        car_desc = ""
+            
+            licence_line = ""
+            if data.get("intl_driver_license"):
+                licence_line = "An international driver's license is mandatory to pick up the car. A physical hard copy is required, as digital copies are not accepted locally. Please note that it may take up to 15 days to obtain the license."
+            
+            # Construire la description complète comme dans ServiceCard
+            desc_parts = [fee_line, car_desc, licence_line]
+            desc = "\n\n".join([p for p in desc_parts if p.strip()])
+    
+        # Pour New Service, la description est déjà dans le sous-titre, donc on ne la répète pas
+        # Pour New Hotel, utiliser description depuis raw_json
+        elif cat == "New Hotel":
+            desc = rj.get("description") or ""
+        elif cat == "New Service":
+            # La description est déjà dans le sous-titre, donc on ne l'affiche pas ici
+            desc = ""
+        
+        # Pour ces catégories spécifiques, on s'assure d'exporter le texte même s'il est dans le titre
+        # MAIS: pour Flight/Train/Ferry, si on a déjà affiché le sous-titre avec les heures, on n'utilise PAS le titre comme description
+        has_subtitle = cat in ("Flight", "Train", "Ferry") and (rj.get("dep_time") or rj.get("arr_time"))
+        
+        if cat in ("Flight", "Train", "Ferry", "Trip info"):
+            # Si pas de description et qu'on n'a pas de sous-titre, on peut utiliser le titre comme description (fallback)
+            if not desc and title and not has_subtitle:
+                desc = title
+
+        if desc:
+            # Pour Trip info, description en italique
+            para_count_before = len(doc.paragraphs)
+            p_desc = doc.add_paragraph()
+            if cat == "Trip info":
+                # Description en italique (pas de gras)
+                append_sanitized_html_to_docx(p_desc, desc, allow_italic=True)
+                # Forcer italique et pas de gras pour tous les runs
+                para_count_after = len(doc.paragraphs)
+                for i in range(para_count_before, para_count_after):
+                    for run in doc.paragraphs[i].runs:
+                        run.font.italic = True
+                        run.font.bold = False
+                    _set_par_spacing(doc.paragraphs[i], before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_NORMAL_PT)
+            else:
+                # Autres catégories : italique autorisé seulement pour Trip info (mais on est déjà dans le else)
+                append_sanitized_html_to_docx(p_desc, desc, allow_italic=False)
+                # Apply spacing to all generated paragraphs
+                para_count_after = len(doc.paragraphs)
+                for i in range(para_count_before, para_count_after):
+                    _set_par_spacing(doc.paragraphs[i], before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_NORMAL_PT)
+            added_any = True
+
+        # 3) Sous-titre pour Activity (catalogue) avec duration
+        if cat in ("Activity", "Small Group", "Private"):
+            is_catalog_activity = bool(rj.get("catalog_id"))
+            if is_catalog_activity:
+                duration = rj.get("duration") or ""
+                subtitle_parts = []
+                if duration and str(duration).strip():
+                    duration_formatted = _pretty_duration(str(duration))
+                    if duration_formatted:
+                        subtitle_parts.append(f"Duration: {duration_formatted}")
+                
+                # Description dans le sous-titre (comme dans ServiceCard)
+                desc_for_subtitle = rj.get("description") or ""
+                if desc_for_subtitle:
+                    subtitle_parts.append(desc_for_subtitle)
+                
+                if subtitle_parts:
+                    subtitle = "\n".join(subtitle_parts)
+                    _add_normal(doc, subtitle)
+                    added_any = True
+            else:
+                # Pour les activités non-catalogue, calculer la durée depuis start_time/end_time
+                start_time = rj.get("start_time") or ""
+                end_time = rj.get("end_time") or ""
+                duration = rj.get("duration") or ""
+                subtitle_parts = []
+                
+                # Calculer la durée si start_time et end_time sont disponibles
+                if start_time and end_time and ":" in start_time and ":" in end_time:
+                    try:
+                        start_parts = start_time.split(":")
+                        end_parts = end_time.split(":")
+                        start_mins = int(start_parts[0]) * 60 + int(start_parts[1] if len(start_parts) > 1 else 0)
+                        end_mins = int(end_parts[0]) * 60 + int(end_parts[1] if len(end_parts) > 1 else 0)
+                        diff_mins = ((end_mins - start_mins + 1440) % 1440)
+                        if diff_mins > 0:
+                            hours = diff_mins // 60
+                            mins = diff_mins % 60
+                            if mins > 0:
+                                duration_str = f"{hours}h{mins:02d}"
+                            else:
+                                duration_str = f"{hours}h"
+                            subtitle_parts.append(f"Duration: {duration_str}")
+                        elif diff_mins == -1:
+                            subtitle_parts.append("⚠ End time before start time")
+                    except (ValueError, IndexError):
+                        pass
+                
+                # Sinon utiliser le champ duration s'il existe
+                if not subtitle_parts and duration:
+                    duration_formatted = _pretty_duration(str(duration))
+                    if duration_formatted:
+                        subtitle_parts.append(f"Duration: {duration_formatted}")
+                
+                # Description dans le sous-titre
+                desc_for_subtitle = rj.get("description") or ""
+                if desc_for_subtitle:
+                    subtitle_parts.append(desc_for_subtitle)
+                
+                if subtitle_parts:
+                    subtitle = "\n".join(subtitle_parts)
+                    _add_normal(doc, subtitle)
+                    added_any = True
+
+        # 4) Sous-titre pour New Service (duration et description)
+        elif cat == "New Service":
+            data = rj  # raw_json contient les données du modal
+            start_time = data.get("start_time") or ""
+            end_time = data.get("end_time") or ""
+            duration = data.get("duration") or ""
+            
+            subtitle_parts = []
+            # Calculer la durée si start_time et end_time sont disponibles
+            if start_time and end_time and ":" in start_time and ":" in end_time:
+                try:
+                    start_parts = start_time.split(":")
+                    end_parts = end_time.split(":")
+                    start_mins = int(start_parts[0]) * 60 + int(start_parts[1] if len(start_parts) > 1 else 0)
+                    end_mins = int(end_parts[0]) * 60 + int(end_parts[1] if len(end_parts) > 1 else 0)
+                    diff_mins = ((end_mins - start_mins + 1440) % 1440)
+                    if diff_mins > 0:
+                        hours = diff_mins // 60
+                        mins = diff_mins % 60
+                        if mins > 0:
+                            duration_str = f"{hours}h{mins:02d}"
+                        else:
+                            duration_str = f"{hours}h"
+                        subtitle_parts.append(f"Duration: {duration_str}")
+                except (ValueError, IndexError):
+                    pass
+            
+            # Sinon utiliser le champ duration s'il existe
+            if not subtitle_parts and duration:
+                duration_str = str(duration).strip()
+                if duration_str:
                     subtitle_parts.append(f"Duration: {duration_str}")
-            except (ValueError, IndexError):
-                pass
-        
-        # Sinon utiliser le champ duration s'il existe
-        if not subtitle_parts and duration:
-            duration_str = str(duration).strip()
-            if duration_str:
-                subtitle_parts.append(f"Duration: {duration_str}")
-        
-        # Description dans le sous-titre (comme dans ServiceCard)
-        desc_for_subtitle = data.get("description") or ""
-        if desc_for_subtitle:
-            subtitle_parts.append(desc_for_subtitle)
-        
-        if subtitle_parts:
-            subtitle = "\n".join(subtitle_parts)
-            _add_normal(doc, subtitle)
-            added_any = True
+            
+            # Description dans le sous-titre (comme dans ServiceCard)
+            desc_for_subtitle = data.get("description") or ""
+            if desc_for_subtitle:
+                subtitle_parts.append(desc_for_subtitle)
+            
+            if subtitle_parts:
+                subtitle = "\n".join(subtitle_parts)
+                _add_normal(doc, subtitle)
+                added_any = True
 
-    # 4) Lien hôtel si catégorie Hotel ou New Hotel
-    if cat == "Hotel":
-        _append_hotel_url_if_any(doc, line)
-        added_any = True
-    elif cat == "New Hotel":
-        # Pour New Hotel, l'URL est dans raw_json.hotel_url
-        data = rj
-        url = (data.get("hotel_url") or "").strip()
-        if url:
-            p = doc.add_paragraph()
-            r = p.add_run(url)
-            r.font.name = "Arial"
-            r.font.size = Pt(NORMAL_PT)
-            r.font.color.rgb = TEXT_COLOR
-            r.underline = True
-            r.italic = False
-            _set_par_spacing(p, before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_NORMAL_PT)
+        # 5) Lien hôtel si catégorie Hotel ou New Hotel
+        if cat == "Hotel":
+            _append_hotel_url_if_any(doc, line)
             added_any = True
+        elif cat == "New Hotel":
+            # Pour New Hotel, l'URL est dans raw_json.hotel_url
+            data = rj
+            url = (data.get("hotel_url") or "").strip()
+            if url:
+                p = doc.add_paragraph()
+                r = p.add_run(url)
+                r.font.name = "Arial"
+                r.font.size = Pt(NORMAL_PT)
+                r.font.color.rgb = TEXT_COLOR
+                r.underline = True
+                r.italic = False
+                _set_par_spacing(p, before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_NORMAL_PT)
+                added_any = True
 
-    # Mémoriser l'index du dernier paragraphe du service (avant le _blank_line)
-    # C'est le dernier paragraphe qui fait partie du service (titre, sous-titre, description, URL)
-    service_end_para_idx = len(doc.paragraphs) - 1
-    
-    # 4) Saut de ligne après le dernier élément du service
-    _blank_line(doc)
-    
-    # Appliquer keep_with_next et keep_together sur tous les paragraphes du service pour éviter les coupures
-    # Cela garantit que le titre, sous-titre, description et URL restent ensemble sur la même page
-    # Si le service ne tient pas sur la page, Word le déplacera entièrement sur la page suivante
-    if service_start_para_idx <= service_end_para_idx and service_end_para_idx < len(doc.paragraphs):
-        for para_idx in range(service_start_para_idx, service_end_para_idx + 1):
-            para = doc.paragraphs[para_idx]
-            # keep_with_next garde le paragraphe avec le suivant
-            # En l'appliquant à tous les paragraphes du service, on garantit qu'ils restent ensemble
-            para.paragraph_format.keep_with_next = True
-            # keep_together empêche le paragraphe d'être divisé sur plusieurs pages
-            para.paragraph_format.keep_together = True
+        # Mémoriser l'index du dernier paragraphe du service (avant le _blank_line)
+        # C'est le dernier paragraphe qui fait partie du service (titre, sous-titre, description, URL)
+        service_end_para_idx = len(doc.paragraphs) - 1
+        
+        # 4) Saut de ligne après le dernier élément du service
+        _blank_line(doc)
+        
+        # Appliquer keep_with_next et keep_together sur tous les paragraphes du service pour éviter les coupures
+        # Cela garantit que le titre, sous-titre, description et URL restent ensemble sur la même page
+        # Si le service ne tient pas sur la page, Word le déplacera entièrement sur la page suivante
+        if service_start_para_idx <= service_end_para_idx and service_end_para_idx < len(doc.paragraphs):
+            for para_idx in range(service_start_para_idx, service_end_para_idx + 1):
+                para = doc.paragraphs[para_idx]
+                # keep_with_next garde le paragraphe avec le suivant
+                # En l'appliquant à tous les paragraphes du service, on garantit qu'ils restent ensemble
+                para.paragraph_format.keep_with_next = True
+                # keep_together empêche le paragraphe d'être divisé sur plusieurs pages
+                para.paragraph_format.keep_together = True
+    except Exception as e:
+        # En cas d'erreur, logger et ajouter un message d'erreur dans le document
+        import traceback
+        error_msg = f"Error rendering service: {str(e)}"
+        print(f"ERROR in _render_service: {error_msg}")
+        print(traceback.format_exc())
+        # Ajouter un paragraphe d'erreur dans le document pour ne pas bloquer l'export
+        try:
+            p_err = doc.add_paragraph()
+            r_err = p_err.add_run(f"[Error rendering service: {cat if 'cat' in locals() else 'unknown'}]")
+            r_err.font.name = "Arial"
+            r_err.font.size = Pt(NORMAL_PT)
+            r_err.font.color.rgb = RGBColor(255, 0, 0)  # Rouge pour l'erreur
+            _set_par_spacing(p_err, before_pt=SP_BEFORE_ALL_PT, after_pt=SP_AFTER_NORMAL_PT)
+        except Exception:
+            pass  # Si même l'ajout d'erreur échoue, on ignore
 
 def _render_day_services(doc: Document, day, usable_w_cm: float = None) -> None:
     """Rend tous les services visibles (inclut Flight, Train, Ferry, Car Rental, etc.)."""
@@ -709,11 +985,11 @@ def build_docx_for_quote(db: Session, quote_id: int) -> BytesIO:
         new_sec.bottom_margin = old_sec.bottom_margin
         usable_width_cm = _compute_usable_width_cm(new_sec)
         # Generate content area now on fresh doc
-        title = (getattr(qout, "display_title", None) or getattr(qout, "title", None) or "").strip()
+        title = (_get_attr(qout, "display_title") or _get_attr(qout, "title") or "").strip()
         if title:
             _add_title(doc, title)
         # Global heroes
-        global_heroes = [getattr(qout, "hero_photo_1", None), getattr(qout, "hero_photo_2", None)]
+        global_heroes = [_get_attr(qout, "hero_photo_1"), _get_attr(qout, "hero_photo_2")]
         global_heroes = [u for u in global_heroes if u]
         if len(global_heroes) >= 2:
             _insert_two_heroes(doc, global_heroes[0], global_heroes[1])
