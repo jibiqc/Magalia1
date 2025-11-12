@@ -2371,13 +2371,39 @@ export default function QuoteEditor(){
   }, [q, enableCatalogHotelModal, setCatalogHotelDraft]);
 
   const restoreLine = (id) => {
+    const trashItem = trashLines.find(x => x.id === id);
+    if (!trashItem) return;
+    
     setTrashLines(t => t.filter(x=>x.id!==id));
-    setLocalLines(l => l.map(x => x.id===id ? {...x, deleted:false} : x));
+    
+    if (trashItem.isLocal === false) {
+      // Restore backend line to q.days
+      const dayIdx = q.days.findIndex(d => d.id === trashItem.dayId);
+      if (dayIdx >= 0 && trashItem.backendLineData) {
+        setQ(prev => {
+          const qn = { ...prev };
+          const day = { ...qn.days[dayIdx] };
+          day.lines = [...(day.lines || []), trashItem.backendLineData];
+          const normalized = normalizeQuotePositions({ 
+            ...qn, 
+            days: qn.days.map((d, i) => i === dayIdx ? day : d) 
+          });
+          normalized.dirty = true;
+          return normalized;
+        });
+        showNotice("Service restored", "success");
+      }
+    } else {
+      // Restore local line
+      setLocalLines(l => l.map(x => x.id===id ? {...x, deleted:false} : x));
+    }
   };
 
   const purgeLine = (id) => {
     setTrashLines(t => t.filter(x=>x.id!==id));
+    // For local lines, remove from localLines
     setLocalLines(l => l.filter(x => x.id!==id));
+    // For backend lines, they're already removed from q.days, so nothing more to do
   };
 
 
@@ -3348,7 +3374,35 @@ export default function QuoteEditor(){
                                 const victim = localLines.find(x => x.id === l.id);
                                 if (victim) setTrashLines(t => [victim, ...t]);
                               } else {
-                                // For backend lines (including catalog hotels and transports), remove from q.days
+                                // For backend lines, convert to trash format and add to trash
+                                const backendLine = d.lines.find(line => line.id === l.id);
+                                if (backendLine) {
+                                  // Convert backend line to trash format (similar to LocalLine structure)
+                                  const trashItem = {
+                                    id: backendLine.id,
+                                    dayId: d.id,
+                                    category: backendLine.category,
+                                    data: {
+                                      title: backendLine.title,
+                                      supplier_name: backendLine.supplier_name,
+                                      service_id: backendLine.service_id,
+                                      pricing: {
+                                        achat_eur: backendLine.achat_eur,
+                                        achat_usd: backendLine.achat_usd,
+                                        vente_usd: backendLine.vente_usd,
+                                        fx_rate: backendLine.fx_rate,
+                                        currency: backendLine.currency,
+                                        base_net_amount: backendLine.base_net_amount,
+                                      },
+                                      ...(backendLine.raw_json || {})
+                                    },
+                                    isLocal: false, // Mark as backend line
+                                    deleted: true,
+                                    backendLineData: backendLine // Keep original for restoration
+                                  };
+                                  setTrashLines(t => [trashItem, ...t]);
+                                }
+                                // Remove from q.days
                                 setQ(prev => {
                                   const qn = { ...prev };
                                   const day = { ...qn.days[dayIdx] };
