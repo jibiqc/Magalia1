@@ -202,15 +202,28 @@ def _upd_line(l: QuoteLine, li):
 
     l.vente_usd = Decimal(str(li.vente_usd)) if li.vente_usd is not None else None
 
-    # compute fx if both provided (>0)
-
-    if l.achat_eur and l.achat_usd and l.achat_usd != 0:
-
+    # Preserve raw_json first to check for buff_pct
+    raw_json = li.raw_json if li.raw_json is not None else {}
+    
+    # Check if buff_pct is present - if so, don't auto-recalculate FX
+    has_buff_pct = raw_json and isinstance(raw_json, dict) and raw_json.get("buff_pct") is not None
+    
+    # compute fx if both provided (>0) AND no buff_pct is present
+    # If buff_pct is present, preserve the fx_rate from input (or existing value)
+    if has_buff_pct:
+        # Preserve fx_rate from input if provided, otherwise keep existing
+        if li.fx_rate is not None:
+            l.fx_rate = Decimal(str(li.fx_rate)).quantize(Decimal("0.000001"))
+        # else: keep existing fx_rate (don't overwrite)
+    elif l.achat_eur and l.achat_usd and l.achat_usd != 0:
+        # Only auto-calculate FX if no buff_pct and both values provided
         l.fx_rate = (l.achat_eur / l.achat_usd).quantize(Decimal("0.000001"))
-
     else:
-
-        l.fx_rate = None
+        # Use fx_rate from input if provided, otherwise None
+        if li.fx_rate is not None:
+            l.fx_rate = Decimal(str(li.fx_rate)).quantize(Decimal("0.000001"))
+        else:
+            l.fx_rate = None
 
     l.currency = li.currency
 
@@ -328,6 +341,40 @@ def export_quote_word(quote_id: int, db: Session = Depends(get_db)):
         import traceback
         error_detail = traceback.format_exc()
         print(f"ERROR in export_quote_word: {e}\n{error_detail}")
+        raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+@router.get("/{quote_id}/export/excel")
+def export_quote_excel(quote_id: int, db: Session = Depends(get_db)):
+    """
+    Export a quote to Excel format (.xlsx).
+    Returns the Excel file as a downloadable file.
+    """
+    from ..exports.excel import build_xlsx_for_quote
+    
+    q = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not q:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    try:
+        buf = build_xlsx_for_quote(db, quote_id)
+        # Generate filename from quote start_date if available
+        filename = f"quote_{quote_id}"
+        if q.start_date:
+            filename = f"quote_{q.start_date.isoformat()}"
+        filename = f"{filename}.xlsx"
+        
+        return Response(
+            content=buf.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        import traceback
+        error_detail = traceback.format_exc()
+        print(f"ERROR in export_quote_excel: {e}\n{error_detail}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 

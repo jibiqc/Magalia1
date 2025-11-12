@@ -88,6 +88,32 @@ export const api = {
     URL.revokeObjectURL(link.href);
   },
 
+  async exportQuoteExcel(quoteId) {
+    // Download Excel export file
+    const url = `${API_BASE}/quotes/${quoteId}/export/excel`;
+    const res = await fetch(url, {
+      method: "GET",
+      credentials: "omit",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status} on ${url}`);
+    const blob = await res.blob();
+    // Extract filename from Content-Disposition header or use default
+    const contentDisposition = res.headers.get("Content-Disposition");
+    let filename = `quote_${quoteId}.xlsx`;
+    if (contentDisposition) {
+      const match = contentDisposition.match(/filename="?([^"]+)"?/);
+      if (match) filename = match[1];
+    }
+    // Trigger download
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(link.href);
+  },
+
   // --- Services catalog API ---
   searchServices,
   getPopularServices,

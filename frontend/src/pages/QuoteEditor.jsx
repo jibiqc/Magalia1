@@ -253,7 +253,7 @@ function computeTotalsUSD(q, localLines, { onspotUsed = 0, hassleUsed = 0, margi
 
   // Commission: même logique que l'Excel preview (pctStr → /100)
   const pctStr = (marginStr ?? ((Number(q?.margin_pct || 0) * 100).toFixed(2)));
-  const commissionPct = round2(parseLocaleFloat(pctStr) / 100);
+  const commissionPct = parseLocaleFloat(pctStr) / 100; // Ne pas arrondir le pourcentage avant la multiplication
   const commissionUsd = round2(achatsUsd * commissionPct);
 
   const grandTotal = round2(achatsUsd + commissionUsd + ventesUsd);
@@ -1372,6 +1372,10 @@ export default function QuoteEditor(){
           lines: allLines.map((l, liIdx) => {
             // For converted localLines, preserve raw_json as-is (don't add fx if it's already there)
             const rawJson = l.raw_json || {};
+            // Migration: if buff_pct exists on line but not in raw_json, copy it
+            if (l.buff_pct !== undefined && rawJson.buff_pct === undefined) {
+              rawJson.buff_pct = l.buff_pct;
+            }
             const finalRawJson = convertedLocalLines.some(cl => cl === l)
               ? rawJson  // For converted lines, use raw_json as-is
               : { ...rawJson, fx: (l.fx_rate ?? fxEuroToUsd ?? DEFAULT_FX) };  // For existing lines, add fx
@@ -2178,7 +2182,20 @@ export default function QuoteEditor(){
         return next;
       }
 
-      Object.assign(next.days[dayIdx].lines[lineIdx], patch);
+      const line = next.days[dayIdx].lines[lineIdx];
+      
+      // Special handling for buff_pct: store it in raw_json
+      if ('buff_pct' in patch) {
+        if (!line.raw_json) {
+          line.raw_json = {};
+        }
+        line.raw_json.buff_pct = patch.buff_pct;
+        // Remove buff_pct from patch to avoid setting it directly on line
+        const { buff_pct, ...restPatch } = patch;
+        Object.assign(line, restPatch);
+      } else {
+        Object.assign(line, patch);
+      }
 
       next.dirty = true;
 
@@ -2689,7 +2706,7 @@ export default function QuoteEditor(){
         const usdCalc = eur>0 ? round2(eur / fx) : 0;
         const usd = (usdRaw===undefined || usdRaw===null || usdRaw==="") ? usdCalc : round2(parseLocaleFloat(usdRaw));
         const sell = round2(parseLocaleFloat(line.vente_usd));
-        const buff_pct = parseLocaleFloat(line.buff_pct) || 0;
+        const buff_pct = parseLocaleFloat(line.raw_json?.buff_pct || line.buff_pct) || 0;
         const supplier_name = line.supplier_name || "";
         const internal_note = line.raw_json?.internal_note || "";
         const category = line.category || "";
@@ -2777,7 +2794,7 @@ export default function QuoteEditor(){
     const ventesUsdSummary = totalSell;  // Σ ventes + Hassle
     // Ensure Commission % shows 2 decimals in UI. Use marginStr when present, else derive from q.margin_pct.
     const pctStr = (marginStr ?? ((Number(q.margin_pct || 0) * 100).toFixed(2)));
-    const commissionPct = round2(parseLocaleFloat(pctStr) / 100); // 16.27 -> 0.1627
+    const commissionPct = parseLocaleFloat(pctStr) / 100; // 16.27 -> 0.1627 (ne pas arrondir avant la multiplication)
     const commissionUsd = round2(achatsUsdSummary * commissionPct);
     const grandTotal = round2(achatsUsdSummary + commissionUsd + ventesUsdSummary);
 
@@ -2829,7 +2846,7 @@ export default function QuoteEditor(){
                 }
               }
               
-              const buff_pct = r.buff_pct || (originalLine?.buff_pct ? parseLocaleFloat(originalLine.buff_pct) : 0) || 0;
+              const buff_pct = r.buff_pct || (originalLine?.raw_json?.buff_pct ? parseLocaleFloat(originalLine.raw_json.buff_pct) : (originalLine?.buff_pct ? parseLocaleFloat(originalLine.buff_pct) : 0)) || 0;
               const supplier_name = r.supplier_name || originalLine?.supplier_name || "";
               // Chercher internal_note dans plusieurs endroits
               const internal_note = r.internal_note || 
@@ -3151,6 +3168,26 @@ export default function QuoteEditor(){
             title="Export to Word"
           >
             Export Word
+          </button>
+        )}
+
+        {q?.id && (
+          <button 
+            className="btn primary" 
+            onClick={async () => {
+              if (!q?.id) return;
+              try {
+                showNotice("Exporting Excel document...", "info");
+                await api.exportQuoteExcel(q.id);
+                showNotice("Excel document downloaded", "success");
+              } catch (err) {
+                console.error("Export error:", err);
+                showNotice("Export failed", "error");
+              }
+            }}
+            title="Export to Excel"
+          >
+            Export Excel
           </button>
         )}
 
@@ -3541,6 +3578,10 @@ export default function QuoteEditor(){
                       const getPrice = (field) => {
                         if (isLocal) {
                           return l.data?.pricing?.[field] ?? l.data?.[field] ?? "";
+                        }
+                        // For backend lines, check raw_json first for buff_pct, then direct property
+                        if (field === "buff_pct") {
+                          return l.raw_json?.buff_pct ?? l[field] ?? "";
                         }
                         return l[field] ?? "";
                       };
