@@ -586,6 +586,7 @@ export default function QuoteEditor(){
   const [showActionIcons, setShowActionIcons] = useState(true); // Toggle pour afficher/masquer les icônes d'action
   const [showDescriptions, setShowDescriptions] = useState(true); // Toggle pour afficher/masquer les descriptions
   const [showImages, setShowImages] = useState(true); // Toggle pour afficher/masquer toutes les images
+  const [unicornMode, setUnicornMode] = useState(false); // Toggle pour le mode licorne (fond coloré)
   const [trashOpen, setTrashOpen] = useState(false);
 
   // local-only services and trash
@@ -671,6 +672,7 @@ export default function QuoteEditor(){
   const [rightRailDestShowMenu, setRightRailDestShowMenu] = useState(false);
   const rightRailDestDebounceRef = useRef(null);
   const rightRailDestWrapRef = useRef(null);
+  const rightRailDestProgrammaticChangeRef = useRef(false);
   
   // --- Helpers: normalize transport title & stars
   function normTransportTitle(name='') {
@@ -692,6 +694,208 @@ export default function QuoteEditor(){
     return `${Math.max(1, Math.min(5, Math.round(n)))}*`;
   }
   
+  // (overlay removed) — rely on the browser's native drag preview
+
+  // Manual DnD helpers (fallback when native drag visuals don't follow)
+  const performManualDrop = (meta, clientX, clientY) => {
+    const el = document.elementFromPoint(clientX, clientY);
+    if (!el) return;
+    const slot = el.closest ? el.closest('.drop-slot') : null;
+    if (!slot) return;
+    const dayIdx = Number(slot.getAttribute('data-day-idx'));
+    const dispIdx = Number(slot.getAttribute('data-disp-idx'));
+    if (!Number.isFinite(dayIdx) || !Number.isFinite(dispIdx)) return;
+
+    const metaObj = meta || {};
+    // Inserts - ouvrir le modal au lieu d'insérer directement
+    if (metaObj.fromInsert && metaObj.category) {
+      const dstDay = q.days[dayIdx];
+      if (!dstDay) return;
+      const dstBack = [...(dstDay.lines || [])];
+      const dayLocal = localLines.filter(l => l.dayId === dstDay.id && !l.deleted);
+      const insertBackIdx = Math.min(Math.max(0, dispIdx), dstBack.length);
+      const insertLocalIdx = Math.max(0, dispIdx - dstBack.length);
+
+      // Créer une ligne temporaire et ouvrir le modal
+      // Toutes les catégories d'insert sont des lignes locales
+      const tempLine = {
+        id: 'temp-' + Date.now(),
+        dayId: dstDay.id,
+        category: metaObj.category,
+        data: {},
+        isLocal: true,
+        insertIndex: insertLocalIdx
+      };
+      openEditModal(tempLine);
+      setHoverSlot({ day: -1, index: -1 });
+      setDragging(null);
+      return;
+    }
+
+    // Catalog
+    if (metaObj.fromCatalog && metaObj.catalogService) {
+      const svc = metaObj.catalogService;
+      const dstDay = q.days[dayIdx];
+      if (!dstDay) return;
+
+      const insertBackIdx = Math.min(Math.max(0, dispIdx), (dstDay.lines || []).length);
+      const categoryLower = (svc?.category || '').toLowerCase();
+      const nameLower = (svc?.name || '').toLowerCase();
+      const looksTransport = isTransportSvc(svc) || (svcTab === 'Transport' && categoryLower.includes('transfer'));
+      if (looksTransport) {
+        (async () => {
+          try {
+            const full = await api.getServiceById(svc.id);
+            const fields = full?.fields || {};
+            const draft = {
+              mode: 'create',
+              svcFull: full,
+              dayIdx: dayIdx,
+              insertIndex: insertBackIdx,
+              defaults: {
+                description: (fields?.full_description || full?.full_description || '') || '',
+                start_time: (fields?.start_time || '') || '',
+                internal_note: ''
+              }
+            };
+            setCatalogTransportDraft(draft);
+          } catch (e) {
+            console.error(e);
+            showNotice("Unable to open transport modal. Falling back to direct insert.", "warn");
+            directInsertCatalogLine(svc, dstDay, insertBackIdx);
+          }
+        })();
+        setHoverSlot({ day: -1, index: -1 });
+        setDragging(null);
+        return;
+      }
+
+      const looksHotel =
+        enableCatalogHotelModal && (
+          (svcTab === 'Hotels') ||
+          categoryLower.includes('hotel') ||
+          categoryLower.includes('apartment') ||
+          categoryLower.includes('villa') ||
+          nameLower.includes('hotel') ||
+          nameLower.includes('apartment') ||
+          nameLower.includes('villa') ||
+          (svc?.fields?.hotel_stars)
+        );
+      if (looksHotel) {
+        (async () => {
+          try {
+            const full = await api.getServiceById(svc.id);
+            const fields = full?.fields || {};
+            const dayDate = dstDay?.date ? new Date(dstDay.date) : new Date();
+            const draft = {
+              mode: 'create',
+              svcFull: full,
+              dayIdx: dayIdx,
+              insertIndex: insertBackIdx,
+              defaults: {
+                check_in: dayDate.toISOString().slice(0,10),
+                nights: 1,
+                internal_note: ''
+              }
+            };
+            setCatalogHotelDraft(draft);
+          } catch (e) {
+            console.error(e);
+            showNotice("Unable to open hotel modal. Falling back to direct insert.", "warn");
+            directInsertCatalogLine(svc, dstDay, insertBackIdx);
+          }
+        })();
+        setHoverSlot({ day: -1, index: -1 });
+        setDragging(null);
+        return;
+      }
+
+      // Activity default
+      (async () => {
+        try {
+          const full = await api.getServiceById(svc.id);
+          const fields = full?.fields || {};
+          const draft = {
+            mode: 'create',
+            svcFull: full,
+            dayIdx: dayIdx,
+            insertIndex: insertBackIdx,
+            defaults: {
+              description: (fields?.full_description || full?.full_description || '') || '',
+              start_time: (fields?.start_time || '') || '',
+              internal_note: ''
+            }
+          };
+          setCatalogActivityDraft(draft);
+        } catch (e) {
+          console.error(e);
+          showNotice("Unable to open activity modal. Falling back to direct insert.", "warn");
+          directInsertCatalogLine(svc, dstDay, insertBackIdx);
+        }
+      })();
+      setHoverSlot({ day: -1, index: -1 });
+      setDragging(null);
+      return;
+    }
+  };
+
+  const startManualDrag = (meta, label, startEvent) => {
+    let dragging = true;
+    const el = document.createElement('div');
+    el.style.position = 'fixed';
+    el.style.left = '0px';
+    el.style.top = '0px';
+    el.style.transform = `translate(${startEvent.clientX + 12}px, ${startEvent.clientY + 12}px)`;
+    el.style.background = '#0f203a';
+    el.style.border = '1px solid rgba(255,255,255,.3)';
+    el.style.borderRadius = '8px';
+    el.style.color = 'white';
+    el.style.padding = '6px 10px';
+    el.style.fontSize = '13px';
+    el.style.boxShadow = '0 4px 12px rgba(0,0,0,.35)';
+    el.style.zIndex = '2147483647';
+    el.style.pointerEvents = 'none';
+    el.textContent = String(label || '');
+    document.body.appendChild(el);
+
+    const onMove = (e) => {
+      if (!dragging) return;
+      el.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 12}px)`;
+    };
+    const onUp = (e) => {
+      dragging = false;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      if (el && el.parentNode) el.parentNode.removeChild(el);
+      performManualDrop(meta, e.clientX, e.clientY);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  // InsertButton component for insert buttons - VERSION SIMPLIFIÉE
+  const InsertButton = ({ category, onOpenModal }) => {
+    return (
+      <div
+        className="cat-button"
+        draggable={false}
+        onClick={(e) => {
+          // Ne pas ouvrir le modal si on vient de drag
+          if (e.defaultPrevented) return;
+          setEditingLine(null);
+          onOpenModal();
+        }}
+        onMouseDown={(e) => {
+          const meta = { fromInsert: true, category };
+          startManualDrag(meta, category, e);
+          e.preventDefault();
+        }}
+      >
+        {category}
+      </div>
+    );
+  };
+
   // Right rail item component
   function RightItem({ s }) {
     const tab = svcTab; // "Activities" | "Hotels" | "Transport"
@@ -706,14 +910,6 @@ export default function QuoteEditor(){
       }
     }, [tab, s.id, info]);
     
-    const onEnter = async (e) => {
-      setSvcHoverId(s.id);
-      ensureSvcInfo(s.id);
-      setHoverPos({ x: e.clientX, y: e.clientY });
-    };
-    const onMove = (e) => setHoverPos({ x: e.clientX, y: e.clientY });
-    const onLeave = () => setSvcHoverId(null);
-
     let title = '', sub = null;
     
     if (tab === 'Hotels') {
@@ -745,20 +941,50 @@ export default function QuoteEditor(){
     // Récupérer l'image depuis info ou fields
     const imageUrl = info?.images?.[0]?.url || fields?.image_url || '';
 
+    const onEnter = async (e) => {
+      setSvcHoverId(s.id);
+      ensureSvcInfo(s.id);
+      setHoverPos({ x: e.clientX, y: e.clientY });
+    };
+    const onMove = (e) => {
+      setHoverPos({ x: e.clientX, y: e.clientY });
+    };
+    const onLeave = () => {
+      setSvcHoverId(null);
+    };
+    
     return (
-      <button
-        type="button"
+      <div
         className="svc-item"
-        onClick={(e)=>{ e.preventDefault(); e.stopPropagation(); safeInsertFromCatalog(s); }}
+        draggable={false}
+        onMouseDown={(e) => {
+          setSvcHoverId(null);
+          const meta = { fromCatalog: true, catalogId: s.id, catalogService: s, category: s.category };
+          const label = s?.name || 'Service';
+          startManualDrag(meta, label, e);
+          e.preventDefault();
+        }}
         onMouseEnter={onEnter}
         onMouseMove={onMove}
         onMouseLeave={onLeave}
       >
-        {typeof title === 'string' ? <div className="svc-title">{title}</div> : title}
-        {sub ? <div className="svc-sub">{sub}</div> : null}
+        {typeof title === 'string' ? (
+          <div className="svc-title">
+            {title}
+          </div>
+        ) : (
+          <div>
+            {title}
+          </div>
+        )}
+        {sub ? (
+          <div className="svc-sub">
+            {sub}
+          </div>
+        ) : null}
         {svcHoverId === s.id && hoverText && createPortal(
           <div className="svc-hover"
-               style={{ left: hoverPos.x - 16, top: hoverPos.y + 16, transform: 'translateX(-100%)' }}>
+               style={{ left: hoverPos.x - 16, top: hoverPos.y + 16, transform: 'translateX(-100%)', pointerEvents: 'none' }}>
             <div style={{display: 'flex', gap: '12px', alignItems: 'flex-start'}}>
               {imageUrl && (
                 <img 
@@ -789,7 +1015,7 @@ export default function QuoteEditor(){
           </div>,
           document.body
         )}
-      </button>
+      </div>
     );
   }
   
@@ -818,15 +1044,68 @@ export default function QuoteEditor(){
 
   const [dragging, setDragging] = useState(null);
   const [hoverSlot, setHoverSlot] = useState({ day: -1, index: -1 });
+  const [dragOverlayPos, setDragOverlayPos] = useState({ x: 0, y: 0 });
+
+  // Global drag overlay - track mouse during drag
+  useEffect(() => {
+    if (!dragging) return;
+
+    const handleMouseMove = (e) => {
+      setDragOverlayPos({ x: e.clientX, y: e.clientY });
+    };
+
+    document.addEventListener('mousemove', handleMouseMove, true);
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove, true);
+    };
+  }, [dragging]);
 
   const allowDrop = (e) => { 
     e.preventDefault(); 
-    e.dataTransfer.dropEffect = 'move'; 
+    e.stopPropagation();
+    // Pour les drops depuis le catalogue, utiliser 'copy' au lieu de 'move'
+    const types = e.dataTransfer.types || [];
+    if (types.includes('application/json') || types.includes('text/plain')) {
+      try {
+        // On ne peut pas lire les données dans onDragOver, mais on peut vérifier les types
+        e.dataTransfer.dropEffect = 'copy';
+      } catch {
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    } else {
+      e.dataTransfer.dropEffect = 'move';
+    }
   };
 
   const readDnd = (e) => {
-    const raw = e.dataTransfer.getData('application/json') || e.dataTransfer.getData('text/plain');
-    try { return raw ? JSON.parse(raw) : null; } catch { return null; }
+    // Essayer plusieurs formats de données
+    let raw = null;
+    try {
+      raw = e.dataTransfer.getData('application/json');
+      if (!raw) raw = e.dataTransfer.getData('text/plain');
+      if (!raw) {
+        // Fallback: essayer de lire depuis les types disponibles
+        const types = e.dataTransfer.types || [];
+        console.log('[dnd] readDnd - available types:', types);
+        for (const type of types) {
+          try {
+            raw = e.dataTransfer.getData(type);
+            if (raw) break;
+          } catch (err) {
+            console.warn('[dnd] readDnd - failed to read type', type, err);
+          }
+        }
+      }
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        console.log('[dnd] readDnd - successfully parsed:', parsed);
+        return parsed;
+      }
+    } catch (err) {
+      console.error('[dnd] readDnd - error parsing:', err, 'raw:', raw);
+    }
+    console.warn('[dnd] readDnd - no data found');
+    return null;
   };
 
   // Helper: pick up to 2 image URLs from a day's activities
@@ -921,10 +1200,200 @@ export default function QuoteEditor(){
 
 
   const dropBefore = (e, toDay, toDispIndex) => {
+    console.log('[dnd] dropBefore CALLED', { toDay, toDispIndex });
     e.preventDefault();
     e.stopPropagation(); // Empêcher la propagation pour éviter l'ouverture accidentelle du modal
     const meta = readDnd(e);
-    if (!meta) return;
+    console.log('[dnd] dropBefore meta read', meta);
+    if (!meta) {
+      console.warn('[dnd] dropBefore: no meta found');
+      return;
+    }
+
+    // Gérer les drops depuis les inserts
+    if (meta.fromInsert && meta.category) {
+      console.log('[dnd] Processing insert drop', { meta, toDay, toDispIndex });
+      const dstDay = q.days[toDay];
+      if (!dstDay) {
+        console.warn('[dnd] No destination day found for insert', toDay);
+        return;
+      }
+      
+      // Calculer l'index d'insertion
+      const dstBack = [...(dstDay.lines || [])];
+      const dayLocal = localLines.filter(l => l.dayId === dstDay.id && !l.deleted);
+      const allLines = [...dstBack, ...dayLocal];
+      const insertBackIdx = Math.min(Math.max(0, toDispIndex), dstBack.length);
+      const insertLocalIdx = Math.max(0, toDispIndex - dstBack.length);
+      
+      // Ouvrir le modal au lieu d'insérer directement
+      // Toutes les catégories d'insert sont des lignes locales
+      const tempLine = {
+        id: 'temp-' + Date.now(),
+        dayId: dstDay.id,
+        category: meta.category,
+        data: {},
+        isLocal: true,
+        insertIndex: insertLocalIdx
+      };
+      openEditModal(tempLine);
+      
+      console.log('[dnd] Insert drop - opening modal', { category: meta.category, toDay, insertBackIdx, insertLocalIdx });
+      setHoverSlot({ day: -1, index: -1 });
+      setDragging(null);
+      return;
+    }
+
+    // Gérer les drops depuis le catalogue
+    if (meta.fromCatalog && meta.catalogService) {
+      console.log('[dnd] Processing catalog drop', { meta, toDay, toDispIndex });
+      const svc = meta.catalogService;
+      const dstDay = q.days[toDay];
+      if (!dstDay) {
+        console.warn('[dnd] No destination day found', toDay);
+        return;
+      }
+
+      // Calculer l'index d'insertion
+      const insertBackIdx = Math.min(Math.max(0, toDispIndex), (dstDay.lines || []).length);
+      
+      // Ouvrir le modal approprié selon le type de service
+      const categoryLower = (svc?.category || '').toLowerCase();
+      const nameLower = (svc?.name || '').toLowerCase();
+      const looksTransport = isTransportSvc(svc) || (svcTab === 'Transport' && categoryLower.includes('transfer'));
+      
+      if (looksTransport) {
+        // Fetch full service and open transport modal
+        (async () => {
+          try {
+            const full = await api.getServiceById(svc.id);
+            const fields = full?.fields || {};
+            const draft = {
+              mode: 'create',
+              svcFull: full,
+              dayIdx: toDay,
+              insertIndex: insertBackIdx,
+              defaults: {
+                description: (fields?.full_description || full?.full_description || '') || '',
+                start_time: (fields?.start_time || '') || '',
+                internal_note: ''
+              }
+            };
+            setCatalogTransportDraft(draft);
+          } catch (e) {
+            console.error(e);
+            showNotice("Unable to open transport modal. Falling back to direct insert.", "warn");
+            directInsertCatalogLine(svc, dstDay, insertBackIdx);
+          }
+        })();
+        setHoverSlot({ day: -1, index: -1 });
+        setDragging(null);
+        return;
+      }
+      
+      // PUIS vérifier si c'est un hôtel
+      const looksHotel =
+        enableCatalogHotelModal && (
+          (svcTab === 'Hotels') ||
+          categoryLower.includes('hotel') ||
+          categoryLower.includes('apartment') ||
+          categoryLower.includes('villa') ||
+          nameLower.includes('hotel') ||
+          nameLower.includes('apartment') ||
+          nameLower.includes('villa') ||
+          (svc?.fields?.hotel_stars)
+        );
+      
+      if (looksHotel) {
+        // Fetch full service and open hotel modal
+        (async () => {
+          try {
+            const full = await api.getServiceById(svc.id);
+            const fields = full?.fields || {};
+            // Compute defaults (même logique que insertCatalogService)
+            const dayDate = dstDay?.date ? new Date(dstDay.date) : new Date();
+            // Find last day in same destination, else last day of itinerary
+            const dest = dstDay?.destination || null;
+            const sameDestDays = (q?.days || []).filter(x => (x?.destination || null) === dest && x?.date);
+            const lastDay = sameDestDays.length > 0 ? sameDestDays[sameDestDays.length - 1] : (q?.days || [])[q.days.length - 1];
+            const coDate = lastDay?.date ? new Date(lastDay.date) : new Date(dayDate);
+            // checkout = day after lastDay
+            const checkInISO = dayDate.toISOString().slice(0,10);
+            const checkOutBase = new Date(coDate); checkOutBase.setDate(checkOutBase.getDate() + 1);
+            const checkOutISO = checkOutBase.toISOString().slice(0,10);
+            const meal1 = String(fields?.meal_1 || '').toLowerCase();
+            const breakfastDefault = meal1.includes('breakfast');
+            const draft = {
+              mode: 'create',
+              svcFull: full,
+              dayIdx: toDay,
+              insertIndex: insertBackIdx,
+              defaults: {
+                hotel_name: (full?.company || full?.supplier?.name || full?.name || '') || '',
+                hotel_stars: (fields?.hotel_stars ?? full?.hotel_stars ?? '') || '',
+                hotel_url: (fields?.hotel_url || '') || '',
+                room_type: '', // mandatory, left empty by design
+                breakfast: !!breakfastDefault,
+                early_check_in: false,
+                check_in_date: checkInISO,
+                check_out_date: checkOutISO,
+                description: (fields?.full_description || full?.full_description || '') || '',
+                internal_note: ''
+              }
+            };
+            setCatalogHotelDraft(draft);
+          } catch (e) {
+            console.error(e);
+            showNotice("Unable to open hotel modal. Falling back to direct insert.", "warn");
+            directInsertCatalogLine(svc, dstDay, insertBackIdx);
+          }
+        })();
+        setHoverSlot({ day: -1, index: -1 });
+        setDragging(null);
+        return;
+      }
+      
+      // Vérifier si c'est une activité
+      const looksActivity = !looksHotel && !looksTransport && (svcTab === 'Activity' || categoryLower.includes('activity') || categoryLower.includes('small group') || categoryLower.includes('private') || categoryLower.includes('tickets'));
+      
+      if (looksActivity) {
+        // Fetch full service and open activity modal
+        (async () => {
+          try {
+            const full = await api.getServiceById(svc.id);
+            const fields = full?.fields || {};
+            const draft = {
+              mode: 'create',
+              svcFull: full,
+              dayIdx: toDay,
+              insertIndex: insertBackIdx,
+              defaults: {
+                description: (fields?.full_description || full?.full_description || '') || '',
+                start_time: (fields?.start_time || '') || '',
+                end_time: (fields?.end_time || '') || '',
+                duration: (fields?.duration || fields?.activity_duration || (full?.duration_minutes != null ? fmtHm(full.duration_minutes) : '')) || '',
+                internal_note: ''
+              }
+            };
+            setCatalogActivityDraft(draft);
+          } catch (e) {
+            console.error(e);
+            showNotice("Unable to open activity modal. Falling back to direct insert.", "warn");
+            directInsertCatalogLine(svc, dstDay, insertBackIdx);
+          }
+        })();
+        setHoverSlot({ day: -1, index: -1 });
+        setDragging(null);
+        return;
+      }
+      
+      // Default direct insert behavior (non-hotel, non-transport, non-activity)
+      directInsertCatalogLine(svc, dstDay, insertBackIdx);
+      
+      setHoverSlot({ day: -1, index: -1 });
+      setDragging(null);
+      return;
+    }
 
     // Capturer la valeur actuelle de localLines pour la vérification
     const currentLocalLines = localLines;
@@ -1936,12 +2405,14 @@ export default function QuoteEditor(){
     return i >= 0 ? (q?.days?.[i]?.destination || "") : "";
   }, [q, findActiveIndex]);
 
-  // Initialize right rail destination from active day (only if empty or when active day changes)
+  // Initialize right rail destination from active day (update when active day changes and has a destination)
   useEffect(() => {
-    if (activeDest && (!rightRailDestination || rightRailDestination === "")) {
+    if (activeDest) {
+      rightRailDestProgrammaticChangeRef.current = true; // Marquer comme changement programmatique
       setRightRailDestination(activeDest);
+      setRightRailDestShowMenu(false); // Fermer le menu quand on change de jour
     }
-  }, [activeDest]); // Only sync when activeDest changes, not when rightRailDestination changes
+  }, [activeDest]); // Sync when activeDest changes
 
   // Debounced fetch destinations for right rail
   useEffect(() => {
@@ -1950,6 +2421,9 @@ export default function QuoteEditor(){
     }
     rightRailDestDebounceRef.current = setTimeout(async () => {
       const query = rightRailDestination.trim();
+      const isProgrammatic = rightRailDestProgrammaticChangeRef.current;
+      rightRailDestProgrammaticChangeRef.current = false; // Réinitialiser le flag
+      
       if (query.length === 0) {
         setRightRailDestSuggestions([]);
         setRightRailDestShowMenu(false);
@@ -1959,7 +2433,8 @@ export default function QuoteEditor(){
       try {
         const results = await api.getDestinations(query);
         setRightRailDestSuggestions(results || []);
-        if (query.length > 0) {
+        // Ne pas rouvrir le menu si c'est un changement programmatique (changement de jour)
+        if (query.length > 0 && !isProgrammatic) {
           setRightRailDestShowMenu(true);
         }
       } catch (err) {
@@ -2196,26 +2671,32 @@ export default function QuoteEditor(){
       return;
     }
     
-    // do not insert the same catalog service twice on the same day
-    const exists = Array.isArray(d?.lines) && d.lines.some(
-      (l) => l?.raw_json?.catalog_id === svc.id
-    );
-    if (exists) return;
     // Default direct insert behavior (non-hotel or flag off)
     directInsertCatalogLine(svc, d);
   }
 
   // Extracted previous direct insert logic to allow fallback
-  function directInsertCatalogLine(svc, dayObj) {
+  function directInsertCatalogLine(svc, dayObj, insertIndex = null) {
     const line = lineFromCatalog(svc);
     setQ(prev => {
       const qn = { ...prev };
       const idx2 = (qn?.days || []).findIndex(dd => dd.id === dayObj.id);
       if (idx2 < 0) { showNotice("Select a day first", "info"); return prev; }
       const day = { ...qn.days[idx2] };
-      day.lines = Array.isArray(day.lines) ? [...day.lines, line] : [line];
+      const lines = Array.isArray(day.lines) ? [...day.lines] : [];
+      // Si insertIndex est spécifié, insérer à cette position, sinon à la fin
+      if (insertIndex !== null && insertIndex >= 0 && insertIndex <= lines.length) {
+        lines.splice(insertIndex, 0, line);
+      } else {
+        lines.push(line);
+      }
+      day.lines = lines;
       const normalized = normalizeQuotePositions({ ...qn, days: qn.days.map((d3, i3) => i3 === idx2 ? day : d3) });
       normalized.dirty = true;
+      // Recompute decorations for the day
+      try {
+        recomputeDayDecorations(normalized, idx2);
+      } catch {}
       return normalized;
     });
     enrichLineFromCatalog(line.id, svc.id, setQ);
@@ -2674,9 +3155,23 @@ export default function QuoteEditor(){
     }
   }
 
-  const addLocalLine = (dayId, category, data={}) => {
+  const addLocalLine = (dayId, category, data={}, insertIndex = null) => {
     const id = crypto.randomUUID();
-    setLocalLines(prev => [{ id, dayId, category, data, isLocal:true, deleted:false }, ...prev]);
+    const newLine = { id, dayId, category, data, isLocal:true, deleted:false };
+    
+    if (insertIndex !== null) {
+      // Insérer à une position spécifique
+      setLocalLines(prev => {
+        const dayLines = prev.filter(l => l.dayId === dayId && !l.deleted);
+        const otherLines = prev.filter(l => l.dayId !== dayId || l.deleted);
+        const before = dayLines.slice(0, insertIndex);
+        const after = dayLines.slice(insertIndex);
+        return [...otherLines, ...before, newLine, ...after];
+      });
+    } else {
+      // Ajouter à la fin
+      setLocalLines(prev => [newLine, ...prev]);
+    }
     setQ(prev => ({ ...prev, dirty: true }));
 
     // Si Car Rental → s'assurer du Trip info "Drop off the car" à la date attendue
@@ -3845,7 +4340,7 @@ export default function QuoteEditor(){
                     </button>
                     <button
                       className={`day-pill ${activeDayId===d.id ? "active":""}`}
-                      onClick={()=>{ setActiveDayId(d.id); const el=document.getElementById(`day-${d.id}`); el?.scrollIntoView({behavior:"smooth", block:"start"}); }}
+                      onClick={()=>{ setActiveDayId(d.id); setRightRailDestShowMenu(false); const el=document.getElementById(`day-${d.id}`); el?.scrollIntoView({behavior:"smooth", block:"start"}); }}
                     >
                       <span className="day-list-label">
                         {fmtDateShortISO(d.date)}{d.destination ? ` — ${d.destination}` : ""}
@@ -3963,6 +4458,18 @@ export default function QuoteEditor(){
                     </svg>
                   </div>
                 </div>
+                {/* Troisième ligne: Licorne (à gauche) */}
+                <div style={{display: 'flex', alignItems: 'center', gap: '12px'}}>
+                  <div style={{display: 'flex', alignItems: 'center', gap: '8px', flex: 1}}>
+                    <button 
+                      className={`cost-toggle ${unicornMode ? 'active' : ''}`}
+                      onClick={() => setUnicornMode(!unicornMode)}
+                      title={unicornMode ? "Désactiver le mode licorne" : "Activer le mode licorne"}
+                      aria-label={unicornMode ? "Désactiver le mode licorne" : "Activer le mode licorne"}
+                    />
+                    <span style={{color: 'var(--ink)', fontSize: '24px', display: 'flex', alignItems: 'center', height: '30px'}}>🦄</span>
+                  </div>
+                </div>
               </div>
 
             </div>
@@ -3977,7 +4484,10 @@ export default function QuoteEditor(){
 
         <div className="center-rail">
 
-          <div className="page" id="wordPage">
+          <div 
+            className={`page ${unicornMode ? 'unicorn-mode' : ''}`}
+            id="wordPage"
+          >
 
             {/* ---- tout ce qui suit doit être DEDANS ---- */}
 
@@ -3985,7 +4495,19 @@ export default function QuoteEditor(){
 
             {q.days.map((d, dayIdx)=>(
 
-              <div key={d.id} id={`day-${d.id}`} className="day-card">
+              <div 
+                key={d.id} 
+                id={`day-${d.id}`} 
+                className="day-card"
+                onDragOver={(e) => {
+                  // Permettre le drop sur toute la carte de jour
+                  e.preventDefault();
+                  console.log('[dnd] dragOver on day-card', dayIdx);
+                }}
+                onDragEnter={(e) => {
+                  console.log('[dnd] dragEnter on day-card', dayIdx);
+                }}
+              >
 
                 {/* DayHero only (above the date). Legacy block below removed */}
                 <DayHero
@@ -4013,11 +4535,31 @@ export default function QuoteEditor(){
                 {/* head-of-day slot */}
                 <div
                   className={`drop-slot ${hoverSlot.day===dayIdx && hoverSlot.index===0 ? 'over' : ''}`}
-                  onDragOver={(e)=>{allowDrop(e); setHoverSlot({day:dayIdx,index:0});}}
-                  onDrop={(e)=> { dropBefore(e, dayIdx, 0); e.stopPropagation(); }}
+                  data-day-idx={dayIdx}
+                  data-disp-idx={0}
+                  style={{}}
+                  onDragOver={(e)=>{
+                    console.log('[dnd] onDragOver on head drop-slot', { dayIdx });
+                    allowDrop(e); 
+                    setHoverSlot({day:dayIdx,index:0});
+                  }}
+                  onDragEnter={(e)=>{
+                    console.log('[dnd] onDragEnter on head drop-slot', { dayIdx });
+                  }}
+                  onDrop={(e)=> { 
+                    console.log('[dnd] onDrop on head drop-slot', { dayIdx });
+                    dropBefore(e, dayIdx, 0); 
+                    e.stopPropagation(); 
+                  }}
                 />
 
-                <div className="day-services">
+                <div 
+                  className="day-services"
+                  onDragOver={(e) => {
+                    // Ne pas bloquer le drag sur day-services
+                    console.log('[dnd] dragOver on day-services', dayIdx);
+                  }}
+                >
                   {(() => {
                     const dayLocal = localLines.filter(l => l.dayId === d.id && !l.deleted);
                     const allLines = [...(d.lines||[]), ...dayLocal];
@@ -4076,14 +4618,31 @@ export default function QuoteEditor(){
                         <React.Fragment key={uniqueKey}>
                           <div
                             className={`drop-slot ${hoverSlot.day===dayIdx && hoverSlot.index===displayIndex ? 'over':''}`}
-                            onDragOver={(e)=>{allowDrop(e); setHoverSlot({day:dayIdx,index:displayIndex});}}
-                            onDrop={(e)=> { dropBefore(e, dayIdx, displayIndex); e.stopPropagation(); }}
+                            data-day-idx={dayIdx}
+                            data-disp-idx={displayIndex}
+                            style={{}}
+                            onDragOver={(e)=>{
+                              console.log('[dnd] onDragOver on drop-slot', { dayIdx, displayIndex });
+                              allowDrop(e); 
+                              setHoverSlot({day:dayIdx,index:displayIndex});
+                            }}
+                            onDragEnter={(e)=>{
+                              console.log('[dnd] onDragEnter on drop-slot', { dayIdx, displayIndex });
+                            }}
+                            onDrop={(e)=> { 
+                              console.log('[dnd] onDrop on drop-slot', { dayIdx, displayIndex });
+                              dropBefore(e, dayIdx, displayIndex); 
+                              e.stopPropagation(); 
+                            }}
                           />
                           {/* card wrapper */}
                           <div
                             className={`draggable-wrap ${dragging?.lineId === l.id ? 'dragging' : ''}`}
                             id={`line-${l.id}`}
-                            onDragOver={allowDrop}
+                            onDragOver={(e) => {
+                              console.log('[dnd] dragOver on draggable-wrap', { dayIdx, displayIndex });
+                              allowDrop(e);
+                            }}
                             onDragEnd={() => {
                               setDragging(null);
                               setHoverSlot({ day: -1, index: -1 });
@@ -4309,8 +4868,22 @@ export default function QuoteEditor(){
                     return (
                       <div
                         className={`drop-slot ${hoverSlot.day===dayIdx && hoverSlot.index===endIndex ? 'over':''}`}
-                        onDragOver={(e)=>{allowDrop(e); setHoverSlot({day:dayIdx,index:endIndex});}}
-                        onDrop={(e)=> { dropBefore(e, dayIdx, endIndex); e.stopPropagation(); }}
+                        data-day-idx={dayIdx}
+                        data-disp-idx={endIndex}
+                        style={{}}
+                        onDragOver={(e)=>{
+                          console.log('[dnd] onDragOver on end drop-slot', { dayIdx, endIndex });
+                          allowDrop(e); 
+                          setHoverSlot({day:dayIdx,index:endIndex});
+                        }}
+                        onDragEnter={(e)=>{
+                          console.log('[dnd] onDragEnter on end drop-slot', { dayIdx, endIndex });
+                        }}
+                        onDrop={(e)=> { 
+                          console.log('[dnd] onDrop on end drop-slot', { dayIdx, endIndex });
+                          dropBefore(e, dayIdx, endIndex); 
+                          e.stopPropagation(); 
+                        }}
                       />
                     );
                   })()}
@@ -4332,8 +4905,34 @@ export default function QuoteEditor(){
 
 
 
+        {/* Drag overlay */}
+        {dragging && (
+          <div
+            style={{
+              position: 'fixed',
+              left: dragOverlayPos.x + 10,
+              top: dragOverlayPos.y + 10,
+              pointerEvents: 'none',
+              zIndex: 999999,
+              background: '#0f203a',
+              border: '2px solid #5fa8ff',
+              borderRadius: '8px',
+              padding: '8px 12px',
+              color: '#e7ecf5',
+              fontSize: '14px',
+              fontWeight: 'bold',
+              whiteSpace: 'nowrap',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+            }}
+          >
+            {dragging.fromInsert ? dragging.category : 
+             dragging.fromCatalog ? '📦 Service' : 'Dragging'}
+          </div>
+        )}
+
         {/* Right rail */}
         <div className="rail right">
+          {/* test elements removed */}
           {/* Trash button at the top */}
           <div style={{ padding: "10px 12px", borderBottom: "1px solid rgba(255,255,255,.06)" }}>
             <button 
@@ -4485,15 +5084,15 @@ export default function QuoteEditor(){
 
             <h4>Insert</h4>
             <div className="insert-grid">
-              <button className="cat-button" onClick={()=>{setEditingLine(null); setTripInfoOpen(true);}}>Trip info</button>
-              <button className="cat-button" onClick={()=>{setEditingLine(null); setInternalInfoOpen(true);}}>Internal info</button>
-              <button className="cat-button" onClick={()=>{setEditingLine(null); setCostOpen(true);}}>Cost</button>
-              <button className="cat-button" onClick={()=>{setEditingLine(null); setTrainOpen(true);}}>Train</button>
-              <button className="cat-button" onClick={()=>{setEditingLine(null); setFlightOpen(true);}}>Flight</button>
-              <button className="cat-button" onClick={()=>{setEditingLine(null); setFerryOpen(true);}}>Ferry</button>
-              <button className="cat-button" onClick={()=>{setEditingLine(null); setCarModalOpen(true);}}>Car Rental</button>
-              <button className="cat-button" onClick={()=>{setEditingLine(null); setHotelOpen(true);}}>New Hotel</button>
-              <button className="cat-button" onClick={()=>{setEditingLine(null); setNewServiceOpen(true);}}>New Service</button>
+              <InsertButton category="Trip info" onOpenModal={() => setTripInfoOpen(true)} />
+              <InsertButton category="Internal info" onOpenModal={() => setInternalInfoOpen(true)} />
+              <InsertButton category="Cost" onOpenModal={() => setCostOpen(true)} />
+              <InsertButton category="Train" onOpenModal={() => setTrainOpen(true)} />
+              <InsertButton category="Flight" onOpenModal={() => setFlightOpen(true)} />
+              <InsertButton category="Ferry" onOpenModal={() => setFerryOpen(true)} />
+              <InsertButton category="Car Rental" onOpenModal={() => setCarModalOpen(true)} />
+              <InsertButton category="New Hotel" onOpenModal={() => setHotelOpen(true)} />
+              <InsertButton category="New Service" onOpenModal={() => setNewServiceOpen(true)} />
             </div>
 
           </div>
@@ -4551,10 +5150,9 @@ export default function QuoteEditor(){
           open={carModalOpen}
           onClose={() => { setCarModalOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
-            const dayId = currentDay?.id;
+            const dayId = editingLine?.dayId || (q.days.find(d => d.id === activeDayId) || q.days[0])?.id;
             if (dayId) {
-              if (editingLine) {
+              if (editingLine && editingLine.id && !String(editingLine.id).startsWith('temp-')) {
                 // Vérifier si c'est une ligne locale ou backend
                 const isLocal = localLines.some(l => l.id === editingLine.id);
                 if (isLocal) {
@@ -4566,15 +5164,14 @@ export default function QuoteEditor(){
                   if (dayIdx >= 0) {
                     const lineIdx = q.days[dayIdx].lines.findIndex(l => l.id === editingLine.id);
                     if (lineIdx >= 0) {
-                      // Construire la ligne mise à jour avec raw_json
-                      const updatedLine = buildLineFromData("Car Rental", payload);
-                      updateLine(dayIdx, lineIdx, { raw_json: updatedLine.raw_json });
+                      // Mettre à jour le raw_json avec le payload directement
+                      updateLine(dayIdx, lineIdx, { raw_json: payload });
                     }
                   }
                 }
               } else {
                 // Créer une nouvelle ligne lors de la création
-                addLocalLine(dayId, "Car Rental", payload);
+                addLocalLine(dayId, "Car Rental", payload, editingLine?.insertIndex);
               }
             }
             setCarModalOpen(false);
@@ -4591,13 +5188,12 @@ export default function QuoteEditor(){
           open={tripInfoOpen}
           onClose={() => { setTripInfoOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
-            const dayId = currentDay?.id;
+            const dayId = editingLine?.dayId || (q.days.find(d => d.id === activeDayId) || q.days[0])?.id;
             if (dayId) {
-              if (editingLine) {
+              if (editingLine && editingLine.id && !String(editingLine.id).startsWith('temp-')) {
                 setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
               } else {
-                addLocalLine(dayId, "Trip info", payload);
+                addLocalLine(dayId, "Trip info", payload, editingLine?.insertIndex);
               }
             }
             setTripInfoOpen(false);
@@ -4613,13 +5209,12 @@ export default function QuoteEditor(){
           open={internalInfoOpen}
           onClose={() => { setInternalInfoOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
-            const dayId = currentDay?.id;
+            const dayId = editingLine?.dayId || (q.days.find(d => d.id === activeDayId) || q.days[0])?.id;
             if (dayId) {
-              if (editingLine) {
+              if (editingLine && editingLine.id && !String(editingLine.id).startsWith('temp-')) {
                 setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
               } else {
-                addLocalLine(dayId, "Internal info", payload);
+                addLocalLine(dayId, "Internal info", payload, editingLine?.insertIndex);
               }
             }
             setInternalInfoOpen(false);
@@ -4635,13 +5230,12 @@ export default function QuoteEditor(){
           open={costOpen}
           onClose={() => { setCostOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
-            const dayId = currentDay?.id;
+            const dayId = editingLine?.dayId || (q.days.find(d => d.id === activeDayId) || q.days[0])?.id;
             if (dayId) {
-              if (editingLine) {
+              if (editingLine && editingLine.id && !String(editingLine.id).startsWith('temp-')) {
                 setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
               } else {
-                addLocalLine(dayId, "Cost", payload);
+                addLocalLine(dayId, "Cost", payload, editingLine?.insertIndex);
               }
             }
             setCostOpen(false);
@@ -4657,13 +5251,12 @@ export default function QuoteEditor(){
           open={flightOpen}
           onClose={() => { setFlightOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
-            const dayId = currentDay?.id;
+            const dayId = editingLine?.dayId || (q.days.find(d => d.id === activeDayId) || q.days[0])?.id;
             if (dayId) {
-              if (editingLine) {
+              if (editingLine && editingLine.id && !String(editingLine.id).startsWith('temp-')) {
                 setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
               } else {
-                addLocalLine(dayId, "Flight", payload);
+                addLocalLine(dayId, "Flight", payload, editingLine?.insertIndex);
               }
             }
             setFlightOpen(false);
@@ -4679,13 +5272,12 @@ export default function QuoteEditor(){
           open={trainOpen}
           onClose={() => { setTrainOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
-            const dayId = currentDay?.id;
+            const dayId = editingLine?.dayId || (q.days.find(d => d.id === activeDayId) || q.days[0])?.id;
             if (dayId) {
-              if (editingLine) {
+              if (editingLine && editingLine.id && !String(editingLine.id).startsWith('temp-')) {
                 setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
               } else {
-                addLocalLine(dayId, "Train", payload);
+                addLocalLine(dayId, "Train", payload, editingLine?.insertIndex);
               }
             }
             setTrainOpen(false);
@@ -4701,13 +5293,12 @@ export default function QuoteEditor(){
           open={ferryOpen}
           onClose={() => { setFerryOpen(false); setEditingLine(null); }}
           onSubmit={(payload) => {
-            const currentDay = q.days.find(d => d.id === activeDayId) || q.days[0];
-            const dayId = currentDay?.id;
+            const dayId = editingLine?.dayId || (q.days.find(d => d.id === activeDayId) || q.days[0])?.id;
             if (dayId) {
-              if (editingLine) {
+              if (editingLine && editingLine.id && !String(editingLine.id).startsWith('temp-')) {
                 setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
               } else {
-                addLocalLine(dayId, "Ferry", payload);
+                addLocalLine(dayId, "Ferry", payload, editingLine?.insertIndex);
               }
             }
             setFerryOpen(false);
@@ -4888,12 +5479,20 @@ export default function QuoteEditor(){
                   raw_json: { ...(L.raw_json||{}), ...baseRaw }
                 } : L);
               } else {
-                d.lines = Array.isArray(d.lines) ? [...d.lines, newLine] : [newLine];
+                // Utiliser insertIndex si fourni, sinon ajouter à la fin
+                const lines = Array.isArray(d.lines) ? [...d.lines] : [];
+                const insertIdx = catalogHotelDraft.insertIndex != null ? catalogHotelDraft.insertIndex : lines.length;
+                lines.splice(insertIdx, 0, newLine);
+                d.lines = lines;
               }
               // Add service images to day's decorative_images
               d = addServiceImagesToDay(d, svcFull);
               const normalized = normalizeQuotePositions({ ...qn, days: qn.days.map((x,i)=> i===dayIdx? d : x) });
               normalized.dirty = true;
+              // Recompute decorations for the day
+              try {
+                recomputeDayDecorations(normalized, dayIdx);
+              } catch {}
               return normalized;
             });
             setCatalogHotelDraft(null);
@@ -4945,12 +5544,20 @@ export default function QuoteEditor(){
                   raw_json: { ...(L.raw_json||{}), ...baseRaw }
                 } : L);
               } else {
-                d.lines = Array.isArray(d.lines) ? [...d.lines, newLine] : [newLine];
+                // Utiliser insertIndex si fourni, sinon ajouter à la fin
+                const lines = Array.isArray(d.lines) ? [...d.lines] : [];
+                const insertIdx = catalogTransportDraft.insertIndex != null ? catalogTransportDraft.insertIndex : lines.length;
+                lines.splice(insertIdx, 0, newLine);
+                d.lines = lines;
               }
               // Add service images to day's decorative_images
               d = addServiceImagesToDay(d, svcFull);
               const normalized = normalizeQuotePositions({ ...qn, days: qn.days.map((x,i)=> i===dayIdx? d : x) });
               normalized.dirty = true;
+              // Recompute decorations for the day
+              try {
+                recomputeDayDecorations(normalized, dayIdx);
+              } catch {}
               return normalized;
             });
             setCatalogTransportDraft(null);
@@ -5004,12 +5611,20 @@ export default function QuoteEditor(){
                   raw_json: { ...(L.raw_json||{}), ...baseRaw }
                 } : L);
               } else {
-                d.lines = Array.isArray(d.lines) ? [...d.lines, newLine] : [newLine];
+                // Utiliser insertIndex si fourni, sinon ajouter à la fin
+                const lines = Array.isArray(d.lines) ? [...d.lines] : [];
+                const insertIdx = catalogActivityDraft.insertIndex != null ? catalogActivityDraft.insertIndex : lines.length;
+                lines.splice(insertIdx, 0, newLine);
+                d.lines = lines;
               }
               // Add service images to day's decorative_images
               d = addServiceImagesToDay(d, svcFull);
               const normalized = normalizeQuotePositions({ ...qn, days: qn.days.map((x,i)=> i===dayIdx? d : x) });
               normalized.dirty = true;
+              // Recompute decorations for the day
+              try {
+                recomputeDayDecorations(normalized, dayIdx);
+              } catch {}
               return normalized;
             });
             setCatalogActivityDraft(null);
