@@ -786,18 +786,53 @@ export default function QuoteEditor(){
           try {
             const full = await api.getServiceById(svc.id);
             const fields = full?.fields || {};
-            const dayDate = dstDay?.date ? new Date(dstDay.date) : new Date();
+            
+            // Get day date - use the day's date or fallback to quote start_date
+            let dayDate = null;
+            if (dstDay?.date) {
+              dayDate = new Date(dstDay.date + 'T00:00:00');
+            } else if (q?.start_date) {
+              dayDate = new Date(q.start_date + 'T00:00:00');
+            } else {
+              dayDate = new Date();
+            }
+            
+            // Find last day in same destination, else last day of itinerary
+            const dest = dstDay?.destination || null;
+            const sameDestDays = (q?.days || []).filter(x => (x?.destination || null) === dest && x?.date);
+            const lastDay = sameDestDays.length > 0 ? sameDestDays[sameDestDays.length - 1] : (q?.days || [])[q.days.length - 1];
+            const coDate = lastDay?.date ? new Date(lastDay.date + 'T00:00:00') : new Date(dayDate);
+            // checkout = day after lastDay
+            const checkInISO = dayDate.toISOString().slice(0,10);
+            const checkOutBase = new Date(coDate); 
+            checkOutBase.setDate(checkOutBase.getDate() + 1);
+            const checkOutISO = checkOutBase.toISOString().slice(0,10);
+            
+            const meal1 = String(fields?.meal_1 || '').toLowerCase();
+            const breakfastDefault = meal1.includes('breakfast');
+            
+            // Extract description from multiple possible sources
+            const description = (fields?.full_description || full?.full_description || full?.description || '') || '';
+            
             const draft = {
               mode: 'create',
               svcFull: full,
               dayIdx: dayIdx,
               insertIndex: insertBackIdx,
               defaults: {
-                check_in: dayDate.toISOString().slice(0,10),
-                nights: 1,
+                hotel_name: (full?.company || full?.supplier?.name || full?.name || '') || '',
+                hotel_stars: (fields?.hotel_stars ?? full?.hotel_stars ?? '') || '',
+                hotel_url: (fields?.hotel_url || full?.hotel_url || '') || '',
+                room_type: '', // mandatory, left empty by design
+                breakfast: !!breakfastDefault,
+                early_check_in: false,
+                check_in_date: checkInISO,
+                check_out_date: checkOutISO,
+                description: description,
                 internal_note: ''
               }
             };
+            console.log('[dropOnDayEnd] Draft defaults:', draft.defaults);
             setCatalogHotelDraft(draft);
           } catch (e) {
             console.error(e);
@@ -815,17 +850,44 @@ export default function QuoteEditor(){
         try {
           const full = await api.getServiceById(svc.id);
           const fields = full?.fields || {};
+          
+          // Extract duration from multiple possible sources
+          let duration = '';
+          // Check normalized fields first
+          if (fields?.duration) {
+            duration = String(fields.duration).trim();
+          } else if (fields?.activity_duration) {
+            duration = String(fields.activity_duration).trim();
+          } 
+          // Check raw extras (before normalization)
+          else if (full?.extras) {
+            if (full.extras.activity_duration) {
+              duration = String(full.extras.activity_duration).trim();
+            } else if (full.extras["Activity Duration"]) {
+              duration = String(full.extras["Activity Duration"]).trim();
+            } else if (full.extras.duration) {
+              duration = String(full.extras.duration).trim();
+            }
+          }
+          // Check duration_minutes and convert
+          if (!duration && full?.duration_minutes != null) {
+            duration = fmtHm(full.duration_minutes);
+          }
+          
           const draft = {
             mode: 'create',
             svcFull: full,
             dayIdx: dayIdx,
             insertIndex: insertBackIdx,
             defaults: {
-              description: (fields?.full_description || full?.full_description || '') || '',
+              description: (fields?.full_description || full?.full_description || full?.description || '') || '',
               start_time: (fields?.start_time || '') || '',
+              end_time: (fields?.end_time || '') || '',
+              duration: duration || '',
               internal_note: ''
             }
           };
+          console.log('[dropOnDayEnd] Activity default draft defaults:', draft.defaults);
           setCatalogActivityDraft(draft);
         } catch (e) {
           console.error(e);
@@ -880,16 +942,17 @@ export default function QuoteEditor(){
         className="cat-button"
         draggable={false}
         onClick={(e) => {
-          // Ne pas ouvrir le modal si on vient de drag
-          if (e.defaultPrevented) return;
-          setEditingLine(null);
-          onOpenModal();
+          // Désactiver le clic - seule l'insertion par drag and drop est autorisée
+          e.preventDefault();
+          e.stopPropagation();
         }}
         onMouseDown={(e) => {
           const meta = { fromInsert: true, category };
           startManualDrag(meta, category, e);
           e.preventDefault();
         }}
+        style={{ cursor: 'grab' }}
+        title={`Glisser-déposer "${category}" sur une date pour l'ajouter`}
       >
         {category}
       </div>
@@ -1356,25 +1419,90 @@ export default function QuoteEditor(){
       // Vérifier si c'est une activité
       const looksActivity = !looksHotel && !looksTransport && (svcTab === 'Activity' || categoryLower.includes('activity') || categoryLower.includes('small group') || categoryLower.includes('private') || categoryLower.includes('tickets'));
       
+      console.log('[dropOnDayEnd] Activity check:', { 
+        looksHotel, 
+        looksTransport, 
+        looksActivity, 
+        svcTab, 
+        category: svc?.category,
+        name: svc?.name 
+      });
+      
       if (looksActivity) {
         // Fetch full service and open activity modal
         (async () => {
           try {
+            console.log('[dropOnDayEnd] Fetching activity service...', svc.id);
             const full = await api.getServiceById(svc.id);
             const fields = full?.fields || {};
+            console.log('[dropOnDayEnd] Activity service fetched:', { 
+              id: full?.id, 
+              fields, 
+              duration_minutes: full?.duration_minutes,
+              activity_duration: fields?.activity_duration,
+              duration: fields?.duration,
+              extras: full?.extras,
+              fullExtrasKeys: full?.extras ? Object.keys(full.extras) : []
+            });
+            
+            // Log all possible duration sources
+            console.log('[dropOnDayEnd] Duration sources check:', {
+              'fields.duration': fields?.duration,
+              'fields.activity_duration': fields?.activity_duration,
+              'extras.activity_duration': full?.extras?.activity_duration,
+              'extras["Activity Duration"]': full?.extras?.["Activity Duration"],
+              'extras.duration': full?.extras?.duration,
+              'duration_minutes': full?.duration_minutes,
+              'allExtrasKeys': full?.extras ? Object.keys(full.extras).filter(k => k.toLowerCase().includes('duration')) : []
+            });
+            
+            // Extract duration from multiple possible sources
+            let duration = '';
+            // Check normalized fields first
+            if (fields?.duration) {
+              duration = String(fields.duration).trim();
+            } else if (fields?.activity_duration) {
+              duration = String(fields.activity_duration).trim();
+            } 
+            // Check raw extras (before normalization)
+            else if (full?.extras) {
+              if (full.extras.activity_duration) {
+                duration = String(full.extras.activity_duration).trim();
+              } else if (full.extras["Activity Duration"]) {
+                duration = String(full.extras["Activity Duration"]).trim();
+              } else if (full.extras.duration) {
+                duration = String(full.extras.duration).trim();
+              }
+            }
+            // Check duration_minutes and convert
+            if (!duration && full?.duration_minutes != null) {
+              duration = fmtHm(full.duration_minutes);
+            }
+            
+            console.log('[dropOnDayEnd] Extracted duration:', duration, 'from sources:', {
+              'fields.duration': fields?.duration,
+              'fields.activity_duration': fields?.activity_duration,
+              'extras.activity_duration': full?.extras?.activity_duration,
+              'extras["Activity Duration"]': full?.extras?.["Activity Duration"],
+              'extras.duration': full?.extras?.duration,
+              'duration_minutes': full?.duration_minutes
+            });
+            
             const draft = {
               mode: 'create',
               svcFull: full,
               dayIdx: toDay,
               insertIndex: insertBackIdx,
               defaults: {
-                description: (fields?.full_description || full?.full_description || '') || '',
+                description: (fields?.full_description || full?.full_description || full?.description || '') || '',
                 start_time: (fields?.start_time || '') || '',
                 end_time: (fields?.end_time || '') || '',
-                duration: (fields?.duration || fields?.activity_duration || (full?.duration_minutes != null ? fmtHm(full.duration_minutes) : '')) || '',
+                duration: duration || '',
                 internal_note: ''
               }
             };
+            console.log('[dropOnDayEnd] Activity draft defaults:', draft.defaults);
+            console.log('[dropOnDayEnd] Full draft object:', draft);
             setCatalogActivityDraft(draft);
           } catch (e) {
             console.error(e);
@@ -1685,7 +1813,7 @@ export default function QuoteEditor(){
     const q1 = {
       ...q0,
       title: data.internalName,
-      display_title: data.internalName, // Synchroniser display_title avec title
+      display_title: null, // Ne pas définir display_title lors de la création - reste vide pour le header
       pax: data.numberOfPax,
       start_date: data.startDate,
       end_date: data.endDate,
@@ -2635,18 +2763,36 @@ export default function QuoteEditor(){
           console.log('[insertCatalogService] Full service fetched:', full);
           // Compute defaults
           const fields = full?.fields || {};
-          const dayDate = d?.date ? new Date(d.date) : new Date();
+          console.log('[insertCatalogService] Fields extracted:', fields);
+          console.log('[insertCatalogService] Day data:', { date: d?.date, destination: d?.destination, idx });
+          
+          // Get day date - use the day's date or fallback to quote start_date
+          let dayDate = null;
+          if (d?.date) {
+            dayDate = new Date(d.date + 'T00:00:00');
+          } else if (q?.start_date) {
+            dayDate = new Date(q.start_date + 'T00:00:00');
+          } else {
+            dayDate = new Date();
+          }
+          
           // Find last day in same destination, else last day of itinerary
           const dest = d?.destination || null;
           const sameDestDays = (q?.days || []).filter(x => (x?.destination || null) === dest && x?.date);
           const lastDay = sameDestDays.length > 0 ? sameDestDays[sameDestDays.length - 1] : (q?.days || [])[q.days.length - 1];
-          const coDate = lastDay?.date ? new Date(lastDay.date) : new Date(dayDate);
+          const coDate = lastDay?.date ? new Date(lastDay.date + 'T00:00:00') : new Date(dayDate);
           // checkout = day after lastDay
           const checkInISO = dayDate.toISOString().slice(0,10);
-          const checkOutBase = new Date(coDate); checkOutBase.setDate(checkOutBase.getDate() + 1);
+          const checkOutBase = new Date(coDate); 
+          checkOutBase.setDate(checkOutBase.getDate() + 1);
           const checkOutISO = checkOutBase.toISOString().slice(0,10);
+          
           const meal1 = String(fields?.meal_1 || '').toLowerCase();
           const breakfastDefault = meal1.includes('breakfast');
+          
+          // Extract description from multiple possible sources
+          const description = (fields?.full_description || full?.full_description || full?.description || '') || '';
+          
           const draft = {
             mode: 'create',
             svcFull: full,
@@ -2654,16 +2800,17 @@ export default function QuoteEditor(){
             defaults: {
               hotel_name: (full?.company || full?.supplier?.name || full?.name || '') || '',
               hotel_stars: (fields?.hotel_stars ?? full?.hotel_stars ?? '') || '',   // avoid null → ''
-              hotel_url: (fields?.hotel_url || '') || '',
+              hotel_url: (fields?.hotel_url || full?.hotel_url || '') || '',
               room_type: '', // mandatory, left empty by design
               breakfast: !!breakfastDefault,
               early_check_in: false,
               check_in_date: checkInISO,
               check_out_date: checkOutISO,
-              description: (fields?.full_description || full?.full_description || '') || '',
+              description: description,
               internal_note: ''
             }
           };
+          console.log('[insertCatalogService] Draft defaults:', draft.defaults);
           console.log('[insertCatalogService] Setting catalogHotelDraft:', draft);
           setCatalogHotelDraft(draft);
         } catch (e) {
@@ -2679,24 +2826,89 @@ export default function QuoteEditor(){
     // Check if it's an activity service (not hotel, not transport)
     const looksActivity = !looksHotel && !looksTransport && (svcTab === 'Activity' || categoryLower.includes('activity') || categoryLower.includes('small group') || categoryLower.includes('private') || categoryLower.includes('tickets'));
     
+    console.log('[insertCatalogService] Activity check:', { 
+      looksHotel, 
+      looksTransport, 
+      looksActivity, 
+      svcTab, 
+      category: svc?.category,
+      name: svc?.name 
+    });
+    
     if (looksActivity) {
       // Fetch full service and open activity modal
       (async () => {
         try {
+          console.log('[insertCatalogService] Fetching activity service...', svc.id);
           const full = await api.getServiceById(svc.id);
           const fields = full?.fields || {};
+          console.log('[insertCatalogService] Activity service fetched:', { 
+            id: full?.id, 
+            fields, 
+            duration_minutes: full?.duration_minutes,
+            activity_duration: fields?.activity_duration,
+            duration: fields?.duration,
+            extras: full?.extras,
+            fullExtrasKeys: full?.extras ? Object.keys(full.extras) : []
+          });
+          
+          // Log all possible duration sources
+          console.log('[insertCatalogService] Duration sources check:', {
+            'fields.duration': fields?.duration,
+            'fields.activity_duration': fields?.activity_duration,
+            'extras.activity_duration': full?.extras?.activity_duration,
+            'extras["Activity Duration"]': full?.extras?.["Activity Duration"],
+            'extras.duration': full?.extras?.duration,
+            'duration_minutes': full?.duration_minutes,
+            'allExtrasKeys': full?.extras ? Object.keys(full.extras).filter(k => k.toLowerCase().includes('duration')) : []
+          });
+          
+          // Extract duration from multiple possible sources
+          let duration = '';
+          // Check normalized fields first
+          if (fields?.duration) {
+            duration = String(fields.duration).trim();
+          } else if (fields?.activity_duration) {
+            duration = String(fields.activity_duration).trim();
+          } 
+          // Check raw extras (before normalization)
+          else if (full?.extras) {
+            if (full.extras.activity_duration) {
+              duration = String(full.extras.activity_duration).trim();
+            } else if (full.extras["Activity Duration"]) {
+              duration = String(full.extras["Activity Duration"]).trim();
+            } else if (full.extras.duration) {
+              duration = String(full.extras.duration).trim();
+            }
+          }
+          // Check duration_minutes and convert
+          if (!duration && full?.duration_minutes != null) {
+            duration = fmtHm(full.duration_minutes);
+          }
+          
+          console.log('[insertCatalogService] Extracted duration:', duration, 'from sources:', {
+            'fields.duration': fields?.duration,
+            'fields.activity_duration': fields?.activity_duration,
+            'extras.activity_duration': full?.extras?.activity_duration,
+            'extras["Activity Duration"]': full?.extras?.["Activity Duration"],
+            'extras.duration': full?.extras?.duration,
+            'duration_minutes': full?.duration_minutes
+          });
+          
           const draft = {
             mode: 'create',
             svcFull: full,
             dayIdx: idx,
             defaults: {
-              description: (fields?.full_description || full?.full_description || '') || '',
+              description: (fields?.full_description || full?.full_description || full?.description || '') || '',
               start_time: (fields?.start_time || '') || '',
               end_time: (fields?.end_time || '') || '',
-              duration: (fields?.duration || fields?.activity_duration || (full?.duration_minutes != null ? fmtHm(full.duration_minutes) : '')) || '',
+              duration: duration || '',
               internal_note: ''
             }
           };
+          console.log('[insertCatalogService] Activity draft defaults:', draft.defaults);
+          console.log('[insertCatalogService] Full draft object:', draft);
           setCatalogActivityDraft(draft);
         } catch (e) {
           console.error(e);

@@ -183,16 +183,24 @@ export default function DestinationRangeModal({
           destinationName = selectedDest.name;
         }
 
-        // Patch days - utiliser dayId en priorité si disponible
+        // Patch days - utiliser dayId en priorité si disponible (seulement si c'est un entier)
         const payload = {
           nights,
           destination: destinationName,
           overwrite: true,
         };
         
-        // Utiliser dayId en priorité, sinon startDate
-        if (dayId) {
-          payload.day_id = dayId;
+        // Vérifier si dayId est un entier valide (pas un UUID temporaire)
+        // Accepter les nombres entiers ou les strings qui représentent des entiers
+        const isValidIntegerId = dayId && (
+          (typeof dayId === 'number' && Number.isInteger(dayId)) ||
+          (typeof dayId === 'string' && /^\d+$/.test(dayId))
+        );
+        
+        // Utiliser dayId seulement s'il est un entier valide, sinon utiliser startDate
+        if (isValidIntegerId) {
+          // Convertir en nombre si c'est une string
+          payload.day_id = typeof dayId === 'string' ? parseInt(dayId, 10) : dayId;
         } else if (startDate) {
           payload.start_date = startDate;
         }
