@@ -337,9 +337,24 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 /* Insert grid - overridden below */
 .cat-button{
   width:100%;background:#0f203a;border:1px solid rgba(255,255,255,.10);
-  color:var(--ink);padding:10px;border-radius:12px;cursor:pointer;text-align:left;
+  color:var(--ink);padding:10px;border-radius:12px;cursor:grab;text-align:left;
+  outline:none;
+  user-select:none;
+  -webkit-user-drag: element;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+.cat-button:focus {
+  outline: 2px solid #5fa8ff;
+  outline-offset: 2px;
 }
 .cat-button:hover{background:#142b50}
+.cat-button:active{cursor:grabbing}     /* Curseur pendant le drag */
+.cat-button.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+}
 
 .table{
   margin-top:12px;background:#0b1830;border:1px solid rgba(255,255,255,.08);
@@ -574,6 +589,10 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   padding: 20px clamp(16px, 2.2vw, 28px);
   max-width: 980px;           /* optionnel : largeur type page */
   margin: 0 auto;             /* centre la page dans la colonne */
+}
+
+.page.unicorn-mode {
+  background: linear-gradient(135deg, #ff9ecf 0%, #ffb3e6 25%, #c8a8ff 50%, #a8d8ff 75%, #b3e5ff 100%) !important;
 }
 
 .page h2.day-title { margin: 6px 0 10px; }
@@ -1476,9 +1495,26 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
   border: 1px solid rgba(255,255,255,.12);
   color: #e7ecf5;
   text-align: left;                       /* Aligner le texte à gauche */
+  cursor: grab;                            /* Indiquer que c'est draggable */
+  outline: none;                           /* Enlever l'outline par défaut */
+  user-select: none;                      /* Empêcher la sélection de texte */
+  -webkit-user-drag: element;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+/* Pas de règles spéciales pour les enfants - laisser le navigateur gérer */
+.svc-item:focus {
+  outline: 2px solid #5fa8ff;
+  outline-offset: 2px;
 }
 .svc-item + .svc-item { margin-top: .5rem; }
 .svc-item:hover { background: #14213a; border-color: #5fa8ff; }
+.svc-item:active { cursor: grabbing; }     /* Curseur pendant le drag */
+.svc-item.dragging {
+  opacity: 0.5;
+  transform: scale(0.95);
+}
 /* item dans le right rail */
 .svc-title {
   display: block;               /* aligné à gauche */
@@ -1491,6 +1527,7 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 .svc-stars { letter-spacing: .02em; font-weight: 600; opacity: .95; white-space: nowrap; }
 /* carte de survol */
 .svc-hover {
+  pointer-events: none !important; /* Ne pas bloquer les événements de drag */
   position: fixed; 
   z-index: 99999;
   width: 520px;                      /* ~x2 plus large */
@@ -1897,12 +1934,20 @@ html,body{margin:0;background:var(--bg);color:var(--ink);font-family: ui-sans-se
 
 /* Insertion bar between cards and at head/end of day */
 .drop-slot{
-  height: 4px;
-  margin: 2px 0;
+  height: 20px;
+  min-height: 20px;
+  margin: 6px 0;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border-radius: 8px;
-  background: transparent;
+  background: rgba(59, 130, 246, 0.03);
   position: relative;
+  z-index: 10; /* Augmenter le z-index pour être au-dessus des cartes */
+  /* Rendre la zone plus visible quand on drag au-dessus */
+  border: 2px dashed rgba(59, 130, 246, 0.2);
+}
+.drop-slot:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(59, 130, 246, 0.5);
 }
 
 .drop-slot.over{

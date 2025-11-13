@@ -1060,20 +1060,20 @@ export default function QuoteEditor(){
     };
   }, [dragging]);
 
-  const allowDrop = (e) => { 
+  const allowDrop = (e, stopProp = true) => { 
     e.preventDefault(); 
-    e.stopPropagation();
-    // Pour les drops depuis le catalogue, utiliser 'copy' au lieu de 'move'
+    if (stopProp) {
+      e.stopPropagation();
+    }
+    // Les services du catalogue utilisent le drag manuel et ne passent pas par ici
+    // Donc si on a des types JSON, c'est probablement un service existant qu'on déplace
     const types = e.dataTransfer.types || [];
-    if (types.includes('application/json') || types.includes('text/plain')) {
-      try {
-        // On ne peut pas lire les données dans onDragOver, mais on peut vérifier les types
-        e.dataTransfer.dropEffect = 'copy';
-      } catch {
-        e.dataTransfer.dropEffect = 'copy';
-      }
-    } else {
+    try {
+      // Par défaut, utiliser 'move' pour les services existants
+      // (les services du catalogue utilisent performManualDrop qui ne passe pas par allowDrop)
       e.dataTransfer.dropEffect = 'move';
+    } catch {
+      // Ignorer si on ne peut pas modifier dropEffect
     }
   };
 
@@ -2038,6 +2038,42 @@ export default function QuoteEditor(){
       return false;
     }
   };
+
+  // --- Auto-save when dirty (debounced) ---
+  const autoSaveTimeoutRef = useRef(null);
+  const saveQuoteRef = useRef(saveQuote);
+  // Mettre à jour la ref quand saveQuote change
+  useEffect(() => {
+    saveQuoteRef.current = saveQuote;
+  }, [saveQuote]);
+  
+  useEffect(() => {
+    // Auto-save seulement si la quote a un ID et est dirty
+    if (!q?.dirty || !q?.id) return;
+    
+    // Annuler le timeout précédent si il existe
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    
+    // Déclencher l'auto-save après 1 seconde de délai
+    autoSaveTimeoutRef.current = setTimeout(async () => {
+      console.info("[auto-save] Triggering auto-save after drag and drop");
+      const saved = await saveQuoteRef.current();
+      if (saved) {
+        console.info("[auto-save] Auto-save successful");
+      } else {
+        console.warn("[auto-save] Auto-save failed");
+      }
+    }, 1000);
+    
+    // Cleanup
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [q?.dirty, q?.id]);
 
   const fetchQuote = async (quoteId) => {
     if (!quoteId) return;
@@ -4641,7 +4677,9 @@ export default function QuoteEditor(){
                             id={`line-${l.id}`}
                             onDragOver={(e) => {
                               console.log('[dnd] dragOver on draggable-wrap', { dayIdx, displayIndex });
-                              allowDrop(e);
+                              // Ne pas bloquer la propagation ici - laisser les zones de drop recevoir l'événement
+                              e.preventDefault();
+                              // Ne pas appeler allowDrop ici car ça bloque la propagation vers les drop-slot
                             }}
                             onDragEnd={() => {
                               setDragging(null);
