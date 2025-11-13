@@ -1,6 +1,7 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import "../styles/quote.css";
+import RichTextEditor from "./RichTextEditor";
 
 export default function HotelModal({
   open = true,
@@ -15,6 +16,29 @@ export default function HotelModal({
   const [hotel_url, setHotelUrl] = useState(initialData?.hotel_url || "");
   const [description, setDescription] = useState(initialData?.description || "");
   const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
+
+  // Mettre à jour l'état quand initialData change ou quand le modal s'ouvre (pour l'édition)
+  useEffect(() => {
+    if (open) {
+      if (initialData) {
+        setHotelName(initialData.hotel_name || "");
+        setStars(initialData.stars || "4");
+        setRoomType(initialData.room_type || "");
+        setBreakfast(initialData.breakfast !== undefined ? initialData.breakfast : true);
+        setHotelUrl(initialData.hotel_url || "");
+        setDescription(initialData.description || "");
+        setInternalNote(initialData.internal_note || "");
+      } else {
+        setHotelName("");
+        setStars("4");
+        setRoomType("");
+        setBreakfast(true);
+        setHotelUrl("");
+        setDescription("");
+        setInternalNote("");
+      }
+    }
+  }, [initialData, open]);
 
   if (!open) return null;
 
@@ -122,10 +146,9 @@ export default function HotelModal({
 
           <div className="field">
             <label>Internal note</label>
-            <textarea
-              className="textarea input-internal-note"
+            <RichTextEditor
               value={internal_note}
-              onChange={(e) => setInternalNote(e.target.value)}
+              onChange={setInternalNote}
               placeholder=""
               rows={3}
             />

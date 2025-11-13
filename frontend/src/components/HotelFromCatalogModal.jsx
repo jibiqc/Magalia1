@@ -1,5 +1,6 @@
 import React, { useMemo, useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import RichTextEditor from "./RichTextEditor";
 
 export default function HotelFromCatalogModal({ open=true, data, onClose, onSubmit }) {
   // Debug logs
@@ -21,6 +22,7 @@ export default function HotelFromCatalogModal({ open=true, data, onClose, onSubm
   useEffect(() => {
     if (data?.defaults) {
       const d = data.defaults;
+      console.log('[HotelFromCatalogModal] Updating state from defaults:', d);
       setRoomType(d.room_type || "");
       setBreakfast(!!d.breakfast);
       setEarlyCI(!!d.early_check_in);
@@ -28,6 +30,8 @@ export default function HotelFromCatalogModal({ open=true, data, onClose, onSubm
       setCheckOut(d.check_out_date || "");
       setDescription(d.description || "");
       setInternalNote(d.internal_note || "");
+    } else {
+      console.log('[HotelFromCatalogModal] No defaults in data:', data);
     }
   }, [data]);
 
@@ -121,7 +125,7 @@ export default function HotelFromCatalogModal({ open=true, data, onClose, onSubm
           </div>
           <div className="form-row">
             <label>Internal note</label>
-            <textarea rows={3} value={internalNote} onChange={(e)=>setInternalNote(e.target.value)} />
+            <RichTextEditor rows={3} value={internalNote} onChange={setInternalNote} />
           </div>
           {/* lock note removed as requested */}
         </div>

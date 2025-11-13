@@ -2,11 +2,16 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { parseHHMM, fmtHm, addMins } from "../utils/duration";
 import TimeAmPmField from "./TimeAmPmField";
+import RichTextEditor from "./RichTextEditor";
 
 export default function ActivityFromCatalogModal({ open=true, data, onClose, onSubmit }) {
   // Debug logs
   useEffect(() => {
     console.log('[ActivityFromCatalogModal] Props:', { open, data: !!data, hasData: !!data });
+    if (data) {
+      console.log('[ActivityFromCatalogModal] Full data object:', data);
+      console.log('[ActivityFromCatalogModal] Data.defaults:', data.defaults);
+    }
   }, [open, data]);
   
   // Controlled fields - must be declared before early return
@@ -21,11 +26,14 @@ export default function ActivityFromCatalogModal({ open=true, data, onClose, onS
   useEffect(() => {
     if (data?.defaults) {
       const d = data.defaults;
+      console.log('[ActivityFromCatalogModal] Updating state from defaults:', d);
       setDescription(d.description || "");
       setStartTime(d.start_time || "");
       setEndTime(d.end_time || "");
       setDuration(d.duration || "");
       setInternalNote(d.internal_note || "");
+    } else {
+      console.log('[ActivityFromCatalogModal] No defaults in data:', data);
     }
   }, [data]);
 
@@ -144,7 +152,7 @@ export default function ActivityFromCatalogModal({ open=true, data, onClose, onS
           </div>
           <div className="form-row">
             <label>Internal note</label>
-            <textarea rows={3} value={internalNote} onChange={(e)=>setInternalNote(e.target.value)} />
+            <RichTextEditor rows={3} value={internalNote} onChange={setInternalNote} />
           </div>
         </div>
         <div className="modal-footer" style={{display:'flex', gap:12, justifyContent:'flex-end'}}>

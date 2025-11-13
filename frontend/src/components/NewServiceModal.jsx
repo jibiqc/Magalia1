@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import "../styles/quote.css";
 import { parseHHMM, fmtHm, addMins } from "../utils/duration";
 import TimeAmPmField from "./TimeAmPmField";
+import RichTextEditor from "./RichTextEditor";
 
 export default function NewServiceModal({
   open = true,
@@ -17,6 +18,29 @@ export default function NewServiceModal({
   const [end_time, setEndTime] = useState(initialData?.end_time || "");
   const [duration, setDuration] = useState(initialData?.duration || "");
   const [internal_note, setInternalNote] = useState(initialData?.internal_note || "");
+
+  // Mettre à jour l'état quand initialData change ou quand le modal s'ouvre (pour l'édition)
+  useEffect(() => {
+    if (open) {
+      if (initialData) {
+        setTitle(initialData.title || "");
+        setDescription(initialData.description || "");
+        setCategoryLabel(initialData.category_label || "");
+        setStartTime(initialData.start_time || "");
+        setEndTime(initialData.end_time || "");
+        setDuration(initialData.duration || "");
+        setInternalNote(initialData.internal_note || "");
+      } else {
+        setTitle("");
+        setDescription("");
+        setCategoryLabel("");
+        setStartTime("");
+        setEndTime("");
+        setDuration("");
+        setInternalNote("");
+      }
+    }
+  }, [initialData, open]);
 
   if (!open) return null;
 
@@ -125,10 +149,9 @@ export default function NewServiceModal({
 
           <div className="field">
             <label>Internal note</label>
-            <textarea
-              className="textarea input-internal-note"
+            <RichTextEditor
               value={internal_note}
-              onChange={(e) => setInternalNote(e.target.value)}
+              onChange={setInternalNote}
               placeholder=""
               rows={3}
             />
