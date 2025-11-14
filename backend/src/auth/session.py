@@ -1,4 +1,5 @@
 """Session management using signed HttpOnly cookies."""
+import logging
 import json
 import hmac
 import hashlib
@@ -7,6 +8,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional, Dict
 from fastapi import Request, Response
 from ..config import SECRET_KEY
+
+logger = logging.getLogger(__name__)
 
 SESSION_COOKIE_NAME = "magalia_session"
 SESSION_TTL_DAYS = 7
@@ -54,20 +57,29 @@ def create_session(response: Response, user_id: int, email: str, display_name: s
     signed = _sign_data(json_data)
     encoded = base64.b64encode(signed.encode()).decode()
     
+    logger.debug(f"Creating session cookie for user_id={user_id}, email={email}")
+    
+    # Set cookie - use "lax" for SameSite (works for same-site requests)
+    # Note: For cross-origin (localhost vs 127.0.0.1), cookies won't work
+    # Solution: Use the same domain for frontend and backend in development
     response.set_cookie(
         key=SESSION_COOKIE_NAME,
         value=encoded,
         max_age=SESSION_TTL_DAYS * 24 * 60 * 60,
         httponly=True,
         secure=False,  # Set to True in production with HTTPS
-        samesite="lax",
+        samesite="lax",  # "lax" works for same-site requests
         path="/",
+        domain=None,  # Don't set domain - let browser use request domain
     )
+    
+    logger.debug(f"Session cookie set: {SESSION_COOKIE_NAME}={encoded[:20]}...")
 
 
 def get_session(request: Request) -> Optional[Dict]:
     """Get and verify session from cookie."""
     cookie_value = request.cookies.get(SESSION_COOKIE_NAME)
+    logger.debug(f"get_session called. Cookie present: {cookie_value is not None}, all cookies: {list(request.cookies.keys())}")
     if not cookie_value:
         return None
     

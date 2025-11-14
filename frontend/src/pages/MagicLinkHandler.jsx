@@ -26,17 +26,16 @@ export default function MagicLinkHandler() {
     async function validateToken() {
       try {
         // Call backend magic link endpoint
-        // The backend sets the HttpOnly cookie and returns a redirect
-        // We follow the redirect and then verify auth
+        // The backend sets the HttpOnly cookie and returns JSON (no redirect to avoid CORS)
+        // Use localhost instead of 127.0.0.1 to match frontend domain for cookie sharing
         const API_BASE =
-          (window.__API_BASE ?? import.meta?.env?.VITE_API_BASE ?? "http://127.0.0.1:8000")
+          (window.__API_BASE ?? import.meta?.env?.VITE_API_BASE ?? "http://localhost:8000")
             .replace(/\/$/, "");
         const url = `${API_BASE}/auth/magic?token=${encodeURIComponent(token)}`;
         
         const response = await fetch(url, {
           method: "GET",
           credentials: "include",
-          redirect: "follow", // Follow redirects
         });
 
         if (!response.ok) {
@@ -45,16 +44,32 @@ export default function MagicLinkHandler() {
           throw new Error(JSON.stringify({ detail: errorData.detail || `HTTP ${response.status}` }));
         }
 
-        // Backend accepted token and set cookie (may have redirected)
-        // Verify authentication with /auth/me
+        // Backend accepted token and set cookie (returns JSON with success message)
+        const responseData = await response.json().catch(() => ({}));
+        console.log("[MagicLinkHandler] Token validated successfully, response:", responseData);
+        
+        // Wait a moment for cookie to be set
+        await new Promise(resolve => setTimeout(resolve, 200));
+        
+        // Verify authentication with /auth/me to ensure cookie is set
         try {
-          await api.getMe();
+          const user = await api.getMe();
+          console.log("[MagicLinkHandler] Authentication verified, user:", user);
           // Authenticated, redirect to main app
           navigate("/", { replace: true });
         } catch (authError) {
-          // Cookie might not be set yet, but backend accepted token
-          // Try redirecting anyway - ProtectedLayout will handle auth check
-          navigate("/", { replace: true });
+          console.error("[MagicLinkHandler] Failed to verify auth after token validation:", authError);
+          // Cookie might not be set yet, wait a bit more and try again
+          await new Promise(resolve => setTimeout(resolve, 300));
+          try {
+            const user = await api.getMe();
+            console.log("[MagicLinkHandler] Authentication verified on retry, user:", user);
+            navigate("/", { replace: true });
+          } catch (retryError) {
+            console.error("[MagicLinkHandler] Auth verification failed on retry:", retryError);
+            // Show error instead of redirecting - cookie might not be set
+            setError("Authentication successful but session cookie was not set. Please try again.");
+          }
         }
       } catch (err) {
         // Extract error message if available
@@ -70,7 +85,10 @@ export default function MagicLinkHandler() {
             // Use default message
           }
         }
+        console.error("[MagicLinkHandler] Error validating token:", err);
+        console.error("[MagicLinkHandler] Error message:", errorMessage);
         setError(errorMessage);
+        // Don't redirect automatically - let user see the error and click "Back to login"
       } finally {
         setLoading(false);
       }

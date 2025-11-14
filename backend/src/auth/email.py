@@ -1,4 +1,5 @@
 """Email sending utilities for magic link authentication."""
+import logging
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -11,6 +12,8 @@ from ..config import (
     SMTP_FROM_EMAIL,
     MAGALIA_APP_BASE_URL,
 )
+
+logger = logging.getLogger(__name__)
 
 
 def send_magic_link_email(to_email: str, token: str) -> None:
@@ -39,20 +42,28 @@ Magalia Team
     msg.attach(MIMEText(body, "plain"))
     
     try:
+        # Set timeout for SMTP operations
         if SMTP_USE_TLS:
-            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
             server.starttls()
         else:
-            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
+            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
         
         if SMTP_USER and SMTP_PASSWORD:
             server.login(SMTP_USER, SMTP_PASSWORD)
         
         server.send_message(msg)
         server.quit()
+    except smtplib.SMTPAuthenticationError as e:
+        # Authentication failed - likely wrong credentials or need app password
+        logger.error(f"SMTP authentication failed for {SMTP_USER}: {e}")
+        raise Exception("SMTP authentication failed. Please check your credentials or use an app password for Office 365.")
+    except smtplib.SMTPException as e:
+        # Other SMTP errors
+        logger.error(f"SMTP error sending email to {to_email}: {e}")
+        raise Exception(f"SMTP error: {str(e)}")
     except Exception as e:
-        # Log error but don't fail the request
-        # In production, use proper logging
-        print(f"Failed to send email to {to_email}: {e}")
-        raise
+        # Network or other errors
+        logger.error(f"Failed to send email to {to_email}: {e}")
+        raise Exception(f"Failed to send email: {str(e)}")
 
