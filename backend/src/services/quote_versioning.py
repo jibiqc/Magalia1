@@ -11,6 +11,41 @@ from ..models_quote import Quote, QuoteVersion
 logger = logging.getLogger(__name__)
 
 
+def get_user_display_name(email: Optional[str]) -> Optional[str]:
+    """
+    Get a user-friendly display name from an email address.
+    
+    Rule:
+    - If email ends with "@eetvl.com": return the part before "@" with first letter capitalized
+    - Otherwise: return the email as-is (or None if email is None)
+    
+    Examples:
+    - fabien@eetvl.com → "Fabien"
+    - elisa@eetvl.com → "Elisa"
+    - kim.chisholm@eetvl.com → "Kim.chisholm"
+    - other@example.com → "other@example.com"
+    - None → None
+    
+    Args:
+        email: The user's email address
+    
+    Returns:
+        Display name string, or None if email is None
+    """
+    if not email:
+        return None
+    
+    if email.endswith("@eetvl.com"):
+        # Extract part before "@" and capitalize first letter
+        local_part = email.split("@")[0]
+        if local_part:
+            return local_part[0].upper() + local_part[1:] if len(local_part) > 1 else local_part.upper()
+        return local_part
+    
+    # For non-eetvl emails, return as-is
+    return email
+
+
 # Version type constants
 VERSION_TYPE_MANUAL = "manual"
 VERSION_TYPE_AUTO_EXPORT_WORD = "auto_export_word"
@@ -50,17 +85,56 @@ def compute_total_price(quote: Quote) -> Optional[float]:
     """
     Compute the total selling price (grand_total) for a quote snapshot.
     
-    Uses the stored grand_total from the quote, which should already be computed.
+    Uses the same calculation logic as the frontend and /reprice endpoint:
+    - Achats USD (incl. Onspot) + Commission% sur Achats + Ventes USD (incl. Hassle)
     
     Args:
         quote: The Quote instance
     
     Returns:
-        The grand_total as float, or None if not available
+        The grand_total as float, or None if calculation fails
     """
-    if quote.grand_total is not None:
-        return float(quote.grand_total)
-    return None
+    try:
+        import math
+        from decimal import Decimal
+        # Import compute_onspot and _days_count from quotes module
+        from ..api.quotes import compute_onspot, _days_count
+        
+        # Compute onspot (same logic as reprice endpoint)
+        onspot_total = compute_onspot(quote)
+        
+        # Calculate hassle (same logic as reprice endpoint)
+        pax = quote.pax or 0
+        hassle_auto = pax * 150
+        hassle_total = float(quote.hassle_manual) if quote.hassle_manual is not None else hassle_auto
+        
+        # Get paid lines only (exclude Trip info and Internal)
+        paid_lines = []
+        for d in quote.days:
+            for l in d.lines:
+                c = (l.category or "").lower()
+                if c in ("trip info", "internal"):
+                    continue
+                paid_lines.append(l)
+        
+        # Sum achats and ventes from paid lines
+        achats_sum = sum(float(l.achat_usd or 0) for l in paid_lines)
+        ventes_sum = sum(float(l.vente_usd or 0) for l in paid_lines)
+        
+        # Calculate totals (same logic as reprice endpoint)
+        achats_total = round(float(onspot_total) + achats_sum, 2)
+        margin = float(quote.margin_pct) if quote.margin_pct is not None else 0.1627
+        commission_total = round(achats_total * margin, 2)
+        ventes_total = round(ventes_sum + hassle_total, 2)
+        grand_total = round(achats_total + commission_total + ventes_total, 2)
+        
+        return grand_total
+    except Exception as e:
+        logger.error(f"Error computing total price for quote {quote.id}: {e}", exc_info=True)
+        # Fallback to stored grand_total if calculation fails
+        if quote.grand_total is not None:
+            return float(quote.grand_total)
+        return None
 
 
 def get_next_version_label(db: Session, quote_id: int) -> str:
@@ -254,7 +328,7 @@ def create_before_restore_version(
         quote_id=quote.id,
         label=label,
         comment=comment,
-        created_by=created_by,
+        created_by=get_user_display_name(created_by),
         type=VERSION_TYPE_AUTO_BEFORE_RESTORE,
         total_price=Decimal(str(total_price)) if total_price is not None else None,
         snapshot_json=snapshot_json
@@ -326,7 +400,7 @@ def create_auto_version(
             quote_id=quote.id,
             label=label,
             comment=comment,
-            created_by=created_by,
+            created_by=get_user_display_name(created_by),
             type=version_type,
             export_type=export_type,
             export_file_name=export_file_name,

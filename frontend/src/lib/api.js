@@ -129,8 +129,40 @@ export const api = {
     await downloadFile(`${API_BASE}/quotes/${quoteId}/export/word`, `quote_${quoteId}.docx`);
   },
 
-  async exportQuoteExcel(quoteId) {
-    await downloadFile(`${API_BASE}/quotes/${quoteId}/export/excel`, `quote_${quoteId}.xlsx`);
+  async exportQuoteExcel(quoteId, createVersion = false) {
+    const url = `${API_BASE}/quotes/${quoteId}/export/excel${createVersion ? '?create_version=true' : ''}`;
+    await downloadFile(url, `quote_${quoteId}.xlsx`);
+  },
+
+  // Quote Versions
+  async getQuoteVersions(quoteId, offset = 0, limit = 10, includeArchived = false) {
+    const params = new URLSearchParams();
+    params.set("offset", String(offset));
+    params.set("limit", String(limit));
+    if (includeArchived) {
+      params.set("include_archived", "true");
+    }
+    return apiCall("GET", `/quotes/${quoteId}/versions?${params.toString()}`);
+  },
+
+  async getQuoteVersion(quoteId, versionId) {
+    return apiCall("GET", `/quotes/${quoteId}/versions/${versionId}`);
+  },
+
+  async createQuoteVersion(quoteId, data) {
+    return apiCall("POST", `/quotes/${quoteId}/versions`, data);
+  },
+
+  async updateQuoteVersion(quoteId, versionId, data) {
+    return apiCall("PATCH", `/quotes/${quoteId}/versions/${versionId}`, data);
+  },
+
+  async archiveQuoteVersion(quoteId, versionId) {
+    return apiCall("POST", `/quotes/${quoteId}/versions/${versionId}/archive`);
+  },
+
+  async restoreQuoteVersion(quoteId, versionId) {
+    return apiCall("POST", `/quotes/${quoteId}/versions/${versionId}/restore`);
   },
 
   // --- Services catalog API ---

@@ -410,8 +410,9 @@ def export_quote_word(quote_id: int, request: Request, db: Session = Depends(get
         
         # Create automatic version after successful export
         try:
+            from ..services.quote_versioning import get_user_display_name
             user = get_current_user(request, db)
-            created_by = user.email if user else None
+            created_by = get_user_display_name(user.email if user else None)
             create_auto_version(
                 quote=q,
                 version_type=VERSION_TYPE_AUTO_EXPORT_WORD,
@@ -472,8 +473,9 @@ def export_quote_excel(
         # Create automatic version if requested
         if create_version:
             try:
+                from ..services.quote_versioning import get_user_display_name
                 user = get_current_user(request, db)
-                created_by = user.email if user else None
+                created_by = get_user_display_name(user.email if user else None)
                 create_auto_version(
                     quote=q,
                     version_type=VERSION_TYPE_AUTO_EXPORT_EXCEL,
@@ -913,8 +915,9 @@ def create_quote_version(
         raise HTTPException(status_code=404, detail="Quote not found")
     
     # Get current user (optional, for created_by field)
+    from ..services.quote_versioning import get_user_display_name
     user = get_current_user(request, db)
-    created_by = user.email if user else None
+    created_by = get_user_display_name(user.email if user else None)
     
     # Build snapshot
     snapshot_json = build_quote_snapshot(quote, db=db)
@@ -1096,8 +1099,9 @@ def restore_quote_version(
         raise HTTPException(status_code=404, detail="Version not found")
     
     # Get current user (for before-restore version)
+    from ..services.quote_versioning import get_user_display_name
     user = get_current_user(request, db)
-    created_by = user.email if user else None
+    created_by = get_user_display_name(user.email if user else None)
     
     # Step 1: Create "before restore" version
     before_restore_version = create_before_restore_version(
