@@ -6,7 +6,6 @@ from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 
 from ..models_quote import Quote, QuoteVersion
-from ..api.quotes import _to_out
 
 
 # Version type constants
@@ -36,6 +35,8 @@ def build_quote_snapshot(quote: Quote, db: Optional[Session] = None) -> Dict[str
     Returns:
         Dictionary representation of the quote (same format as QuoteOut API response)
     """
+    # Import here to avoid circular dependency
+    from ..api.quotes import _to_out
     quote_out = _to_out(quote, db=db, include_first_image=False)
     # Convert Pydantic model to dict for JSON storage
     return quote_out.model_dump()

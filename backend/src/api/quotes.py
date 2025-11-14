@@ -5,7 +5,7 @@ from decimal import Decimal, ROUND_HALF_UP
 
 from math import ceil
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import Response
 
 from sqlalchemy.orm import Session
@@ -14,12 +14,20 @@ from sqlalchemy import desc
 
 from ..db import get_db
 
-from ..models_quote import Quote, QuoteDay, QuoteLine
+from ..models_quote import Quote, QuoteDay, QuoteLine, QuoteVersion
 
-from .schemas_quote import QuoteIn, QuoteOut, DestinationRangePatch, QuoteDayOut
+from .schemas_quote import QuoteIn, QuoteOut, DestinationRangePatch, QuoteDayOut, QuoteVersionIn, QuoteVersionOut, QuoteVersionDetailOut, QuoteVersionListOut
 from typing import List, Optional, Dict
 
 from ..models.prod_models import ServiceImage
+
+from ..api.auth import get_current_user
+from ..services.quote_versioning import (
+    build_quote_snapshot,
+    compute_total_price,
+    get_next_version_label,
+    VERSION_TYPE_MANUAL
+)
 
 logger = logging.getLogger(__name__)
 
@@ -713,4 +721,172 @@ def patch_days_by_range(
         error_detail = traceback.format_exc()
         logger.error(f"ERROR in patch_days_by_range: {e}\n{error_detail}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+# --------- Quote Versioning endpoints ----------
+
+@router.get("/{quote_id}/versions", response_model=QuoteVersionListOut)
+def list_quote_versions(
+    quote_id: int,
+    limit: int = Query(10, ge=1, le=100, description="Number of versions per page"),
+    offset: int = Query(0, ge=0, description="Offset for pagination"),
+    include_archived: bool = Query(False, description="Include archived versions"),
+    db: Session = Depends(get_db)
+):
+    """
+    List versions for a quote (paginated, sorted by newest first).
+    By default, excludes archived versions.
+    """
+    # Verify quote exists
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    # Build query
+    query = db.query(QuoteVersion).filter(QuoteVersion.quote_id == quote_id)
+    
+    # Exclude archived by default
+    if not include_archived:
+        query = query.filter(QuoteVersion.archived_at.is_(None))
+    
+    # Get total count
+    total = query.count()
+    
+    # Get paginated results (newest first)
+    versions = (
+        query
+        .order_by(desc(QuoteVersion.created_at))
+        .offset(offset)
+        .limit(limit)
+        .all()
+    )
+    
+    # Convert to output format
+    items = []
+    for v in versions:
+        items.append(QuoteVersionOut(
+            id=v.id,
+            quote_id=v.quote_id,
+            label=v.label,
+            comment=v.comment,
+            created_at=v.created_at.isoformat() if v.created_at else None,
+            created_by=v.created_by,
+            type=v.type,
+            export_type=v.export_type,
+            export_file_name=v.export_file_name,
+            total_price=float(v.total_price) if v.total_price is not None else None,
+            archived_at=v.archived_at.isoformat() if v.archived_at else None
+        ))
+    
+    has_more = (offset + len(items)) < total
+    
+    return QuoteVersionListOut(
+        items=items,
+        total=total,
+        has_more=has_more
+    )
+
+
+@router.get("/{quote_id}/versions/{version_id}", response_model=QuoteVersionDetailOut)
+def get_quote_version(
+    quote_id: int,
+    version_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get full details of a specific version, including the complete snapshot JSON.
+    """
+    # Verify quote exists
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    # Get version
+    version = (
+        db.query(QuoteVersion)
+        .filter(
+            QuoteVersion.id == version_id,
+            QuoteVersion.quote_id == quote_id
+        )
+        .first()
+    )
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    # Return with snapshot
+    return QuoteVersionDetailOut(
+        id=version.id,
+        quote_id=version.quote_id,
+        label=version.label,
+        comment=version.comment,
+        created_at=version.created_at.isoformat() if version.created_at else None,
+        created_by=version.created_by,
+        type=version.type,
+        export_type=version.export_type,
+        export_file_name=version.export_file_name,
+        total_price=float(version.total_price) if version.total_price is not None else None,
+        archived_at=version.archived_at.isoformat() if version.archived_at else None,
+        snapshot_json=version.snapshot_json or {}
+    )
+
+
+@router.post("/{quote_id}/versions", response_model=QuoteVersionOut)
+def create_quote_version(
+    quote_id: int,
+    payload: QuoteVersionIn,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a manual version of a quote.
+    Requires a comment and creates a full snapshot of the current quote state.
+    """
+    # Verify quote exists
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    # Get current user (optional, for created_by field)
+    user = get_current_user(request, db)
+    created_by = user.email if user else None
+    
+    # Build snapshot
+    snapshot_json = build_quote_snapshot(quote, db=db)
+    
+    # Compute total price
+    total_price = compute_total_price(quote)
+    
+    # Get next version label
+    label = get_next_version_label(db, quote_id)
+    
+    # Create version
+    version = QuoteVersion(
+        quote_id=quote_id,
+        label=label,
+        comment=payload.comment,
+        created_by=created_by,
+        type=VERSION_TYPE_MANUAL,
+        total_price=Decimal(str(total_price)) if total_price is not None else None,
+        snapshot_json=snapshot_json
+    )
+    
+    db.add(version)
+    db.commit()
+    db.refresh(version)
+    
+    # Return created version
+    return QuoteVersionOut(
+        id=version.id,
+        quote_id=version.quote_id,
+        label=version.label,
+        comment=version.comment,
+        created_at=version.created_at.isoformat() if version.created_at else None,
+        created_by=version.created_by,
+        type=version.type,
+        export_type=version.export_type,
+        export_file_name=version.export_file_name,
+        total_price=float(version.total_price) if version.total_price is not None else None,
+        archived_at=version.archived_at.isoformat() if version.archived_at else None
+    )
 
