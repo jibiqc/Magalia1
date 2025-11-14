@@ -4376,6 +4376,35 @@ export default function QuoteEditor(){
         {q?.id && (
           <button 
             className="btn" 
+            onClick={async () => {
+              if (!q?.id) return;
+              const comment = window.prompt("Enter a comment for this version (required):");
+              if (!comment || !comment.trim()) {
+                if (comment !== null) {
+                  showNotice("Comment is required", "error");
+                }
+                return;
+              }
+              try {
+                showNotice("Creating version...", "info");
+                await api.createQuoteVersion(q.id, { comment: comment.trim() });
+                showNotice("Version created successfully", "success");
+                // Optionally open version history modal
+                setIsVersionHistoryOpen(true);
+              } catch (err) {
+                console.error("Create version error:", err);
+                showNotice(err.detail || "Failed to create version", "error");
+              }
+            }}
+            title="Save current state as a new version"
+          >
+            Save version
+          </button>
+        )}
+
+        {q?.id && (
+          <button 
+            className="btn" 
             onClick={() => setIsVersionHistoryOpen(true)}
             title="View version history"
           >
@@ -5998,6 +6027,12 @@ export default function QuoteEditor(){
         quoteId={q?.id}
         isOpen={isVersionHistoryOpen}
         onClose={() => setIsVersionHistoryOpen(false)}
+        onQuoteRestored={() => {
+          // Reload quote after restore
+          if (q?.id) {
+            fetchQuote(q.id);
+          }
+        }}
       />
 
     </div>

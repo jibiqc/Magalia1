@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { api } from "../lib/api";
 
-export default function VersionHistoryModal({ quoteId, isOpen, onClose }) {
+export default function VersionHistoryModal({ quoteId, isOpen, onClose, onQuoteRestored }) {
   const [versions, setVersions] = useState([]);
   const [selectedVersion, setSelectedVersion] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -10,6 +10,7 @@ export default function VersionHistoryModal({ quoteId, isOpen, onClose }) {
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(false);
   const [total, setTotal] = useState(0);
+  const [actionLoading, setActionLoading] = useState(false);
   const limit = 10;
 
   // Load versions when modal opens
@@ -121,6 +122,101 @@ export default function VersionHistoryModal({ quoteId, isOpen, onClose }) {
   const truncateComment = (comment, maxLength = 60) => {
     if (!comment) return "";
     return comment.length > maxLength ? comment.substring(0, maxLength) + "..." : comment;
+  };
+
+  const handleRestore = async () => {
+    if (!selectedVersion || !quoteId) return;
+    const confirmed = window.confirm(
+      `Are you sure you want to restore this quote to version ${selectedVersion.label}?\n\nThis will create a backup of the current state before restoring.`
+    );
+    if (!confirmed) return;
+
+    setActionLoading(true);
+    try {
+      await api.restoreQuoteVersion(quoteId, selectedVersion.id);
+      // Reload versions list
+      await loadVersions(0);
+      // Reload quote if callback provided
+      if (onQuoteRestored) {
+        onQuoteRestored();
+      }
+      setError(null);
+    } catch (err) {
+      console.error("[VersionHistoryModal] Restore error:", err);
+      setError(err.detail || err.message || "Failed to restore version");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleRename = async () => {
+    if (!selectedVersion || !quoteId) return;
+    const newLabel = window.prompt("Enter new label:", selectedVersion.label);
+    if (!newLabel || newLabel.trim() === selectedVersion.label) return;
+
+    setActionLoading(true);
+    try {
+      const updated = await api.updateQuoteVersion(quoteId, selectedVersion.id, {
+        label: newLabel.trim(),
+      });
+      // Update selected version and list
+      setSelectedVersion(updated);
+      setVersions((prev) =>
+        prev.map((v) => (v.id === selectedVersion.id ? updated : v))
+      );
+      setError(null);
+    } catch (err) {
+      console.error("[VersionHistoryModal] Rename error:", err);
+      setError(err.detail || err.message || "Failed to rename version");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleEditComment = async () => {
+    if (!selectedVersion || !quoteId) return;
+    const newComment = window.prompt("Enter new comment:", selectedVersion.comment || "");
+    if (newComment === null) return; // User cancelled
+
+    setActionLoading(true);
+    try {
+      const updated = await api.updateQuoteVersion(quoteId, selectedVersion.id, {
+        comment: newComment.trim() || null,
+      });
+      // Update selected version and list
+      setSelectedVersion(updated);
+      setVersions((prev) =>
+        prev.map((v) => (v.id === selectedVersion.id ? updated : v))
+      );
+      setError(null);
+    } catch (err) {
+      console.error("[VersionHistoryModal] Edit comment error:", err);
+      setError(err.detail || err.message || "Failed to update comment");
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleArchive = async () => {
+    if (!selectedVersion || !quoteId) return;
+    const confirmed = window.confirm(
+      `Are you sure you want to archive version ${selectedVersion.label}?\n\nArchived versions will be hidden from the default list.`
+    );
+    if (!confirmed) return;
+
+    setActionLoading(true);
+    try {
+      await api.archiveQuoteVersion(quoteId, selectedVersion.id);
+      // Reload versions list (archived version will be hidden)
+      await loadVersions(0);
+      setSelectedVersion(null);
+      setError(null);
+    } catch (err) {
+      console.error("[VersionHistoryModal] Archive error:", err);
+      setError(err.detail || err.message || "Failed to archive version");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   if (!isOpen) {
@@ -249,6 +345,36 @@ export default function VersionHistoryModal({ quoteId, isOpen, onClose }) {
                     <div className="detail-comment">{selectedVersion.comment}</div>
                   </div>
                 )}
+                <div className="detail-actions">
+                  <button
+                    className="action-button primary"
+                    onClick={handleRestore}
+                    disabled={actionLoading}
+                  >
+                    Restore
+                  </button>
+                  <button
+                    className="action-button"
+                    onClick={handleRename}
+                    disabled={actionLoading}
+                  >
+                    Rename label
+                  </button>
+                  <button
+                    className="action-button"
+                    onClick={handleEditComment}
+                    disabled={actionLoading}
+                  >
+                    Edit comment
+                  </button>
+                  <button
+                    className="action-button danger"
+                    onClick={handleArchive}
+                    disabled={actionLoading}
+                  >
+                    Archive
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -473,6 +599,46 @@ export default function VersionHistoryModal({ quoteId, isOpen, onClose }) {
         }
         .error-state {
           color: #fc8181;
+        }
+        .detail-actions {
+          margin-top: 24px;
+          padding-top: 24px;
+          border-top: 1px solid rgba(255, 255, 255, 0.08);
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+        .action-button {
+          background: #1a2332;
+          color: #e6ecff;
+          border: 1px solid rgba(255, 255, 255, 0.12);
+          border-radius: 6px;
+          padding: 8px 16px;
+          cursor: pointer;
+          font-size: 14px;
+          transition: all 0.2s;
+        }
+        .action-button:hover:not(:disabled) {
+          background: #1f2937;
+          border-color: rgba(255, 255, 255, 0.2);
+        }
+        .action-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+        .action-button.primary {
+          background: #2563eb;
+          border-color: #2563eb;
+        }
+        .action-button.primary:hover:not(:disabled) {
+          background: #1d4ed8;
+        }
+        .action-button.danger {
+          background: #dc2626;
+          border-color: #dc2626;
+        }
+        .action-button.danger:hover:not(:disabled) {
+          background: #b91c1c;
         }
       `}</style>
     </div>,
