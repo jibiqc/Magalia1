@@ -1,0 +1,29 @@
+[project]
+name = "magalia-backend"
+version = "0.1.0"
+description = "FastAPI backend for Magalia travel quote management"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi>=0.121.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.13.0",
+    "python-dotenv>=1.0.0",
+    "python-docx>=1.1.0",
+    "bleach>=6.0.0",
+    "pillow>=10.0.0",
+    "openpyxl>=3.1.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
+]
+
