@@ -336,20 +336,37 @@ def build_xlsx_for_quote(db: Session, quote_id: int) -> BytesIO:
         if row_data["supplier"]:
             ws.cell(row=excel_row, column=7).value = row_data["supplier"]
         
-        # Column H: Internal note
-        if row_data["internal_note"]:
-            ws.cell(row=excel_row, column=8).value = row_data["internal_note"]
+        # Column H: Internal note (or provider_url if internal_note is empty, as clickable hyperlink)
+        internal_note = row_data["internal_note"]
+        provider_url = row_data["provider_url"]
         
-        # Column I: Provider URL (as clickable hyperlink)
-        if row_data["provider_url"]:
-            url = row_data["provider_url"].strip()
+        # If H is empty, use I's content in H (as clickable hyperlink) and leave I empty
+        if not internal_note and provider_url:
+            url = provider_url.strip()
             # Ensure URL has protocol
             if url and not url.startswith(("http://", "https://")):
                 url = "https://" + url
-            cell = ws.cell(row=excel_row, column=9)
-            cell.value = url
-            cell.hyperlink = url
-            cell.font = Font(underline="single", color="0563C1")
+            # Put URL in H as clickable hyperlink
+            cell_h = ws.cell(row=excel_row, column=8)
+            cell_h.value = url
+            cell_h.hyperlink = url
+            cell_h.font = Font(underline="single", color="0563C1")
+            # Don't put anything in I
+        else:
+            # Normal case: H has content or both H and I are empty
+            if internal_note:
+                ws.cell(row=excel_row, column=8).value = internal_note
+            
+            # Column I: Provider URL (as clickable hyperlink) - only if H is not empty
+            if provider_url:
+                url = provider_url.strip()
+                # Ensure URL has protocol
+                if url and not url.startswith(("http://", "https://")):
+                    url = "https://" + url
+                cell = ws.cell(row=excel_row, column=9)
+                cell.value = url
+                cell.hyperlink = url
+                cell.font = Font(underline="single", color="0563C1")
     
     # === BLANK ROW ===
     blank_row = last_service_row + 1
@@ -389,11 +406,20 @@ def build_xlsx_for_quote(db: Session, quote_id: int) -> BytesIO:
         top=Side(style='thin'),
         bottom=Side(style='thin')
     )
+    # Border for columns G, H, I: only left border (no top, right, bottom)
+    left_only_border = Border(
+        left=Side(style='thin')
+    )
     
     # Apply borders from row 2 to grand_total_row
     for row in range(2, grand_total_row + 1):
         for col in range(2, 10):  # Columns B to I
-            ws.cell(row=row, column=col).border = thin_border
+            if col == 7:  # Column G: only left border
+                ws.cell(row=row, column=col).border = left_only_border
+            elif col >= 8:  # Columns H, I: no borders
+                ws.cell(row=row, column=col).border = Border()  # No borders
+            else:  # Columns B to F: full borders
+                ws.cell(row=row, column=col).border = thin_border
     
     # === RECAP BLOCK (2 blank rows after grand total) ===
     recap_start_row = grand_total_row + 3

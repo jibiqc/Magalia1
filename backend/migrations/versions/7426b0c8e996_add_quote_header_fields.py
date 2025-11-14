@@ -33,3 +33,5 @@ def downgrade() -> None:
         batch.drop_column("hero_photo_1")
         batch.drop_column("display_title")
 
+
+

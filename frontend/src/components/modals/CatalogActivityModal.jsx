@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import "../../styles/quote.css";
+import RichTextEditor from "../RichTextEditor";
 
 export default function CatalogActivityModal({
   open = true,
@@ -12,14 +13,18 @@ export default function CatalogActivityModal({
   const [description, setDescription] = useState("");
   const [internal_note, setInternalNote] = useState("");
 
-  // Initialize from line when it changes
+  // Initialize from line when it changes or when modal opens
   useEffect(() => {
-    if (line) {
+    if (open && line) {
       setTitle(line.title || "");
       setDescription(line.raw_json?.snapshot?.description || line.raw_json?.snapshot?.body || "");
       setInternalNote(line.raw_json?.snapshot?.internal_note || "");
+    } else if (open && !line) {
+      setTitle("");
+      setDescription("");
+      setInternalNote("");
     }
-  }, [line]);
+  }, [line, open]);
 
   if (!open || !line) return null;
 
@@ -90,10 +95,9 @@ export default function CatalogActivityModal({
 
           <div className="field">
             <label>Internal note</label>
-            <textarea
-              className="textarea input-internal-note"
+            <RichTextEditor
               value={internal_note}
-              onChange={(e) => setInternalNote(e.target.value)}
+              onChange={setInternalNote}
               placeholder=""
               rows={3}
             />

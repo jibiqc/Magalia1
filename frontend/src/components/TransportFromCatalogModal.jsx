@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import TimeAmPmField from "./TimeAmPmField";
+import RichTextEditor from "./RichTextEditor";
 
 export default function TransportFromCatalogModal({ open=true, data, onClose, onSubmit }) {
   // Debug logs
@@ -89,7 +90,7 @@ export default function TransportFromCatalogModal({ open=true, data, onClose, on
           </div>
           <div className="form-row">
             <label>Internal note</label>
-            <textarea rows={3} value={internalNote} onChange={(e)=>setInternalNote(e.target.value)} />
+            <RichTextEditor rows={3} value={internalNote} onChange={setInternalNote} />
           </div>
         </div>
         <div className="modal-footer" style={{display:'flex', gap:12, justifyContent:'flex-end'}}>

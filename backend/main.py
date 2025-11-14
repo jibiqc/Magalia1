@@ -3,6 +3,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
+
+# Import all models first to ensure SQLAlchemy metadata is properly initialized
+from src.models.db import Base, engine
+from src.models_quote import Quote, QuoteDay, QuoteLine
+from src.models_geo import Destination, DestinationPhoto
+from src.models.prod_models import ServiceCatalog, ServicePopularity, Supplier, ServiceImage
+
+# Import routers after models
 from src.api.quotes import router as quotes_router
 from src.api.destinations import router as destinations_router
 from src.api.services import router as services_router
@@ -25,6 +33,20 @@ app.add_middleware(
 )
 
 # Exception handlers to ensure CORS headers are always present
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Handle Pydantic validation errors (422) with CORS headers."""
+    print(f"Validation error: {exc.errors()}")
+    response = JSONResponse(
+        status_code=422,
+        content={"detail": exc.errors(), "body": exc.body},
+        headers={
+            "Access-Control-Allow-Origin": request.headers.get("origin", "http://localhost:5173"),
+            "Access-Control-Allow-Credentials": "true",
+        }
+    )
+    return response
+
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     response = JSONResponse(
@@ -59,6 +81,7 @@ def health():
 app.include_router(quotes_router)
 app.include_router(destinations_router)
 app.include_router(services_router)
+
 
 
 

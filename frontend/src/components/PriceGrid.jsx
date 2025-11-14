@@ -9,20 +9,20 @@ export default function PriceGrid({ value, onChange }) {
   const onEur = (val) => {
     set("purchase_eur", val);
     const fx = Number(v.fx_eur_usd || 0);
-    if (val !== "" && fx) set("purchase_usd", (Number(val)*fx).toFixed(2));
+    if (val !== "" && fx) set("purchase_usd", (Number(val)/fx).toFixed(2));
   };
 
   const onFx = (val) => {
     set("fx_eur_usd", val);
     const eur = Number(v.purchase_eur || 0);
-    if (val !== "" && eur) set("purchase_usd", (eur*Number(val)).toFixed(2));
+    if (val !== "" && eur) set("purchase_usd", (eur/Number(val)).toFixed(2));
   };
 
   const onUsd = (val) => {
     set("purchase_usd", val);
     const eur = Number(v.purchase_eur || 0);
     if (val !== "" && eur) {
-      const fx = Number(val) / eur;
+      const fx = eur / Number(val);
       if (isFinite(fx) && fx>0) set("fx_eur_usd", fx.toFixed(4));
     }
   };

@@ -29,6 +29,7 @@ def upgrade() -> None:
         # Create the table if it doesn't exist
         op.create_table('audit_logs',
             sa.Column('id', sa.Integer(), nullable=False),
+            sa.Column('ts', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
             sa.Column('actor', sa.String(), nullable=False),
             sa.Column('action', sa.String(), nullable=False),
             sa.Column('entity_type', sa.String(), nullable=False),
@@ -36,12 +37,14 @@ def upgrade() -> None:
             sa.Column('field', sa.String(), nullable=True),
             sa.Column('old_value', sa.Text(), nullable=True),
             sa.Column('new_value', sa.Text(), nullable=True),
-            sa.Column('timestamp', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')),
+            sa.Column('timestamp', sa.DateTime(), nullable=True),
             sa.PrimaryKeyConstraint('id')
         )
     else:
-        # Table exists, check if timestamp column exists
+        # Table exists, check if columns exist
         columns = [col['name'] for col in inspector.get_columns('audit_logs')]
+        if 'ts' not in columns:
+            op.add_column('audit_logs', sa.Column('ts', sa.DateTime(), nullable=False, server_default=sa.text('CURRENT_TIMESTAMP')))
         if 'timestamp' not in columns:
             # SQLite limitation: cannot add NOT NULL column with non-constant default
             # So we add it as nullable first, update existing rows, then make it NOT NULL

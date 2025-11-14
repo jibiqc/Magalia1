@@ -635,7 +635,10 @@ def patch_days_by_range(
                 raise HTTPException(status_code=404, detail=f"Day with ID {payload.day_id} not found in quote {quote_id}")
             start_date = start_day.date
         elif payload.start_date:
-            start_date = payload.start_date
+            # Convert ISO string to date object
+            start_date = _to_date(payload.start_date)
+            if not start_date:
+                raise HTTPException(status_code=400, detail=f"Invalid start_date format: {payload.start_date}")
         else:
             raise HTTPException(status_code=400, detail="Either day_id or start_date must be provided")
         

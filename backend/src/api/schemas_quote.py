@@ -194,7 +194,7 @@ class QuoteOut(BaseModel):
 
 
 class DestinationRangePatch(BaseModel):
-    start_date: Optional[date] = None
+    start_date: Optional[str] = None  # Accept ISO string, will be converted to date in endpoint
     day_id: Optional[int] = None  # ID du jour cible (prioritaire sur start_date)
     nights: conint(ge=1)
     destination: constr(strip_whitespace=True, min_length=1)
