@@ -1,5 +1,6 @@
 from logging.config import fileConfig
 import os
+from pathlib import Path
 
 from sqlalchemy import engine_from_config
 from sqlalchemy import pool
@@ -11,9 +12,14 @@ from alembic import context
 config = context.config
 
 # Override sqlalchemy.url with DATABASE_URL from environment if set
+# If not set, use SQLite default (same as db.py)
 database_url = os.getenv("DATABASE_URL")
-if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+if not database_url:
+    # Use same default as db.py: SQLite in project root
+    project_root = Path(__file__).resolve().parent.parent.parent
+    default_db_path = project_root / "app.db"
+    database_url = f"sqlite:///{default_db_path}"
+config.set_main_option("sqlalchemy.url", database_url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -23,7 +29,6 @@ if config.config_file_name is not None:
 # add your model's MetaData object here
 # for 'autogenerate' support
 import sys
-from pathlib import Path
 
 # Add backend/src to path for imports
 backend_src = Path(__file__).parent.parent / "src"
@@ -31,6 +36,7 @@ sys.path.insert(0, str(backend_src.parent))
 
 from src.models.db import Base
 from src.models import staging_models, prod_models
+from src import models_quote, models_geo, models_audit
 
 target_metadata = Base.metadata
 
