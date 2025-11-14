@@ -124,6 +124,23 @@ export default function VersionHistoryModal({ quoteId, isOpen, onClose, onQuoteR
     return comment.length > maxLength ? comment.substring(0, maxLength) + "..." : comment;
   };
 
+  const formatUserDisplayName = (emailOrName) => {
+    if (!emailOrName) return null;
+    // If it's already a display name (no @), return as-is
+    if (!emailOrName.includes("@")) {
+      return emailOrName;
+    }
+    // If it's an email ending with @eetvl.com, format it
+    if (emailOrName.endsWith("@eetvl.com")) {
+      const localPart = emailOrName.split("@")[0];
+      if (localPart) {
+        return localPart[0].toUpperCase() + localPart.slice(1);
+      }
+    }
+    // For other emails, return as-is (or could return just the local part)
+    return emailOrName;
+  };
+
   const handleRestore = async () => {
     if (!selectedVersion || !quoteId) return;
     const confirmed = window.confirm(
@@ -262,7 +279,7 @@ export default function VersionHistoryModal({ quoteId, isOpen, onClose, onQuoteR
                         <div className="version-meta">
                           <span className="version-date">{formatDate(version.created_at)}</span>
                           {version.created_by && (
-                            <span className="version-user"> • {version.created_by}</span>
+                            <span className="version-user"> • {formatUserDisplayName(version.created_by)}</span>
                           )}
                           <span className="version-type"> • {formatType(version.type)}</span>
                         </div>
@@ -317,7 +334,7 @@ export default function VersionHistoryModal({ quoteId, isOpen, onClose, onQuoteR
                 </div>
                 {selectedVersion.created_by && (
                   <div className="detail-row">
-                    <strong>Créé par:</strong> {selectedVersion.created_by}
+                    <strong>Créé par:</strong> {formatUserDisplayName(selectedVersion.created_by)}
                   </div>
                 )}
                 {selectedVersion.export_type && (
