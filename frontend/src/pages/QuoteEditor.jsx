@@ -1,5 +1,6 @@
 import React, {useEffect, useMemo, useRef, useState, useCallback} from "react";
 import { createPortal } from "react-dom";
+import { useNavigate } from "react-router-dom";
 
 import "../styles/quote.css";
 import DestinationRangeModal from "../components/DestinationRangeModal";
@@ -500,6 +501,7 @@ export function openEditCatalogHotelModal(line, dayIdx, enable, setDraft) {
 
 export default function QuoteEditor(){
 
+  const navigate = useNavigate();
   const [q,setQ] = useState(emptyQuote);
 
   // Feature flag: enable the dedicated hotel-from-catalog modal
@@ -4368,6 +4370,24 @@ export default function QuoteEditor(){
             Export Excel
           </button>
         )}
+
+        {/* Logout button */}
+        <button 
+          className="btn" 
+          onClick={async () => {
+            try {
+              await api.logout();
+              navigate("/login", { replace: true });
+            } catch (err) {
+              console.error("Logout error:", err);
+              // Even if logout fails, redirect to login
+              navigate("/login", { replace: true });
+            }
+          }}
+          title="Logout"
+        >
+          Logout
+        </button>
       </div>
       {/* Dirty navigation ribbon: fixed wrapper (non-blocking) + inner (clickable) */}
       {confirmNav.visible && (

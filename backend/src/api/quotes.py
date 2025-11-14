@@ -1,3 +1,4 @@
+import logging
 from datetime import date as dt_date
 import math
 from decimal import Decimal, ROUND_HALF_UP
@@ -19,6 +20,8 @@ from .schemas_quote import QuoteIn, QuoteOut, DestinationRangePatch, QuoteDayOut
 from typing import List, Optional, Dict
 
 from ..models.prod_models import ServiceImage
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -282,8 +285,8 @@ def create_quote(payload: QuoteIn, db: Session = Depends(get_db)):
         for li_idx, li in enumerate(d.lines or []):
             # DEBUG: Log raw_json before saving
             if li.raw_json and li.category in ("Flight", "Train", "Ferry", "Car Rental", "Trip info"):
-                print(f"[create_quote] Line {li_idx} ({li.category}): raw_json keys = {list(li.raw_json.keys())}")
-                print(f"[create_quote] Full raw_json: {li.raw_json}")
+                logger.debug(f"[create_quote] Line {li_idx} ({li.category}): raw_json keys = {list(li.raw_json.keys())}")
+                logger.debug(f"[create_quote] Full raw_json: {li.raw_json}")
             
             line = QuoteLine(quote_day_id=day.id, position=li_idx)
 
@@ -386,7 +389,7 @@ def export_quote_word(quote_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         import traceback
         error_detail = traceback.format_exc()
-        print(f"ERROR in export_quote_word: {e}\n{error_detail}")
+        logger.error(f"ERROR in export_quote_word: {e}\n{error_detail}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
@@ -422,7 +425,7 @@ def export_quote_excel(quote_id: int, db: Session = Depends(get_db)):
     except Exception as e:
         import traceback
         error_detail = traceback.format_exc()
-        print(f"ERROR in export_quote_excel: {e}\n{error_detail}")
+        logger.error(f"ERROR in export_quote_excel: {e}\n{error_detail}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
 
@@ -501,8 +504,8 @@ def upsert_quote(quote_id: int, payload: QuoteIn, db: Session = Depends(get_db))
         for li_idx, li in enumerate(d.lines or []):
             # DEBUG: Log raw_json before saving
             if li.raw_json and li.category in ("Flight", "Train", "Ferry", "Car Rental", "Trip info"):
-                print(f"[upsert_quote] Line {li_idx} ({li.category}): raw_json keys = {list(li.raw_json.keys())}")
-                print(f"[upsert_quote] Full raw_json: {li.raw_json}")
+                logger.debug(f"[upsert_quote] Line {li_idx} ({li.category}): raw_json keys = {list(li.raw_json.keys())}")
+                logger.debug(f"[upsert_quote] Full raw_json: {li.raw_json}")
             
             line = QuoteLine(quote_day_id=day.id, position=li_idx)
 
@@ -517,7 +520,7 @@ def upsert_quote(quote_id: int, payload: QuoteIn, db: Session = Depends(get_db))
     for day in (result.days or []):
         for line in (day.lines or []):
             if line.category in ("Flight", "Train", "Ferry", "Car Rental", "Trip info"):
-                print(f"[upsert_quote] Returning line ({line.category}): raw_json keys = {list(line.raw_json.keys()) if line.raw_json else []}")
+                logger.debug(f"[upsert_quote] Returning line ({line.category}): raw_json keys = {list(line.raw_json.keys()) if line.raw_json else []}")
     
     return result
 
@@ -596,7 +599,7 @@ def patch_days_by_range(
         try:
             from ..services.audit import log_change
         except ImportError as e:
-            print(f"ERROR: Cannot import log_change: {e}")
+            logger.warning(f"Cannot import log_change: {e}")
             # Create a no-op function if audit is not available
             def log_change(*args, **kwargs):
                 pass
@@ -660,10 +663,6 @@ def patch_days_by_range(
                     day.destination = dest_name
                 # Log the change
                 try:
-                    import inspect
-                    from ..services import audit as AUD
-                    print("AUDIT_MODULE", AUD.__file__)
-                    print("AUDIT_FUNC", inspect.getsource(AUD.log_change)[:120])
                     log_change(
                         db,
                         actor="system",
@@ -677,7 +676,7 @@ def patch_days_by_range(
                     pass
                 updated_days.append(day)
             except Exception as e:
-                print(f"ERROR updating day {day.id}: {e}")
+                logger.error(f"ERROR updating day {day.id}: {e}")
                 raise
         
         db.commit()
@@ -712,6 +711,6 @@ def patch_days_by_range(
         raise
     except Exception as e:
         error_detail = traceback.format_exc()
-        print(f"ERROR in patch_days_by_range: {e}\n{error_detail}")
+        logger.error(f"ERROR in patch_days_by_range: {e}\n{error_detail}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 

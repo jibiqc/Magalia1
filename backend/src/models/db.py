@@ -1,9 +1,12 @@
+import logging
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 # Load environment variables from project root
 # __file__ is backend/src/models/db.py, so we go up 4 levels to get to project root
@@ -19,18 +22,18 @@ load_dotenv()  # Fallback: try loading from current working directory
 default_db_path = project_root / "app.db"
 # Always use the app.db in project root (where migrations were run)
 DATABASE_URL = f"sqlite:///{default_db_path}"
-print(f"DB_DSN: {DATABASE_URL}")
-print(f"DB_PATH: {default_db_path}")
-print(f"DB_EXISTS: {default_db_path.exists()}")
+logger.info(f"DB_DSN: {DATABASE_URL}")
+logger.info(f"DB_PATH: {default_db_path}")
+logger.info(f"DB_EXISTS: {default_db_path.exists()}")
 
-# Debug: print DATABASE_URL to verify it's loaded correctly
+# Debug: log DATABASE_URL to verify it's loaded correctly
 if "sqlite" not in DATABASE_URL.lower():
-    print(f"WARNING: DATABASE_URL is not SQLite: {DATABASE_URL}")
-    print(f"Looking for .env at: {env_path}")
-    print(f".env exists: {env_path.exists()}")
+    logger.warning(f"DATABASE_URL is not SQLite: {DATABASE_URL}")
+    logger.warning(f"Looking for .env at: {env_path}")
+    logger.warning(f".env exists: {env_path.exists()}")
     if env_path.exists():
         with open(env_path, 'r') as f:
-            print(f".env contents: {f.read()}")
+            logger.warning(f".env contents: {f.read()}")
 
 # Create engine
 # SQLite needs check_same_thread=False for FastAPI
@@ -45,12 +48,5 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 # Create base class for models
 Base = declarative_base()
 
-# Dependency for getting database session
-def get_db():
-    """Dependency for getting database session."""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+# Note: get_db() is defined in src/db.py to avoid circular imports
 

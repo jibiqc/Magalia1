@@ -1,7 +1,10 @@
+import logging
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from datetime import datetime, timezone
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 def _to_str(v: Any) -> str:
@@ -26,7 +29,7 @@ def _audit_cols(db):
 def log_change(db, *, actor: str, entity_type: str, entity_id: int, field: str, old_value, new_value):
     """Schema-aware insert into audit_logs. Always set ts. Add timestamp if present."""
     cols = _audit_cols(db)
-    print("AUDIT_COLS", cols)  # doit contenir {'ts', 'timestamp', ...}
+    logger.debug(f"AUDIT_COLS: {cols}")  # doit contenir {'ts', 'timestamp', ...}
     now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     payload = {
         "actor": actor or "system",
@@ -49,7 +52,7 @@ def log_change(db, *, actor: str, entity_type: str, entity_id: int, field: str, 
     placeholders = ",".join(f":{c}" for c in insert_cols)
     columns_sql = ",".join(insert_cols)
     sql = text(f"INSERT INTO audit_logs ({columns_sql}) VALUES ({placeholders})")
-    print("AUDIT_INSERT", columns_sql, {k: payload[k] for k in insert_cols})
+    logger.debug(f"AUDIT_INSERT: {columns_sql}, payload keys: {list(payload.keys())}")
     try:
         db.execute(sql, {k: payload[k] for k in insert_cols})
     except IntegrityError:
