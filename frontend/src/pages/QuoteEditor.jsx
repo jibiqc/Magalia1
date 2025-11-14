@@ -23,6 +23,7 @@ import DayHero from "../components/DayHero";
 import DayImagesModal from "../components/modals/DayImagesModal";
 import DayHeroModal from "../components/modals/DayHeroModal";
 import NewQuoteModal from "../components/NewQuoteModal";
+import VersionHistoryModal from "../components/VersionHistoryModal";
 import { api } from "../lib/api";
 import { fmtDateShortISO, fmtDateLongISO } from "../utils/dateFmt";
 import { uid } from "../utils/localId";
@@ -558,6 +559,7 @@ export default function QuoteEditor(){
 
   // New Quote Modal state
   const [newQuoteModalOpen, setNewQuoteModalOpen] = useState(false);
+  const [isVersionHistoryOpen, setIsVersionHistoryOpen] = useState(false);
 
   // (moved openId above)
 
@@ -4371,6 +4373,45 @@ export default function QuoteEditor(){
           </button>
         )}
 
+        {q?.id && (
+          <button 
+            className="btn" 
+            onClick={async () => {
+              if (!q?.id) return;
+              const comment = window.prompt("Enter a comment for this version (required):");
+              if (!comment || !comment.trim()) {
+                if (comment !== null) {
+                  showNotice("Comment is required", "error");
+                }
+                return;
+              }
+              try {
+                showNotice("Creating version...", "info");
+                await api.createQuoteVersion(q.id, { comment: comment.trim() });
+                showNotice("Version created successfully", "success");
+                // Optionally open version history modal
+                setIsVersionHistoryOpen(true);
+              } catch (err) {
+                console.error("Create version error:", err);
+                showNotice(err.detail || "Failed to create version", "error");
+              }
+            }}
+            title="Save current state as a new version"
+          >
+            Save version
+          </button>
+        )}
+
+        {q?.id && (
+          <button 
+            className="btn" 
+            onClick={() => setIsVersionHistoryOpen(true)}
+            title="View version history"
+          >
+            Version history
+          </button>
+        )}
+
         {/* Logout button */}
         <button 
           className="btn" 
@@ -5980,6 +6021,19 @@ export default function QuoteEditor(){
           </div>
         </div>
       )}
+
+      {/* Version History Modal */}
+      <VersionHistoryModal
+        quoteId={q?.id}
+        isOpen={isVersionHistoryOpen}
+        onClose={() => setIsVersionHistoryOpen(false)}
+        onQuoteRestored={() => {
+          // Reload quote after restore
+          if (q?.id) {
+            fetchQuote(q.id);
+          }
+        }}
+      />
 
     </div>
 

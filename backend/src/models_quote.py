@@ -162,3 +162,35 @@ class QuoteLine(Base):
 
 
 
+
+class QuoteVersion(Base):
+
+    __tablename__ = "quote_versions"
+
+    id = Column(Integer, primary_key=True, index=True)
+
+    quote_id = Column(Integer, ForeignKey("quotes.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    label = Column(String(50), nullable=False)
+
+    comment = Column(Text, nullable=True)
+
+    created_at = Column(DateTime, default=utcnow, nullable=False)
+
+    created_by = Column(String(255), nullable=True)  # Email
+
+    type = Column(String(50), nullable=False)  # manual, auto_export_word, auto_export_pdf, auto_export_excel, auto_initial
+
+    export_type = Column(String(20), nullable=True)  # word, pdf, excel, null
+
+    export_file_name = Column(String(255), nullable=True)
+
+    total_price = Column(DEC2, nullable=True)
+
+    snapshot_json = Column(JSON, nullable=False)
+
+    archived_at = Column(DateTime, nullable=True, index=True)
+
+    quote = relationship("Quote", backref="versions")
+
+

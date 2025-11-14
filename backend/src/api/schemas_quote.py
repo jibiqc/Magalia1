@@ -202,3 +202,44 @@ class DestinationRangePatch(BaseModel):
 
 
 
+# QuoteVersion schemas
+
+class QuoteVersionIn(BaseModel):
+    """Schema for creating a manual version (requires comment)."""
+    comment: str  # Mandatory for manual versions
+
+
+class QuoteVersionPatch(BaseModel):
+    """Schema for updating version metadata (label and/or comment)."""
+    label: Optional[str] = None
+    comment: Optional[str] = None
+
+
+class QuoteVersionOut(BaseModel):
+    """Schema for reading a version (full metadata, snapshot excluded from list view)."""
+    id: int
+    quote_id: int
+    label: str
+    comment: Optional[str] = None
+    created_at: str  # ISO format datetime
+    created_by: Optional[str] = None  # Email
+    type: str
+    export_type: Optional[str] = None
+    export_file_name: Optional[str] = None
+    total_price: Optional[float] = None
+    archived_at: Optional[str] = None  # ISO format datetime
+
+
+class QuoteVersionDetailOut(QuoteVersionOut):
+    """Schema for reading a version with full snapshot JSON."""
+    snapshot_json: dict  # Full quote snapshot
+
+
+class QuoteVersionListOut(BaseModel):
+    """Schema for paginated version list response."""
+    items: List[QuoteVersionOut]
+    total: int
+    has_more: bool
+
+
+
