@@ -16,7 +16,7 @@ from ..db import get_db
 
 from ..models_quote import Quote, QuoteDay, QuoteLine, QuoteVersion
 
-from .schemas_quote import QuoteIn, QuoteOut, DestinationRangePatch, QuoteDayOut, QuoteVersionIn, QuoteVersionOut, QuoteVersionDetailOut, QuoteVersionListOut
+from .schemas_quote import QuoteIn, QuoteOut, DestinationRangePatch, QuoteDayOut, QuoteVersionIn, QuoteVersionOut, QuoteVersionDetailOut, QuoteVersionListOut, QuoteVersionPatch
 from typing import List, Optional, Dict
 
 from ..models.prod_models import ServiceImage
@@ -26,6 +26,8 @@ from ..services.quote_versioning import (
     build_quote_snapshot,
     compute_total_price,
     get_next_version_label,
+    apply_snapshot_to_quote,
+    create_before_restore_version,
     VERSION_TYPE_MANUAL
 )
 
@@ -301,6 +303,23 @@ def create_quote(payload: QuoteIn, db: Session = Depends(get_db)):
             _upd_line(line, li); db.add(line)
 
     db.commit(); db.refresh(q)
+    
+    # Create initial automatic version
+    try:
+        from ..services.quote_versioning import create_auto_version, VERSION_TYPE_AUTO_INITIAL
+        # Note: create_quote doesn't have request context, so created_by will be None
+        create_auto_version(
+            quote=q,
+            version_type=VERSION_TYPE_AUTO_INITIAL,
+            db=db,
+            created_by=None
+        )
+        # Commit version creation (separate transaction to not break quote creation)
+        db.commit()
+    except Exception as e:
+        # Log but don't fail quote creation if version creation fails
+        logger.warning(f"Failed to create initial version for quote {q.id}: {e}")
+        db.rollback()  # Rollback only the version creation attempt
 
     return _to_out(q)
 
@@ -365,13 +384,15 @@ def search_quotes(
 
 
 @router.get("/{quote_id}/export/word")
-def export_quote_word(quote_id: int, db: Session = Depends(get_db)):
+def export_quote_word(quote_id: int, request: Request, db: Session = Depends(get_db)):
     """
     Export a quote to Word format (.docx).
     Returns the Word document as a downloadable file.
+    Automatically creates a version after successful export.
     """
     # Import here to avoid circular import
     from ..exports.word import build_docx_for_quote
+    from ..services.quote_versioning import create_auto_version, VERSION_TYPE_AUTO_EXPORT_WORD, EXPORT_TYPE_WORD
     import re
     
     q = db.query(Quote).filter(Quote.id == quote_id).first()
@@ -386,6 +407,24 @@ def export_quote_word(quote_id: int, db: Session = Depends(get_db)):
         safe_name = re.sub(r'[<>:"/\\|?*]', '_', base_name)
         safe_name = safe_name.strip()[:200]  # Limit length
         filename = f"{safe_name}.docx"
+        
+        # Create automatic version after successful export
+        try:
+            user = get_current_user(request, db)
+            created_by = user.email if user else None
+            create_auto_version(
+                quote=q,
+                version_type=VERSION_TYPE_AUTO_EXPORT_WORD,
+                db=db,
+                created_by=created_by,
+                export_type=EXPORT_TYPE_WORD,
+                export_file_name=filename
+            )
+            db.commit()
+        except Exception as e:
+            # Log but don't fail export if version creation fails
+            logger.warning(f"Failed to create auto version after Word export for quote {quote_id}: {e}")
+            db.rollback()
         
         return Response(
             content=buf.getvalue(),
@@ -402,12 +441,19 @@ def export_quote_word(quote_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{quote_id}/export/excel")
-def export_quote_excel(quote_id: int, db: Session = Depends(get_db)):
+def export_quote_excel(
+    quote_id: int,
+    request: Request,
+    create_version: bool = Query(False, description="Create an automatic version after export"),
+    db: Session = Depends(get_db)
+):
     """
     Export a quote to Excel format (.xlsx).
     Returns the Excel file as a downloadable file.
+    Optionally creates a version if create_version=true.
     """
     from ..exports.excel import build_xlsx_for_quote
+    from ..services.quote_versioning import create_auto_version, VERSION_TYPE_AUTO_EXPORT_EXCEL, EXPORT_TYPE_EXCEL
     import re
     
     q = db.query(Quote).filter(Quote.id == quote_id).first()
@@ -422,6 +468,25 @@ def export_quote_excel(quote_id: int, db: Session = Depends(get_db)):
         safe_name = re.sub(r'[<>:"/\\|?*]', '_', base_name)
         safe_name = safe_name.strip()[:200]  # Limit length
         filename = f"{safe_name}.xlsx"
+        
+        # Create automatic version if requested
+        if create_version:
+            try:
+                user = get_current_user(request, db)
+                created_by = user.email if user else None
+                create_auto_version(
+                    quote=q,
+                    version_type=VERSION_TYPE_AUTO_EXPORT_EXCEL,
+                    db=db,
+                    created_by=created_by,
+                    export_type=EXPORT_TYPE_EXCEL,
+                    export_file_name=filename
+                )
+                db.commit()
+            except Exception as e:
+                # Log but don't fail export if version creation fails
+                logger.warning(f"Failed to create auto version after Excel export for quote {quote_id}: {e}")
+                db.rollback()
         
         return Response(
             content=buf.getvalue(),
@@ -889,4 +954,170 @@ def create_quote_version(
         total_price=float(version.total_price) if version.total_price is not None else None,
         archived_at=version.archived_at.isoformat() if version.archived_at else None
     )
+
+
+@router.patch("/{quote_id}/versions/{version_id}", response_model=QuoteVersionOut)
+def update_quote_version(
+    quote_id: int,
+    version_id: int,
+    payload: QuoteVersionPatch,
+    db: Session = Depends(get_db)
+):
+    """
+    Update a version's label and/or comment.
+    """
+    # Verify quote exists
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    # Get version
+    version = (
+        db.query(QuoteVersion)
+        .filter(
+            QuoteVersion.id == version_id,
+            QuoteVersion.quote_id == quote_id
+        )
+        .first()
+    )
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    # Update fields if provided
+    if payload.label is not None:
+        version.label = payload.label
+    if payload.comment is not None:
+        version.comment = payload.comment
+    
+    db.commit()
+    db.refresh(version)
+    
+    # Return updated version
+    return QuoteVersionOut(
+        id=version.id,
+        quote_id=version.quote_id,
+        label=version.label,
+        comment=version.comment,
+        created_at=version.created_at.isoformat() if version.created_at else None,
+        created_by=version.created_by,
+        type=version.type,
+        export_type=version.export_type,
+        export_file_name=version.export_file_name,
+        total_price=float(version.total_price) if version.total_price is not None else None,
+        archived_at=version.archived_at.isoformat() if version.archived_at else None
+    )
+
+
+@router.post("/{quote_id}/versions/{version_id}/archive", response_model=QuoteVersionOut)
+def archive_quote_version(
+    quote_id: int,
+    version_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Archive a version (soft delete by setting archived_at).
+    Archived versions are excluded from default list view.
+    """
+    # Verify quote exists
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    # Get version
+    version = (
+        db.query(QuoteVersion)
+        .filter(
+            QuoteVersion.id == version_id,
+            QuoteVersion.quote_id == quote_id
+        )
+        .first()
+    )
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    # Archive (set archived_at)
+    from datetime import datetime, timezone
+    version.archived_at = datetime.now(timezone.utc)
+    
+    db.commit()
+    db.refresh(version)
+    
+    # Return archived version
+    return QuoteVersionOut(
+        id=version.id,
+        quote_id=version.quote_id,
+        label=version.label,
+        comment=version.comment,
+        created_at=version.created_at.isoformat() if version.created_at else None,
+        created_by=version.created_by,
+        type=version.type,
+        export_type=version.export_type,
+        export_file_name=version.export_file_name,
+        total_price=float(version.total_price) if version.total_price is not None else None,
+        archived_at=version.archived_at.isoformat() if version.archived_at else None
+    )
+
+
+@router.post("/{quote_id}/versions/{version_id}/restore", response_model=QuoteOut)
+def restore_quote_version(
+    quote_id: int,
+    version_id: int,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    """
+    Restore a quote to a previous version.
+    
+    This operation:
+    1. Creates an automatic "before restore" version of the current state
+    2. Applies the snapshot from the specified version to the quote
+    3. Returns the restored quote
+    
+    The "before restore" version ensures you can always undo the restore.
+    """
+    # Verify quote exists
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    # Get version to restore
+    version = (
+        db.query(QuoteVersion)
+        .filter(
+            QuoteVersion.id == version_id,
+            QuoteVersion.quote_id == quote_id
+        )
+        .first()
+    )
+    
+    if not version:
+        raise HTTPException(status_code=404, detail="Version not found")
+    
+    # Get current user (for before-restore version)
+    user = get_current_user(request, db)
+    created_by = user.email if user else None
+    
+    # Step 1: Create "before restore" version
+    before_restore_version = create_before_restore_version(
+        quote=quote,
+        original_version=version,
+        db=db,
+        created_by=created_by
+    )
+    
+    # Step 2: Apply snapshot to quote
+    snapshot_json = version.snapshot_json or {}
+    if not snapshot_json:
+        raise HTTPException(status_code=400, detail="Version snapshot is empty or invalid")
+    
+    apply_snapshot_to_quote(quote, snapshot_json, db)
+    
+    # Commit all changes
+    db.commit()
+    db.refresh(quote)
+    
+    # Return restored quote
+    return _to_out(quote, db=db, include_first_image=False)
 
