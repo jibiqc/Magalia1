@@ -35,7 +35,7 @@ backend_src = Path(__file__).parent.parent / "src"
 sys.path.insert(0, str(backend_src.parent))
 
 from src.models.db import Base
-from src.models import staging_models, prod_models
+from src.models import staging_models, prod_models, auth_models
 from src import models_quote, models_geo, models_audit
 
 target_metadata = Base.metadata

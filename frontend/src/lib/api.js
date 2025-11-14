@@ -4,8 +4,12 @@ const API_BASE =
 
 async function apiCall(method, path, body) {
   const url = `${API_BASE}${path}`;
+  console.log("[apiCall] Making request to:", url);
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort("timeout"), 10000); // 10s hard timeout
+  const timer = setTimeout(() => {
+    console.log("[apiCall] Timeout triggered, aborting request");
+    ctrl.abort();
+  }, 10000); // 10s hard timeout
   try {
     const res = await fetch(url, {
       method,
@@ -16,21 +20,54 @@ async function apiCall(method, path, body) {
     });
     if (!res.ok) {
       // Try to extract error detail from response
-      let errorDetail = `HTTP ${res.status}`;
-      try {
-        const errorData = await res.json();
-        if (errorData.detail) {
-          errorDetail = errorData.detail;
+      let errorDetail = null;
+      const contentType = res.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        try {
+          const errorData = await res.json();
+          console.log("[apiCall] Error response JSON:", errorData);
+          if (errorData.detail) {
+            errorDetail = errorData.detail;
+          }
+        } catch (e) {
+          console.error("[apiCall] Failed to parse error JSON:", e);
+          // Response is not valid JSON, will use fallback
         }
-      } catch {
-        // Response is not JSON, use status
+      } else {
+        console.log("[apiCall] Response is not JSON, content-type:", contentType);
       }
       const error = new Error(`HTTP ${res.status} on ${url}`);
       error.status = res.status;
-      error.detail = errorDetail;
+      error.detail = errorDetail || `HTTP ${res.status}`;
+      console.log("[apiCall] Throwing error with detail:", error.detail);
       throw error;
     }
     return res.status === 204 ? null : await res.json();
+  } catch (fetchError) {
+    console.log("[apiCall] Caught fetch error:", fetchError);
+    console.log("[apiCall] Error name:", fetchError.name);
+    console.log("[apiCall] Error message:", fetchError.message);
+    
+    // Handle fetch errors (network, timeout, abort, etc.)
+    // AbortError is thrown when ctrl.abort() is called (timeout or manual abort)
+    if (fetchError.name === 'AbortError' || fetchError.message?.includes('timeout') || fetchError === 'timeout' || (typeof fetchError === 'string' && fetchError === 'timeout')) {
+      const timeoutError = new Error('Request timeout. Please check your connection and try again.');
+      timeoutError.status = 0;
+      timeoutError.detail = 'Request timeout. Please check your connection and try again.';
+      console.log("[apiCall] Throwing timeout error");
+      throw timeoutError;
+    }
+    // Re-throw if it's already our formatted error (from !res.ok above)
+    if (fetchError.status && fetchError.detail) {
+      console.log("[apiCall] Re-throwing formatted error:", fetchError.detail);
+      throw fetchError;
+    }
+    // For other fetch errors, wrap them
+    const wrappedError = new Error(fetchError.message || 'Network error');
+    wrappedError.status = 0;
+    wrappedError.detail = fetchError.message || 'Network error. Please check your connection.';
+    console.log("[apiCall] Throwing wrapped error:", wrappedError.detail);
+    throw wrappedError;
   } finally {
     clearTimeout(timer);
   }

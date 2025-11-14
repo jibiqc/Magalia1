@@ -9,14 +9,18 @@ from src.models.db import Base, engine
 from src.models_quote import Quote, QuoteDay, QuoteLine
 from src.models_geo import Destination, DestinationPhoto
 from src.models.prod_models import ServiceCatalog, ServicePopularity, Supplier, ServiceImage
+from src.models.auth_models import User, LoginToken
 
 # Import routers after models
 from src.api.quotes import router as quotes_router
 from src.api.destinations import router as destinations_router
 from src.api.services import router as services_router
+from src.api.auth import router as auth_router
 
 app = FastAPI(title="Magalia API")
 
+# Allow all origins in development (for debugging CORS issues)
+# In production, restrict to specific domains
 ALLOWED_ORIGINS = [
     "http://localhost:5173",
     "http://127.0.0.1:5173",
@@ -25,7 +29,7 @@ ALLOWED_ORIGINS = [
 # CORS middleware must be added before routes
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|\[::1\]):5173",  # Allow localhost variants for development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -81,6 +85,7 @@ def health():
 app.include_router(quotes_router)
 app.include_router(destinations_router)
 app.include_router(services_router)
+app.include_router(auth_router)
 
 
 

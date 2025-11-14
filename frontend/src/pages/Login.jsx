@@ -41,11 +41,19 @@ export default function Login() {
       setEmail(""); // Clear input on success
     } catch (error) {
       // Extract error message from error object
+      // apiCall exposes error.detail with the backend's error message
+      console.log("[Login] Caught error:", error);
+      console.log("[Login] error.detail:", error.detail);
+      console.log("[Login] error.status:", error.status);
+      console.log("[Login] error.message:", error.message);
+      
       let errorMessage = "An error occurred. Please try again.";
       
-      // apiCall now includes error.detail with the backend's error message
-      if (error.detail) {
+      // Prioritize backend detail message if available (this is the exact message from backend)
+      // Check if error.detail exists and is not just the HTTP status code
+      if (error.detail && typeof error.detail === 'string' && !error.detail.startsWith('HTTP ')) {
         errorMessage = error.detail;
+        console.log("[Login] Using error.detail:", errorMessage);
       } else if (error.message) {
         // Fallback to status-based messages if detail not available
         if (error.message.includes("429")) {
@@ -53,6 +61,7 @@ export default function Login() {
         } else if (error.message.includes("400")) {
           errorMessage = "Only @eetvl.com email addresses are allowed.";
         }
+        console.log("[Login] Using fallback message:", errorMessage);
       }
       setMessage({ type: "error", text: errorMessage });
     } finally {
