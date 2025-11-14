@@ -12,9 +12,24 @@ async function apiCall(method, path, body) {
       headers: { "Content-Type": "application/json" },
       body: body ? JSON.stringify(body) : undefined,
       signal: ctrl.signal,
-      credentials: "omit",
+      credentials: "include",
     });
-    if (!res.ok) throw new Error(`HTTP ${res.status} on ${url}`);
+    if (!res.ok) {
+      // Try to extract error detail from response
+      let errorDetail = `HTTP ${res.status}`;
+      try {
+        const errorData = await res.json();
+        if (errorData.detail) {
+          errorDetail = errorData.detail;
+        }
+      } catch {
+        // Response is not JSON, use status
+      }
+      const error = new Error(`HTTP ${res.status} on ${url}`);
+      error.status = res.status;
+      error.detail = errorDetail;
+      throw error;
+    }
     return res.status === 204 ? null : await res.json();
   } finally {
     clearTimeout(timer);
@@ -72,7 +87,7 @@ export const api = {
     const url = `${API_BASE}/quotes/${quoteId}/export/word`;
     const res = await fetch(url, {
       method: "GET",
-      credentials: "omit",
+      credentials: "include",
     });
     if (!res.ok) throw new Error(`HTTP ${res.status} on ${url}`);
     const blob = await res.blob();
@@ -98,7 +113,7 @@ export const api = {
     const url = `${API_BASE}/quotes/${quoteId}/export/excel`;
     const res = await fetch(url, {
       method: "GET",
-      credentials: "omit",
+      credentials: "include",
     });
     if (!res.ok) throw new Error(`HTTP ${res.status} on ${url}`);
     const blob = await res.blob();
@@ -123,6 +138,20 @@ export const api = {
   searchServices,
   getPopularServices,
   getServiceById,
+
+  // --- Auth API ---
+  async requestLink(email) {
+    return apiCall("POST", "/auth/request-link", { email });
+  },
+
+  async getMe() {
+    return apiCall("GET", "/auth/me");
+  },
+
+  async logout() {
+    return apiCall("POST", "/auth/logout");
+  },
+
 };
 
 // Named exports for services API
