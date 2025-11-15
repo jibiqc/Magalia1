@@ -998,16 +998,20 @@ export default function QuoteEditor(){
     const info = svcInfoCache.get(s.id);
     const fields = info?.fields || info?.extras || {};
     
+    // Détecter si c'est un hôtel (même si l'onglet n'est pas "Hotels")
+    const isHotel = isHotelSvc(s);
+    
     // Charger les infos en arrière-plan pour les hôtels si pas encore chargées (pour afficher les étoiles immédiatement)
     useEffect(() => {
-      if (tab === 'Hotels' && !info) {
+      if (isHotel && !info) {
         ensureSvcInfo(s.id);
       }
-    }, [tab, s.id, info]);
+    }, [isHotel, s.id, info]);
     
     let title = '', sub = null;
     
-    if (tab === 'Hotels') {
+    if (isHotel) {
+      // Afficher les hôtels avec le nom du supplier et les étoiles, même si l'onglet n'est pas "Hotels"
       const supplier = s.supplier_name || s.company || s.name || '';
       // Utiliser s.hotel_stars en premier si disponible, sinon fields (qui seront chargés en arrière-plan)
       const starsAbbr = starsAbbrFrom(
@@ -2682,7 +2686,58 @@ const CATEGORY_GROUPS = {
           limit: 50
         });
         if (!abort.v) {
-          const filtered = (Array.isArray(res) ? res : []).filter(r => inTab(r, svcTab));
+          let filtered = (Array.isArray(res) ? res : []).filter(r => inTab(r, svcTab));
+          
+          // Séparer les hôtels des autres résultats
+          const hotels = filtered.filter(x => isHotelSvc(x));
+          const nonHotels = filtered.filter(x => !isHotelSvc(x));
+          
+          // Dédupliquer les hôtels par supplier (même si l'onglet n'est pas "Hotels")
+          if (hotels.length > 0) {
+            const getSupplierKey = (x) => {
+              // Utiliser supplier_name ou company en priorité (pas name car il varie selon le type de chambre)
+              return (x.supplier_name || x.company || "").trim().toLowerCase();
+            };
+            
+            // Grouper par supplier et garder le meilleur résultat (celui avec le plus d'infos)
+            const hotelMap = new Map();
+            for (const x of hotels) {
+              const key = getSupplierKey(x);
+              if (!key) continue; // Ignorer si pas de supplier identifié
+              
+              if (!hotelMap.has(key)) {
+                hotelMap.set(key, x);
+              } else {
+                // Garder celui qui a le plus d'informations (priorité aux étoiles)
+                const existing = hotelMap.get(key);
+                const existingHasStars = !!(existing.hotel_stars || existing.fields?.hotel_stars);
+                const currentHasStars = !!(x.hotel_stars || x.fields?.hotel_stars);
+                
+                if (currentHasStars && !existingHasStars) {
+                  hotelMap.set(key, x);
+                } else if (!currentHasStars && existingHasStars) {
+                  // Garder l'existant
+                } else {
+                  // Si même niveau d'infos, garder le premier (ou celui avec le nom le plus court = plus générique)
+                  const existingName = (existing.name || "").toLowerCase();
+                  const currentName = (x.name || "").toLowerCase();
+                  if (currentName.length < existingName.length || currentName.includes("hotel room")) {
+                    hotelMap.set(key, x);
+                  }
+                }
+              }
+            }
+            
+            const deduplicatedHotels = Array.from(hotelMap.values());
+            
+            // Charger les infos complètes pour les hôtels immédiatement (pour afficher les étoiles)
+            const promises = deduplicatedHotels.map(s => ensureSvcInfo(s.id));
+            await Promise.all(promises);
+            
+            // Recombiner : hôtels dédupliqués + autres résultats
+            filtered = [...deduplicatedHotels, ...nonHotels];
+          }
+          
           setSvcResults(filtered);
         }
       }catch{
@@ -5588,6 +5643,28 @@ const CATEGORY_GROUPS = {
             </div>
           </div>
 
+          {/* Search */}
+          <div style={{padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,.06)"}}>
+            <div style={{fontWeight:700, opacity:.9, marginBottom:6}}>Search</div>
+            <input
+              value={svcQuery}
+              onChange={e=>setSvcQuery(e.target.value)}
+              onKeyDown={e=>{ if(e.key==="Escape"){ setSvcQuery(""); setSvcResults([]); } }}
+              placeholder={`Type to search ${svcTab.toLowerCase()}…`}
+              style={{width:"100%", height:36, padding:"0 10px", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, background:"#0f1c33", color:"#e6edf7"}}
+            />
+            <div style={{marginTop:8}}>
+              {svcSLoading && <div style={{opacity:.8}}>Searching…</div>}
+              {svcSError && <div style={{color:"#f88"}}>Error: {String(svcSError)}</div>}
+              {!svcSLoading && !svcSError && svcQuery.trim() && (
+                <div style={{display:"grid", gridTemplateColumns:"1fr", gap:6}}>
+                  {svcResults.map(s => <RightItem key={s.id} s={s} />)}
+                  {svcResults.length===0 && <div style={{opacity:.7}}>No results.</div>}
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="catalog">
 
             <div className="chipbar">
@@ -5607,31 +5684,9 @@ const CATEGORY_GROUPS = {
 
 
 
-            {/* Search (Activity) */}
-            <div style={{padding:"10px 12px", borderBottom:"1px solid rgba(255,255,255,.06)"}}>
-              <div style={{fontWeight:700, opacity:.9, marginBottom:6}}>Search ({svcTab})</div>
-              <input
-                value={svcQuery}
-                onChange={e=>setSvcQuery(e.target.value)}
-                onKeyDown={e=>{ if(e.key==="Escape"){ setSvcQuery(""); setSvcResults([]); } }}
-                placeholder={`Type to search ${svcTab.toLowerCase()}…`}
-                style={{width:"100%", height:36, padding:"0 10px", border:"1px solid rgba(255,255,255,.12)", borderRadius:8, background:"#0f1c33", color:"#e6edf7"}}
-              />
-              <div style={{marginTop:8}}>
-                {svcSLoading && <div style={{opacity:.8}}>Searching…</div>}
-                {svcSError && <div style={{color:"#f88"}}>Error: {String(svcSError)}</div>}
-                {!svcSLoading && !svcSError && svcQuery.trim() && (
-                  <div style={{display:"grid", gridTemplateColumns:"1fr", gap:6}}>
-                    {svcResults.map(s => <RightItem key={s.id} s={s} />)}
-                    {svcResults.length===0 && <div style={{opacity:.7}}>No results.</div>}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Popular (Activity) */}
+            {/* Popular */}
             <div style={{padding:"10px 12px"}}>
-              <div style={{fontWeight:700, opacity:.9, marginBottom:6}}>Popular ({svcTab})</div>
+              <div style={{fontWeight:700, opacity:.9, marginBottom:6}}>Popular</div>
               {svcLoading && <div style={{opacity:.8}}>Loading…</div>}
               {svcError && <div style={{color:"#f88"}}>Error: {String(svcError)}</div>}
               {!svcLoading && !svcError && (
