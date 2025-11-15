@@ -242,4 +242,13 @@ class QuoteVersionListOut(BaseModel):
     has_more: bool
 
 
+class DayImageCandidateOut(BaseModel):
+    """Schema for day image candidates from services."""
+    url: str
+    caption: Optional[str] = None
+    source: str  # "import" or "manual"
+    service_id: Optional[int] = None
+    service_name: Optional[str] = None
+
+
 

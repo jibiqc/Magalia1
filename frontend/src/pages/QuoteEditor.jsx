@@ -6364,6 +6364,8 @@ const CATEGORY_GROUPS = {
         const day = q.days?.[dayIdx];
         return (
           <DayHeroModal
+            quoteId={q?.id}
+            dayId={dayId}
             initialP1={(day?.decorative_images?.[0]) || ""}
             initialP2={(day?.decorative_images?.[1]) || ""}
             onClose={() => setEditingDayHero(null)}

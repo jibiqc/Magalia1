@@ -16,10 +16,10 @@ from ..db import get_db
 
 from ..models_quote import Quote, QuoteDay, QuoteLine, QuoteVersion
 
-from .schemas_quote import QuoteIn, QuoteOut, DestinationRangePatch, QuoteDayOut, QuoteVersionIn, QuoteVersionOut, QuoteVersionDetailOut, QuoteVersionListOut, QuoteVersionPatch
+from .schemas_quote import QuoteIn, QuoteOut, DestinationRangePatch, QuoteDayOut, QuoteVersionIn, QuoteVersionOut, QuoteVersionDetailOut, QuoteVersionListOut, QuoteVersionPatch, DayImageCandidateOut
 from typing import List, Optional, Dict
 
-from ..models.prod_models import ServiceImage
+from ..models.prod_models import ServiceImage, ServiceCatalog
 
 from ..api.auth import get_current_user
 from ..services.quote_versioning import (
@@ -285,10 +285,17 @@ def create_quote(payload: QuoteIn, db: Session = Depends(get_db)):
     db.add(q); db.flush()
 
     for idx, d in enumerate(payload.days or []):
+        # Validate decorative_images: max 2 images per day
+        decorative_images = d.decorative_images or []
+        if len(decorative_images) > 2:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Day at position {idx}: no more than 2 decorative images per day allowed (got {len(decorative_images)})"
+            )
 
         day = QuoteDay(quote_id=q.id, position=idx, date=_to_date(d.date),
 
-                       destination=d.destination, decorative_images=d.decorative_images or [])
+                       destination=d.destination, decorative_images=decorative_images)
 
         db.add(day); db.flush()
 
@@ -569,10 +576,17 @@ def upsert_quote(quote_id: int, payload: QuoteIn, db: Session = Depends(get_db))
     db.flush()
 
     for idx, d in enumerate(payload.days or []):
+        # Validate decorative_images: max 2 images per day
+        decorative_images = d.decorative_images or []
+        if len(decorative_images) > 2:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Day at position {idx}: no more than 2 decorative images per day allowed (got {len(decorative_images)})"
+            )
 
         day = QuoteDay(quote_id=q.id, position=idx, date=_to_date(d.date),
 
-                       destination=d.destination, decorative_images=d.decorative_images or [])
+                       destination=d.destination, decorative_images=decorative_images)
 
         db.add(day); db.flush()
 
@@ -788,6 +802,93 @@ def patch_days_by_range(
         error_detail = traceback.format_exc()
         logger.error(f"ERROR in patch_days_by_range: {e}\n{error_detail}")
         raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
+
+
+# --------- Day Image Candidates endpoint ----------
+
+def get_day_image_candidates(day_id: int, db: Session) -> List[Dict]:
+    """
+    Collect candidate images from all services used in a day's lines.
+    Returns a deduplicated list ordered by service appearance in lines, then by ServiceImage.id.
+    """
+    # 1. Get day and its lines (ordered by position)
+    day = db.query(QuoteDay).filter(QuoteDay.id == day_id).first()
+    if not day:
+        return []
+    
+    # 2. Extract service_ids in the order they appear in lines
+    lines = sorted(day.lines, key=lambda x: x.position or 0)
+    service_ids_ordered = []
+    seen_service_ids = set()
+    for line in lines:
+        if line.service_id and line.service_id not in seen_service_ids:
+            service_ids_ordered.append(line.service_id)
+            seen_service_ids.add(line.service_id)
+    
+    if not service_ids_ordered:
+        return []
+    
+    # 3. Build a map of service_id -> service_name for enrichment
+    service_map = {}
+    services = db.query(ServiceCatalog).filter(ServiceCatalog.id.in_(service_ids_ordered)).all()
+    for svc in services:
+        service_map[svc.id] = svc.name
+    
+    # 4. Query ServiceImage for each service in order, preserving the order of services as they appear in lines
+    # We'll collect images per service, then flatten while preserving order
+    all_images = []
+    for service_id in service_ids_ordered:
+        images = (
+            db.query(ServiceImage)
+            .filter(ServiceImage.service_id == service_id)
+            .order_by(ServiceImage.id)
+            .all()
+        )
+        all_images.extend(images)
+    
+    # 5. Deduplicate by URL while preserving order (first occurrence wins)
+    seen_urls = set()
+    candidates = []
+    for img in all_images:
+        if img.url in seen_urls:
+            continue
+        seen_urls.add(img.url)
+        candidates.append({
+            "url": img.url,
+            "caption": getattr(img, "caption", None),
+            "source": getattr(img, "source", "import"),
+            "service_id": img.service_id,
+            "service_name": service_map.get(img.service_id)
+        })
+    
+    return candidates
+
+
+@router.get("/{quote_id}/days/{day_id}/image-candidates", response_model=List[DayImageCandidateOut])
+def get_day_image_candidates_endpoint(
+    quote_id: int,
+    day_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get candidate images for a day from all services used in that day's lines.
+    Returns deduplicated list ordered by service appearance, then by ServiceImage.id.
+    """
+    # Verify quote exists
+    quote = db.query(Quote).filter(Quote.id == quote_id).first()
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    # Verify day belongs to quote
+    day = db.query(QuoteDay).filter(
+        QuoteDay.id == day_id,
+        QuoteDay.quote_id == quote_id
+    ).first()
+    if not day:
+        raise HTTPException(status_code=404, detail="Day not found in this quote")
+    
+    candidates = get_day_image_candidates(day_id, db)
+    return [DayImageCandidateOut(**c) for c in candidates]
 
 
 # --------- Quote Versioning endpoints ----------

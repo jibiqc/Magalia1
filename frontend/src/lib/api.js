@@ -171,6 +171,9 @@ export const api = {
   getServiceById,
   addServiceImage,
   deleteServiceImage,
+  
+  // --- Day images API ---
+  getDayImageCandidates,
 
   // --- Auth API ---
   async requestLink(email) {
@@ -221,6 +224,12 @@ export async function deleteServiceImage(serviceId, imageId) {
   if (!serviceId) throw new Error("serviceId is required");
   if (!imageId) throw new Error("imageId is required");
   return apiCall("DELETE", `/services/${serviceId}/images/${imageId}`);
+}
+
+export async function getDayImageCandidates(quoteId, dayId) {
+  if (!quoteId) throw new Error("quoteId is required");
+  if (!dayId) throw new Error("dayId is required");
+  return apiCall("GET", `/quotes/${quoteId}/days/${dayId}/image-candidates`);
 }
 
 // Helper function for downloading files
