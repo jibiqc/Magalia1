@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import "../styles/quote.css";
 import TimeAmPmField from "./TimeAmPmField";
-import RichTextEditor from "./RichTextEditor";
 
 export default function FerryModal({
   open = true,
@@ -83,30 +82,36 @@ export default function FerryModal({
       >
         <div className="modal-title">Ferry</div>
 
-        <div className="dest-modal-body" style={{ padding: 0 }}>
-          <div className="field">
-            <label>From</label>
-            <input
-              type="text"
-              className="input"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              placeholder=""
-            />
+        {/* Route */}
+        <div className="modal-section">
+          <div className="modal-section-header">Route</div>
+          <div className="grid-2">
+            <div className="field">
+              <label>From</label>
+              <input
+                type="text"
+                className="input"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                placeholder=""
+              />
+            </div>
+            <div className="field">
+              <label>To</label>
+              <input
+                type="text"
+                className="input"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                placeholder=""
+              />
+            </div>
           </div>
+        </div>
 
-          <div className="field">
-            <label>To</label>
-            <input
-              type="text"
-              className="input"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              placeholder=""
-            />
-          </div>
-
-          {/* Row: Class type (left)  |  Seat reservation (right) */}
+        {/* Ferry details */}
+        <div className="modal-section">
+          <div className="modal-section-header">Ferry details</div>
           <div className="row-split">
             <div className="field">
               <label>Class type</label>
@@ -130,13 +135,19 @@ export default function FerryModal({
               </div>
             </div>
           </div>
+        </div>
 
+        {/* Schedule */}
+        <div className="modal-section">
+          <div className="modal-section-header">Schedule</div>
           <TimeAmPmField label="Departure time" value24={dep_time} onChange={setDepTime} />
-
           <TimeAmPmField label="Arrival time" value24={arr_time} onChange={setArrTime} />
+          <div className="time-help">Enter time in AM/PM. Typing 13:30 will auto-convert to 1:30 PM.</div>
+        </div>
 
-          <div className="help-line">Enter time in AM/PM. Typing 13:30 will auto-convert to 1:30 PM.</div>
-
+        {/* Description */}
+        <div className="modal-section">
+          <div className="modal-section-header">Description</div>
           <div className="field">
             <label>Description</label>
             <textarea
@@ -147,12 +158,17 @@ export default function FerryModal({
               rows={3}
             />
           </div>
+        </div>
 
+        {/* Internal note */}
+        <div className="modal-section">
+          <div className="modal-section-header">Internal note</div>
           <div className="field">
             <label>Internal note</label>
-            <RichTextEditor
+            <textarea
+              className="textarea"
               value={internal_note}
-              onChange={setInternalNote}
+              onChange={(e) => setInternalNote(e.target.value)}
               placeholder=""
               rows={3}
             />

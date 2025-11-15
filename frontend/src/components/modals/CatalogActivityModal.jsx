@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import "../../styles/quote.css";
-import RichTextEditor from "../RichTextEditor";
 
 export default function CatalogActivityModal({
   open = true,
@@ -70,7 +69,9 @@ export default function CatalogActivityModal({
       >
         <div className="modal-title">Edit Activity</div>
 
-        <div className="dest-modal-body" style={{ padding: 0 }}>
+        {/* Activity information */}
+        <div className="modal-section">
+          <div className="modal-section-header">Activity information</div>
           <div className="field">
             <label>Title</label>
             <input
@@ -81,7 +82,11 @@ export default function CatalogActivityModal({
               placeholder=""
             />
           </div>
+        </div>
 
+        {/* Description */}
+        <div className="modal-section">
+          <div className="modal-section-header">Description</div>
           <div className="field">
             <label>Description</label>
             <textarea
@@ -92,12 +97,17 @@ export default function CatalogActivityModal({
               rows={4}
             />
           </div>
+        </div>
 
+        {/* Internal note */}
+        <div className="modal-section">
+          <div className="modal-section-header">Internal note</div>
           <div className="field">
             <label>Internal note</label>
-            <RichTextEditor
+            <textarea
+              className="textarea"
               value={internal_note}
-              onChange={setInternalNote}
+              onChange={(e) => setInternalNote(e.target.value)}
               placeholder=""
               rows={3}
             />

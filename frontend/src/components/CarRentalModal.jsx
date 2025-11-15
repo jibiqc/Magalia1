@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import RichTextEditor from "./RichTextEditor";
 
 export default function CarRentalModal({
   open = true,
@@ -138,275 +137,225 @@ export default function CarRentalModal({
     >
       <div 
         className="modal-card" 
-        style={{ 
-          minWidth: 760, 
-          maxWidth: 940,
-          position: "relative",
-          zIndex: 100000,
-          pointerEvents: "auto"
-        }}
         onClick={e=>e.stopPropagation()}
       >
-        <h2>Car rental</h2>
+        <div className="modal-title">Car rental</div>
 
-        <div className="field">
-          <label>Pick-up location</label>
-          <input 
-            className="input" 
-            value={pickup_loc} 
-            onChange={e=>setPickupLoc(e.target.value)}
-            style={{
-              position: "relative",
-              zIndex: 1,
-              pointerEvents: "auto"
-            }}
-          />
-        </div>
-
-        <div className="field">
-          <label>Drop-off location</label>
-          <input 
-            className="input" 
-            value={dropoff_loc} 
-            onChange={e=>setDropoffLoc(e.target.value)}
-            style={{
-              position: "relative",
-              zIndex: 1,
-              pointerEvents: "auto"
-            }}
-          />
-        </div>
-
-        <div className="grid-2">
-          <div className="field">
-            <label>Pick-up date</label>
-            <input 
-              className="input" 
-              type="date" 
-              value={pickup_date} 
-              onChange={e=>setPickupDate(e.target.value)}
-              style={{
-                position: "relative",
-                zIndex: 1,
-                pointerEvents: "auto"
-              }}
-            />
-          </div>
-          <div className="field">
-            <label>Pick-up time</label>
-            <input 
-              className="input" 
-              placeholder="e.g. 10:30" 
-              value={pickup_time} 
-              onChange={e=>setPickupTime(e.target.value)}
-              style={{
-                position: "relative",
-                zIndex: 1,
-                pointerEvents: "auto"
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="grid-2">
-          <div className="field">
-            <label>Drop-off date</label>
-            <input 
-              className="input" 
-              type="date" 
-              value={dropoff_date} 
-              onChange={e=>onChangeDropoffDate(e.target.value)}
-              style={{
-                position: "relative",
-                zIndex: 1,
-                pointerEvents: "auto"
-              }}
-            />
-          </div>
-          <div className="field">
-            <label>Drop-off time</label>
-            <input 
-              className="input" 
-              placeholder="e.g. 14:15" 
-              value={dropoff_time} 
-              onChange={e=>setDropoffTime(e.target.value)}
-              style={{
-                position: "relative",
-                zIndex: 1,
-                pointerEvents: "auto"
-              }}
-            />
-          </div>
-        </div>
-
-        <div className="field">
-          <label>Expected drop-off date (To advise client to drop-off the car)</label>
-          <input 
-            className="input" 
-            type="date" 
-            value={expected_dropoff_date} 
-            onChange={e=>setExpected(e.target.value)}
-            style={{
-              position: "relative",
-              zIndex: 1,
-              pointerEvents: "auto"
-            }}
-          />
-        </div>
-
-        <div className="grid-2">
-          <div className="field">
-            <label>Vehicle type</label>
-            <input 
-              className="input" 
-              placeholder="SUV, Compact…" 
-              value={vehicle_type} 
-              onChange={e=>setVehicleType(e.target.value)}
-              style={{
-                position: "relative",
-                zIndex: 1,
-                pointerEvents: "auto"
-              }}
-            />
-          </div>
-          <div className="field">
-            <label>Transmission</label>
-            <div className="radio-pills">
-              <button type="button"
-                className={`radio-pill ${transmission==="Automatic" ? "selected":""}`}
-                onClick={()=> setTransmission("Automatic")}>Automatic</button>
-              <button type="button"
-                className={`radio-pill ${transmission==="Manual" ? "selected":""}`}
-                onClick={()=> setTransmission("Manual")}>Manual</button>
-              <button type="button"
-                className={`radio-pill ${transmission==="Do not precise" ? "selected":""}`}
-                onClick={()=> setTransmission("Do not precise")}>Do not precise</button>
+        {/* Pick-up / Drop-off locations */}
+        <div className="modal-section">
+          <div className="modal-section-header">Pick-up & Drop-off</div>
+          <div className="grid-2">
+            <div className="field">
+              <label>Pick-up location</label>
+              <input 
+                className="input" 
+                value={pickup_loc} 
+                onChange={e=>setPickupLoc(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Drop-off location</label>
+              <input 
+                className="input" 
+                value={dropoff_loc} 
+                onChange={e=>setDropoffLoc(e.target.value)}
+              />
             </div>
           </div>
         </div>
 
-        <div className="grid-3">
-          <div className="field">
-            <label>One-way fee (USD)</label>
-            <input 
-              className="input" 
-              inputMode="decimal" 
-              value={one_way_fee} 
-              onChange={e=>setOneWayFee(e.target.value)}
-              style={{
-                position: "relative",
-                zIndex: 1,
-                pointerEvents: "auto"
-              }}
-            />
+        {/* Dates & Times */}
+        <div className="modal-section">
+          <div className="modal-section-header">Dates & Times</div>
+          <div className="grid-2">
+            <div className="field">
+              <label>Pick-up date</label>
+              <input 
+                className="input" 
+                type="date" 
+                value={pickup_date} 
+                onChange={e=>setPickupDate(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Pick-up time</label>
+              <input 
+                className="input" 
+                placeholder="e.g. 10:30" 
+                value={pickup_time} 
+                onChange={e=>setPickupTime(e.target.value)}
+              />
+            </div>
+          </div>
+          <div className="grid-2">
+            <div className="field">
+              <label>Drop-off date</label>
+              <input 
+                className="input" 
+                type="date" 
+                value={dropoff_date} 
+                onChange={e=>onChangeDropoffDate(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Drop-off time</label>
+              <input 
+                className="input" 
+                placeholder="e.g. 14:15" 
+                value={dropoff_time} 
+                onChange={e=>setDropoffTime(e.target.value)}
+              />
+            </div>
           </div>
           <div className="field">
-            <label>Mileage</label>
+            <label>Expected drop-off date (To advise client to drop-off the car)</label>
             <input 
               className="input" 
-              value={mileage} 
-              onChange={e=>setMileage(e.target.value)}
-              style={{
-                position: "relative",
-                zIndex: 1,
-                pointerEvents: "auto"
-              }}
-            />
-          </div>
-          <div className="field">
-            <label>Insurance</label>
-            <input 
-              className="input" 
-              value={insurance} 
-              onChange={e=>setInsurance(e.target.value)}
-              style={{
-                position: "relative",
-                zIndex: 1,
-                pointerEvents: "auto"
-              }}
+              type="date" 
+              value={expected_dropoff_date} 
+              onChange={e=>setExpected(e.target.value)}
             />
           </div>
         </div>
 
-        <div className="field">
-          <label>Description</label>
-          <textarea 
-            className="textarea" 
-            rows={3} 
-            value={description} 
-            onChange={e=>setDescription(e.target.value)}
-            style={{
-              position: "relative",
-              zIndex: 1,
-              pointerEvents: "auto"
-            }}
-          />
+        {/* Vehicle details */}
+        <div className="modal-section">
+          <div className="modal-section-header">Vehicle details</div>
+          <div className="grid-2">
+            <div className="field">
+              <label>Vehicle type</label>
+              <input 
+                className="input" 
+                placeholder="SUV, Compact…" 
+                value={vehicle_type} 
+                onChange={e=>setVehicleType(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Transmission</label>
+              <div className="radio-pills">
+                <button type="button"
+                  className={`radio-pill ${transmission==="Automatic" ? "selected":""}`}
+                  onClick={()=> setTransmission("Automatic")}>Automatic</button>
+                <button type="button"
+                  className={`radio-pill ${transmission==="Manual" ? "selected":""}`}
+                  onClick={()=> setTransmission("Manual")}>Manual</button>
+                <button type="button"
+                  className={`radio-pill ${transmission==="Do not precise" ? "selected":""}`}
+                  onClick={()=> setTransmission("Do not precise")}>Do not precise</button>
+              </div>
+            </div>
+          </div>
+          <div className="grid-3">
+            <div className="field">
+              <label>One-way fee (USD)</label>
+              <input 
+                className="input" 
+                inputMode="decimal" 
+                value={one_way_fee} 
+                onChange={e=>setOneWayFee(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Mileage</label>
+              <input 
+                className="input" 
+                value={mileage} 
+                onChange={e=>setMileage(e.target.value)}
+              />
+            </div>
+            <div className="field">
+              <label>Insurance</label>
+              <input 
+                className="input" 
+                value={insurance} 
+                onChange={e=>setInsurance(e.target.value)}
+              />
+            </div>
+          </div>
         </div>
 
-        <div className="field" style={{ 
-          padding: "12px", 
-          backgroundColor: "rgba(255, 255, 255, 0.03)", 
-          borderRadius: "8px",
-          border: "1px solid rgba(255, 255, 255, 0.1)"
-        }}>
-          <label className="chk" style={{ 
-            display: "flex", 
-            alignItems: "center", 
-            gap: "8px",
-            fontWeight: 500,
-            cursor: "pointer"
+        {/* Options */}
+        <div className="modal-section">
+          <div className="modal-section-header">Options</div>
+          <div className="field">
+            <label>Description</label>
+            <textarea 
+              className="textarea" 
+              rows={3} 
+              value={description} 
+              onChange={e=>setDescription(e.target.value)}
+            />
+          </div>
+          <div className="field" style={{ 
+            padding: "12px", 
+            backgroundColor: "rgba(255, 255, 255, 0.03)", 
+            borderRadius: "8px",
+            border: "1px solid rgba(255, 255, 255, 0.1)"
           }}>
-            <input 
-              type="checkbox" 
-              checked={intl_driver_license} 
-              onChange={e=>setIDL(e.target.checked)}
-              style={{
-                width: "18px",
-                height: "18px",
-                cursor: "pointer"
-              }}
-            />
-            <span>International driver licence required</span>
-          </label>
-        </div>
-
-        <div className="field" style={{ 
-          padding: "12px", 
-          backgroundColor: "rgba(255, 255, 255, 0.03)", 
-          borderRadius: "8px",
-          border: "1px solid rgba(255, 255, 255, 0.1)"
-        }}>
-          <label className="chk" style={{ 
-            display: "flex", 
-            alignItems: "center", 
-            gap: "8px",
-            fontWeight: 500,
-            cursor: "pointer"
+            <label className="chk" style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "8px",
+              fontWeight: 500,
+              cursor: "pointer"
+            }}>
+              <input 
+                type="checkbox" 
+                checked={intl_driver_license} 
+                onChange={e=>setIDL(e.target.checked)}
+                style={{
+                  width: "18px",
+                  height: "18px",
+                  cursor: "pointer"
+                }}
+              />
+              <span>International driver licence required</span>
+            </label>
+          </div>
+          <div className="field" style={{ 
+            padding: "12px", 
+            backgroundColor: "rgba(255, 255, 255, 0.03)", 
+            borderRadius: "8px",
+            border: "1px solid rgba(255, 255, 255, 0.1)"
           }}>
-            <input 
-              type="checkbox" 
-              checked={additional_items_paid_on_site} 
-              onChange={e=>setAdditionalItems(e.target.checked)}
-              style={{
-                width: "18px",
-                height: "18px",
-                cursor: "pointer"
-              }}
+            <label className="chk" style={{ 
+              display: "flex", 
+              alignItems: "center", 
+              gap: "8px",
+              fontWeight: 500,
+              cursor: "pointer"
+            }}>
+              <input 
+                type="checkbox" 
+                checked={additional_items_paid_on_site} 
+                onChange={e=>setAdditionalItems(e.target.checked)}
+                style={{
+                  width: "18px",
+                  height: "18px",
+                  cursor: "pointer"
+                }}
+              />
+              <span>Additional Items (GPS...) paid on site</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Internal note */}
+        <div className="modal-section">
+          <div className="modal-section-header">Internal note</div>
+          <div className="field">
+            <label>Internal note</label>
+            <textarea
+              className="textarea"
+              value={internal_note}
+              onChange={e=>setInternalNote(e.target.value)}
+              rows={3}
             />
-            <span>Additional Items (GPS...) paid on site</span>
-          </label>
+          </div>
         </div>
 
-        <div className="field">
-          <label>Internal note</label>
-          <RichTextEditor
-            value={internal_note}
-            onChange={setInternalNote}
-            rows={2}
-          />
-        </div>
-
-        <div className="modal-actions">
+        <div className="actions">
           <button className="btn secondary" onClick={onClose}>Cancel</button>
           <button className="btn primary" onClick={handleContinue}>Continue</button>
         </div>

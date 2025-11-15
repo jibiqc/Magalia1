@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
+import "../styles/quote.css";
 import TimeAmPmField from "./TimeAmPmField";
-import RichTextEditor from "./RichTextEditor";
 
 export default function TransportFromCatalogModal({ open=true, data, onClose, onSubmit }) {
   // Debug logs
@@ -56,59 +56,74 @@ export default function TransportFromCatalogModal({ open=true, data, onClose, on
 
   return createPortal(
     <div 
-      className="modal-backdrop" 
-      role="dialog" 
-      aria-modal="true"
+      className="dest-modal-backdrop"
+      style={{
+        position: "fixed",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 99999,
+        background: "rgba(0,0,0,0.30)"
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose?.();
       }}
+      role="dialog"
+      aria-modal="true"
     >
       <div 
-        className="modal card"
+        className="modal-card"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal-header" style={{display: 'flex', flexDirection: 'column', gap: '8px'}}>
-          <div className="text-lg font-semibold">
-            {transportName}
+        <div className="modal-title">{transportName}</div>
+        {(supplierName || category) && (
+          <div className="modal-subtitle">
+            {supplierName && <span>{supplierName}</span>}
+            {supplierName && category && <span> • </span>}
+            {category && <span>{category}</span>}
           </div>
-          {supplierName && (
-            <div style={{opacity: 0.8}}>
-              {supplierName}
-            </div>
-          )}
-          {category && (
-            <div style={{opacity: 0.7, fontSize: '0.9em'}}>
-              {category}
-            </div>
-          )}
-        </div>
-        <div className="modal-body">
+        )}
+
+        {/* Schedule */}
+        <div className="modal-section">
+          <div className="modal-section-header">Schedule</div>
           <TimeAmPmField label="Start time" value24={startTime} onChange={setStartTime} />
-          <div className="form-row">
+        </div>
+
+        {/* Description */}
+        <div className="modal-section">
+          <div className="modal-section-header">Description</div>
+          <div className="field">
             <label>Description</label>
-            <textarea rows={4} value={description} onChange={(e)=>setDescription(e.target.value)} />
-          </div>
-          <div className="form-row">
-            <label>Internal note</label>
-            <RichTextEditor rows={3} value={internalNote} onChange={setInternalNote} />
+            <textarea 
+              className="textarea"
+              rows={4} 
+              value={description} 
+              onChange={(e)=>setDescription(e.target.value)} 
+            />
           </div>
         </div>
-        <div className="modal-footer" style={{display:'flex', gap:12, justifyContent:'flex-end'}}>
-          <button type="button" onClick={onClose}>Cancel</button>
-          <button type="button" onClick={handleSave}>Save</button>
+
+        {/* Internal note */}
+        <div className="modal-section">
+          <div className="modal-section-header">Internal note</div>
+          <div className="field">
+            <label>Internal note</label>
+            <textarea
+              className="textarea"
+              value={internalNote}
+              onChange={(e) => setInternalNote(e.target.value)}
+              rows={3}
+            />
+          </div>
+        </div>
+
+        <div className="actions">
+          <button className="btn secondary" onClick={onClose}>Cancel</button>
+          <button className="btn primary" onClick={handleSave}>Save</button>
         </div>
       </div>
-      <style>{`
-        .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none}
-        .modal.card{background:#0b1220;color:#e6ecff;border-radius:16px;min-width:560px;max-width:720px;padding:20px;border:1px solid rgba(255,255,255,0.08);pointer-events:auto;user-select:text;position:relative;z-index:1}
-        .form-row{margin-top:12px;display:flex;flex-direction:column;gap:6px}
-        .modal-header{margin-bottom:8px}
-        .modal-footer button[disabled]{opacity:0.5;cursor:not-allowed}
-        input, textarea{background:#0f1729;color:#e6ecff;border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:8px}
-        label{font-weight:500}
-        a{color:#a9c7ff;text-decoration:underline}
-        input[disabled]{opacity:0.7;cursor:not-allowed}
-      `}</style>
     </div>,
     document.body
   );

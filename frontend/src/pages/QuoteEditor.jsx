@@ -905,36 +905,62 @@ export default function QuoteEditor(){
     }
   };
 
+  const [catalogDragging, setCatalogDragging] = useState(null);
+  const [catalogDragPos, setCatalogDragPos] = useState({ x: 0, y: 0 });
+  const [catalogDragLabel, setCatalogDragLabel] = useState('');
+
   const startManualDrag = (meta, label, startEvent) => {
-    let dragging = true;
-    const el = document.createElement('div');
-    el.style.position = 'fixed';
-    el.style.left = '0px';
-    el.style.top = '0px';
-    el.style.transform = `translate(${startEvent.clientX + 12}px, ${startEvent.clientY + 12}px)`;
-    el.style.background = '#0f203a';
-    el.style.border = '1px solid rgba(255,255,255,.3)';
-    el.style.borderRadius = '8px';
-    el.style.color = 'white';
-    el.style.padding = '6px 10px';
-    el.style.fontSize = '13px';
-    el.style.boxShadow = '0 4px 12px rgba(0,0,0,.35)';
-    el.style.zIndex = '2147483647';
-    el.style.pointerEvents = 'none';
-    el.textContent = String(label || '');
-    document.body.appendChild(el);
+    setCatalogDragging(meta);
+    setCatalogDragPos({ x: startEvent.clientX, y: startEvent.clientY });
+    setCatalogDragLabel(String(label || 'Service'));
 
     const onMove = (e) => {
-      if (!dragging) return;
-      el.style.transform = `translate(${e.clientX + 12}px, ${e.clientY + 12}px)`;
+      setCatalogDragPos({ x: e.clientX, y: e.clientY });
+      
+      // Auto-scroll pour le drag depuis le catalogue
+      const scrollThreshold = 80;
+      const centerRail = document.querySelector('.center-rail');
+      
+      if (centerRail) {
+        const rect = centerRail.getBoundingClientRect();
+        const mouseY = e.clientY;
+        const distanceFromTop = mouseY - rect.top;
+        const distanceFromBottom = rect.bottom - mouseY;
+        
+        let scrollSpeed = 0;
+        if (distanceFromTop < scrollThreshold) {
+          scrollSpeed = ((scrollThreshold - distanceFromTop) / scrollThreshold) * 10;
+          scrollSpeed = Math.max(1, Math.min(10, scrollSpeed));
+        } else if (distanceFromBottom < scrollThreshold) {
+          scrollSpeed = -((scrollThreshold - distanceFromBottom) / scrollThreshold) * 10;
+          scrollSpeed = Math.min(-1, Math.max(-10, scrollSpeed));
+        }
+        
+        if (scrollSpeed !== 0 && autoScrollRef.current === null) {
+          autoScrollRef.current = setInterval(() => {
+            if (centerRail) {
+              centerRail.scrollTop += scrollSpeed;
+            }
+          }, 16);
+        } else if (scrollSpeed === 0 && autoScrollRef.current !== null) {
+          clearInterval(autoScrollRef.current);
+          autoScrollRef.current = null;
+        }
+      }
     };
+    
     const onUp = (e) => {
-      dragging = false;
+      if (autoScrollRef.current) {
+        clearInterval(autoScrollRef.current);
+        autoScrollRef.current = null;
+      }
+      setCatalogDragging(null);
+      setCatalogDragLabel('');
       window.removeEventListener('mousemove', onMove);
       window.removeEventListener('mouseup', onUp);
-      if (el && el.parentNode) el.parentNode.removeChild(el);
       performManualDrop(meta, e.clientX, e.clientY);
     };
+    
     window.addEventListener('mousemove', onMove);
     window.addEventListener('mouseup', onUp);
   };
@@ -1081,12 +1107,13 @@ export default function QuoteEditor(){
             </div>
           </div>,
           document.body
-        )}
-      </div>
-    );
-  }
-  
-  const CATEGORY_GROUPS = {
+      )}
+
+    </div>
+  );
+}
+
+const CATEGORY_GROUPS = {
     Activities: ["small group","private","private chauffeur","tickets"],
     Hotels: ["hotel room","hotel","apartment","appartment","villa"],
     Transport: ["private transfer"]
@@ -1112,20 +1139,7 @@ export default function QuoteEditor(){
   const [dragging, setDragging] = useState(null);
   const [hoverSlot, setHoverSlot] = useState({ day: -1, index: -1 });
   const [dragOverlayPos, setDragOverlayPos] = useState({ x: 0, y: 0 });
-
-  // Global drag overlay - track mouse during drag
-  useEffect(() => {
-    if (!dragging) return;
-
-    const handleMouseMove = (e) => {
-      setDragOverlayPos({ x: e.clientX, y: e.clientY });
-    };
-
-    document.addEventListener('mousemove', handleMouseMove, true);
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove, true);
-    };
-  }, [dragging]);
+  const autoScrollRef = useRef(null);
 
   const allowDrop = (e, stopProp = true) => { 
     e.preventDefault(); 
@@ -4966,7 +4980,7 @@ export default function QuoteEditor(){
                             onChangeLocalData={isLocal ? (newData)=>{
                               setLocalLines(prev => prev.map(x => x.id===l.id ? { ...x, data:newData } : x));
                             } : undefined}
-                            onDragStart={(e)=>{
+                            onDragStart={(e)=>{ 
                               const meta = {
                                 fromDay: dayIdx,
                                 fromBackendIndex: lineIdx,    // -1 if local
@@ -6034,6 +6048,36 @@ export default function QuoteEditor(){
           }
         }}
       />
+
+      {/* Drag Ghost Preview - Catalog items */}
+      {catalogDragging && (
+        <div
+          style={{
+            position: 'fixed',
+            left: `${catalogDragPos.x - 150}px`,
+            top: `${catalogDragPos.y - 20}px`,
+            width: '300px',
+            maxWidth: '300px',
+            opacity: 0.85,
+            pointerEvents: 'none',
+            zIndex: 100000,
+            transform: 'rotate(1.5deg)',
+            transition: 'none',
+            boxShadow: '0 12px 32px rgba(0, 0, 0, 0.4), 0 0 0 2px rgba(110, 168, 255, 0.3)',
+            borderRadius: '10px',
+            backgroundColor: '#ffffff',
+            border: '1px solid rgba(110, 168, 255, 0.2)',
+            padding: '10px',
+            fontFamily: 'Arial, sans-serif',
+            fontSize: '10pt',
+            color: '#002060'
+          }}
+        >
+          <div style={{ fontWeight: 700, color: '#002060' }}>
+            {catalogDragLabel}
+          </div>
+        </div>
+      )}
 
     </div>
 

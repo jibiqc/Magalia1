@@ -1,6 +1,6 @@
-import React, { useMemo, useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
-import RichTextEditor from "./RichTextEditor";
+import "../styles/quote.css";
 
 export default function HotelFromCatalogModal({ open=true, data, onClose, onSubmit }) {
   // Debug logs
@@ -76,76 +76,131 @@ export default function HotelFromCatalogModal({ open=true, data, onClose, onSubm
 
   return createPortal(
     <div 
-      className="modal-backdrop" 
-      role="dialog" 
-      aria-modal="true"
+      className="dest-modal-backdrop"
+      style={{
+        position: "fixed",
+        inset: 0,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 99999,
+        background: "rgba(0,0,0,0.30)"
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose?.();
       }}
+      role="dialog"
+      aria-modal="true"
     >
       <div 
-        className="modal card"
+        className="modal-card"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="modal-header">
-          <div className="text-lg font-semibold" style={{display:'flex', alignItems:'center', gap:'8px', flexWrap:'wrap'}}>
-            <span>{hotelName}</span>
-            {starsText && <span>{starsText}</span>}
+        <div className="modal-title">{hotelName}{starsText && ` ${starsText}`}</div>
+        {url && (
+          <div className="modal-subtitle">
+            <a href={url} target="_blank" rel="noreferrer" style={{color: "var(--accent)", textDecoration: "underline"}}>{url}</a>
           </div>
-          {url ? (
-            <div className="mt-1">
-              <a href={url} target="_blank" rel="noreferrer">{url}</a>
-            </div>
-          ) : null}
-        </div>
-        <div className="modal-body">
-          <div className="form-row">
+        )}
+
+        {/* Room details */}
+        <div className="modal-section">
+          <div className="modal-section-header">Room details</div>
+          <div className="field">
             <label>Room type *</label>
-            <input type="text" value={roomType} onChange={(e)=>setRoomType(e.target.value)} placeholder="e.g., 1 suite" />
+            <input 
+              type="text" 
+              className="input"
+              value={roomType} 
+              onChange={(e)=>setRoomType(e.target.value)} 
+              placeholder="e.g., 1 suite" 
+            />
           </div>
-          {/* Dates block directly under room type */}
-          <div className="form-row dates-grid">
-            <div>
-              <label>Check-in date</label>
-              <input type="date" value={checkIn || ''} onChange={(e)=>setCheckIn(e.target.value)} />
-            </div>
-            <div>
-              <label>Check-out date</label>
-              <input type="date" value={checkOut || ''} onChange={(e)=>setCheckOut(e.target.value)} />
-            </div>
-          </div>
-          {/* Toggles below dates - same row */}
-          <div className="form-row toggles-row">
-            <label><input type="checkbox" checked={breakfast} onChange={(e)=>setBreakfast(e.target.checked)} /> Breakfast</label>
-            <label><input type="checkbox" checked={earlyCI} onChange={(e)=>setEarlyCI(e.target.checked)} /> Early Check-in</label>
-          </div>
-          <div className="form-row">
-            <label>Description</label>
-            <textarea rows={4} value={description} onChange={(e)=>setDescription(e.target.value)} />
-          </div>
-          <div className="form-row">
-            <label>Internal note</label>
-            <RichTextEditor rows={3} value={internalNote} onChange={setInternalNote} />
-          </div>
-          {/* lock note removed as requested */}
         </div>
-        <div className="modal-footer" style={{display:'flex', gap:12, justifyContent:'flex-end'}}>
-          <button type="button" onClick={onClose}>Cancel</button>
-          <button type="button" disabled={disableSave} onClick={handleSave}>Save</button>
+
+        {/* Dates */}
+        <div className="modal-section">
+          <div className="modal-section-header">Dates</div>
+          <div className="grid-2">
+            <div className="field">
+              <label>Check-in date</label>
+              <input 
+                type="date" 
+                className="input"
+                value={checkIn || ''} 
+                onChange={(e)=>setCheckIn(e.target.value)} 
+              />
+            </div>
+            <div className="field">
+              <label>Check-out date</label>
+              <input 
+                type="date" 
+                className="input"
+                value={checkOut || ''} 
+                onChange={(e)=>setCheckOut(e.target.value)} 
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Options */}
+        <div className="modal-section">
+          <div className="modal-section-header">Options</div>
+          <div className="field">
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={breakfast}
+                onChange={(e) => setBreakfast(e.target.checked)}
+              />
+              <span>Breakfast</span>
+            </label>
+          </div>
+          <div className="field">
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={earlyCI}
+                onChange={(e) => setEarlyCI(e.target.checked)}
+              />
+              <span>Early Check-in</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Description */}
+        <div className="modal-section">
+          <div className="modal-section-header">Description</div>
+          <div className="field">
+            <label>Description</label>
+            <textarea 
+              className="textarea"
+              rows={4} 
+              value={description} 
+              onChange={(e)=>setDescription(e.target.value)} 
+            />
+          </div>
+        </div>
+
+        {/* Internal note */}
+        <div className="modal-section">
+          <div className="modal-section-header">Internal note</div>
+          <div className="field">
+            <label>Internal note</label>
+            <textarea
+              className="textarea"
+              value={internalNote}
+              onChange={(e) => setInternalNote(e.target.value)}
+              rows={3}
+            />
+          </div>
+        </div>
+
+        <div className="actions">
+          <button className="btn secondary" onClick={onClose}>Cancel</button>
+          <button className="btn primary" disabled={disableSave} onClick={handleSave}>Save</button>
         </div>
       </div>
-      <style>{`
-        .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:9999;user-select:none;-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none}
-        .modal.card{background:#0b1220;color:#e6ecff;border-radius:16px;min-width:560px;max-width:720px;padding:20px;border:1px solid rgba(255,255,255,0.08);pointer-events:auto;user-select:text;position:relative;z-index:1}
-        .form-row{margin-top:12px;display:flex;flex-direction:column;gap:6px}
-        .modal-header{margin-bottom:8px}
-        .modal-footer button[disabled]{opacity:0.5;cursor:not-allowed}
-        input, textarea{background:#0f1729;color:#e6ecff;border:1px solid rgba(255,255,255,0.12);border-radius:10px;padding:8px}
-        label{font-weight:500}
-        a{color:#a9c7ff;text-decoration:underline}
-        .dates-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;align-items:center}
-        .toggles-row{display:flex;flex-direction:row;gap:24px;align-items:center;flex-wrap:wrap}
-      `}</style>
     </div>,
     document.body
   );

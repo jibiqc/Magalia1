@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import "../styles/quote.css";
-import RichTextEditor from "./RichTextEditor";
 
 export default function HotelModal({
   open = true,
@@ -70,7 +69,9 @@ export default function HotelModal({
       >
         <div className="modal-title">Hotel</div>
 
-        <div className="dest-modal-body" style={{ padding: 0 }}>
+        {/* Hotel information */}
+        <div className="modal-section">
+          <div className="modal-section-header">Hotel information</div>
           <div className="field">
             <label>Hotel name</label>
             <input
@@ -81,7 +82,6 @@ export default function HotelModal({
               placeholder=""
             />
           </div>
-
           <div className="field">
             <label>Stars</label>
             <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 4 }}>
@@ -99,29 +99,6 @@ export default function HotelModal({
               ))}
             </div>
           </div>
-
-          <div className="field">
-            <label>Room type</label>
-            <input
-              type="text"
-              className="input"
-              value={room_type}
-              onChange={(e) => setRoomType(e.target.value)}
-              placeholder="e.g., 1 suite, 2 double rooms"
-            />
-          </div>
-
-          <div className="field">
-            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
-              <input
-                type="checkbox"
-                checked={breakfast}
-                onChange={(e) => setBreakfast(e.target.checked)}
-              />
-              <span>Breakfast</span>
-            </label>
-          </div>
-
           <div className="field">
             <label>Hotel URL</label>
             <input
@@ -132,7 +109,36 @@ export default function HotelModal({
               placeholder=""
             />
           </div>
+        </div>
 
+        {/* Room details */}
+        <div className="modal-section">
+          <div className="modal-section-header">Room details</div>
+          <div className="field">
+            <label>Room type</label>
+            <input
+              type="text"
+              className="input"
+              value={room_type}
+              onChange={(e) => setRoomType(e.target.value)}
+              placeholder="e.g., 1 suite, 2 double rooms"
+            />
+          </div>
+          <div className="field">
+            <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={breakfast}
+                onChange={(e) => setBreakfast(e.target.checked)}
+              />
+              <span>Breakfast</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Description */}
+        <div className="modal-section">
+          <div className="modal-section-header">Description</div>
           <div className="field">
             <label>Description</label>
             <textarea
@@ -143,26 +149,20 @@ export default function HotelModal({
               rows={4}
             />
           </div>
+        </div>
 
+        {/* Internal note */}
+        <div className="modal-section">
+          <div className="modal-section-header">Internal note</div>
           <div className="field">
             <label>Internal note</label>
-            <RichTextEditor
+            <textarea
+              className="textarea"
               value={internal_note}
-              onChange={setInternalNote}
+              onChange={(e) => setInternalNote(e.target.value)}
               placeholder=""
               rows={3}
             />
-          </div>
-
-          <div className="field">
-            <button
-              type="button"
-              className="btn secondary"
-              style={{ opacity: 0.5, cursor: "not-allowed" }}
-              disabled
-            >
-              Fetch hotel details
-            </button>
           </div>
         </div>
 

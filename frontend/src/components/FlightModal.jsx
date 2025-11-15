@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 import "../styles/quote.css";
 import TimeAmPmField from "./TimeAmPmField";
-import RichTextEditor from "./RichTextEditor";
 
 export default function FlightModal({
   open = true,
@@ -84,52 +83,58 @@ export default function FlightModal({
       >
         <div className="modal-title">Flight</div>
 
-        <div className="dest-modal-body" style={{ padding: 0 }}>
-          <div className="field">
-            <label>From</label>
-            <input
-              type="text"
-              className="input"
-              value={from}
-              onChange={(e) => setFrom(e.target.value)}
-              placeholder=""
-            />
+        {/* Route information */}
+        <div className="modal-section">
+          <div className="modal-section-header">Route</div>
+          <div className="grid-2">
+            <div className="field">
+              <label>From</label>
+              <input
+                type="text"
+                className="input"
+                value={from}
+                onChange={(e) => setFrom(e.target.value)}
+                placeholder=""
+              />
+            </div>
+            <div className="field">
+              <label>To</label>
+              <input
+                type="text"
+                className="input"
+                value={to}
+                onChange={(e) => setTo(e.target.value)}
+                placeholder=""
+              />
+            </div>
           </div>
+        </div>
 
-          <div className="field">
-            <label>To</label>
-            <input
-              type="text"
-              className="input"
-              value={to}
-              onChange={(e) => setTo(e.target.value)}
-              placeholder=""
-            />
+        {/* Flight details */}
+        <div className="modal-section">
+          <div className="modal-section-header">Flight details</div>
+          <div className="grid-2">
+            <div className="field">
+              <label>Airline</label>
+              <input
+                type="text"
+                className="input"
+                value={airline}
+                onChange={(e) => setAirline(e.target.value)}
+                placeholder=""
+              />
+            </div>
+            <div className="field">
+              <label>Class of service</label>
+              <input
+                type="text"
+                className="input"
+                value={class_of_service}
+                onChange={(e) => setClassOfService(e.target.value)}
+                placeholder="e.g., Business, Economy, 1st, 2nd"
+              />
+            </div>
           </div>
-
-          <div className="field">
-            <label>Airline</label>
-            <input
-              type="text"
-              className="input"
-              value={airline}
-              onChange={(e) => setAirline(e.target.value)}
-              placeholder=""
-            />
-          </div>
-
-          <div className="field">
-            <label>Class of service</label>
-            <input
-              type="text"
-              className="input"
-              value={class_of_service}
-              onChange={(e) => setClassOfService(e.target.value)}
-              placeholder="e.g., Business, Economy, 1st, 2nd"
-            />
-          </div>
-
-          {/* Seat reservation (radio pills) */}
           <div className="field">
             <label>Seat reservation</label>
             <div className="seat-radio">
@@ -145,13 +150,21 @@ export default function FlightModal({
               >Do not precise</button>
             </div>
           </div>
+        </div>
 
+        {/* Times */}
+        <div className="modal-section">
+          <div className="modal-section-header">Schedule</div>
           <div className="time-row">
             <TimeAmPmField label="Departure time" value24={dep_time} onChange={setDepTime} />
             <TimeAmPmField label="Arrival time" value24={arr_time} onChange={setArrTime} />
           </div>
           <div className="time-help">Enter time in AM/PM. Typing 13:30 will auto-convert to 1:30 PM.</div>
+        </div>
 
+        {/* Description */}
+        <div className="modal-section">
+          <div className="modal-section-header">Description</div>
           <div className="field">
             <label>Description</label>
             <textarea
@@ -162,15 +175,19 @@ export default function FlightModal({
               rows={3}
             />
           </div>
+        </div>
 
+        {/* Internal note */}
+        <div className="modal-section">
+          <div className="modal-section-header">Internal note</div>
           <div className="field">
             <label>Internal note</label>
-            <RichTextEditor
+            <textarea
+              className="textarea"
               value={internal_note}
-              onChange={setInternalNote}
+              onChange={(e) => setInternalNote(e.target.value)}
               placeholder=""
               rows={3}
-              maxLength={1000}
             />
           </div>
         </div>

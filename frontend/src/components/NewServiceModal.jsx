@@ -3,7 +3,6 @@ import { createPortal } from "react-dom";
 import "../styles/quote.css";
 import { parseHHMM, fmtHm, addMins } from "../utils/duration";
 import TimeAmPmField from "./TimeAmPmField";
-import RichTextEditor from "./RichTextEditor";
 
 export default function NewServiceModal({
   open = true,
@@ -92,7 +91,9 @@ export default function NewServiceModal({
       >
         <div className="modal-title">New Service</div>
 
-        <div className="dest-modal-body" style={{ padding: 0 }}>
+        {/* Service information */}
+        <div className="modal-section">
+          <div className="modal-section-header">Service information</div>
           <div className="field">
             <label>Title</label>
             <input
@@ -103,18 +104,6 @@ export default function NewServiceModal({
               placeholder=""
             />
           </div>
-
-          <div className="field">
-            <label>Description</label>
-            <textarea
-              className="textarea"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder=""
-              rows={4}
-            />
-          </div>
-
           <div className="field">
             <label>Category</label>
             <select
@@ -131,11 +120,25 @@ export default function NewServiceModal({
               <option value="Restaurant Reservation">Restaurant Reservation</option>
             </select>
           </div>
+          <div className="field">
+            <label>Description</label>
+            <textarea
+              className="textarea"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder=""
+              rows={4}
+            />
+          </div>
+        </div>
 
-          <TimeAmPmField label="Start time" value24={start_time} onChange={setStartTime} />
-
-          <TimeAmPmField label="End time" value24={end_time} onChange={handleEndChange} />
-
+        {/* Schedule */}
+        <div className="modal-section">
+          <div className="modal-section-header">Schedule</div>
+          <div className="grid-2">
+            <TimeAmPmField label="Start time" value24={start_time} onChange={setStartTime} />
+            <TimeAmPmField label="End time" value24={end_time} onChange={handleEndChange} />
+          </div>
           <div className="field">
             <label>Duration</label>
             <input
@@ -146,12 +149,17 @@ export default function NewServiceModal({
               placeholder="e.g., 3h or 3h30"
             />
           </div>
+        </div>
 
+        {/* Internal note */}
+        <div className="modal-section">
+          <div className="modal-section-header">Internal note</div>
           <div className="field">
             <label>Internal note</label>
-            <RichTextEditor
+            <textarea
+              className="textarea"
               value={internal_note}
-              onChange={setInternalNote}
+              onChange={(e) => setInternalNote(e.target.value)}
               placeholder=""
               rows={3}
             />
