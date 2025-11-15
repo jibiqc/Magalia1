@@ -25,6 +25,7 @@ import DayHeroModal from "../components/modals/DayHeroModal";
 import DayManagerModal from "../components/modals/DayManagerModal";
 import NewQuoteModal from "../components/NewQuoteModal";
 import VersionHistoryModal from "../components/VersionHistoryModal";
+import ServiceImagesModal from "../components/modals/ServiceImagesModal";
 import { api } from "../lib/api";
 import { fmtDateShortISO, fmtDateLongISO } from "../utils/dateFmt";
 import { uid } from "../utils/localId";
@@ -527,6 +528,7 @@ export default function QuoteEditor(){
   const [catalogActivityDraft, setCatalogActivityDraft] = useState(null);
   const [editingDayImages, setEditingDayImages] = useState(null); // { dayId, day }
   const [editingDayHero, setEditingDayHero] = useState(null); // { dayId, dayIdx }
+  const [serviceImagesModal, setServiceImagesModal] = useState(null); // { serviceId, serviceName, images }
   
   // Debug: log when catalogHotelDraft changes
   useEffect(() => {
@@ -1040,8 +1042,10 @@ export default function QuoteEditor(){
     // Récupérer le start time depuis fields ou info
     const startTime = fields?.start_time || fields?.Start_time || fields?.['Start time'] || info?.start_time || '';
     
-    // Récupérer l'image depuis info ou fields
-    const imageUrl = info?.images?.[0]?.url || fields?.image_url || '';
+    // Récupérer les images depuis info ou fields
+    const images = info?.images || [];
+    const imageUrl = images[0]?.url || fields?.image_url || '';
+    const thumbnailUrl = imageUrl; // Première image disponible pour la miniature
 
     const onEnter = async (e) => {
       setSvcHoverId(s.id);
@@ -1054,7 +1058,7 @@ export default function QuoteEditor(){
     const onLeave = () => {
       setSvcHoverId(null);
     };
-    
+
     return (
       <div
         className="svc-item"
@@ -1070,6 +1074,7 @@ export default function QuoteEditor(){
         onMouseMove={onMove}
         onMouseLeave={onLeave}
       >
+        {/* Titre et sous-titre */}
         {typeof title === 'string' ? (
           <div className="svc-title">
             {title}
@@ -6017,6 +6022,22 @@ const CATEGORY_GROUPS = {
           open={!!catalogHotelDraft}
           data={catalogHotelDraft}
           onClose={() => setCatalogHotelDraft(null)}
+          onOpenImagesModal={async () => {
+            const { svcFull } = catalogHotelDraft;
+            if (svcFull?.id) {
+              try {
+                const full = await api.getServiceById(svcFull.id);
+                setServiceImagesModal({
+                  serviceId: svcFull.id,
+                  serviceName: svcFull.name || `Service #${svcFull.id}`,
+                  images: full.images || []
+                });
+              } catch (err) {
+                console.error("[QuoteEditor] Failed to load service for images:", err);
+                alert("Failed to load service images. Please try again.");
+              }
+            }
+          }}
           onSubmit={(payload) => {
             // payload: { room_type, breakfast, early_check_in, check_in_date, check_out_date, description, internal_note }
             const { mode, svcFull, dayIdx, defaults, lineId } = catalogHotelDraft;
@@ -6133,6 +6154,22 @@ const CATEGORY_GROUPS = {
           open={!!catalogTransportDraft}
           data={catalogTransportDraft}
           onClose={() => setCatalogTransportDraft(null)}
+          onOpenImagesModal={async () => {
+            const { svcFull } = catalogTransportDraft;
+            if (svcFull?.id) {
+              try {
+                const full = await api.getServiceById(svcFull.id);
+                setServiceImagesModal({
+                  serviceId: svcFull.id,
+                  serviceName: svcFull.name || `Service #${svcFull.id}`,
+                  images: full.images || []
+                });
+              } catch (err) {
+                console.error("[QuoteEditor] Failed to load service for images:", err);
+                alert("Failed to load service images. Please try again.");
+              }
+            }
+          }}
           onSubmit={(payload) => {
             // payload: { description, start_time, internal_note }
             const { mode, svcFull, dayIdx, lineId } = catalogTransportDraft;
@@ -6198,6 +6235,45 @@ const CATEGORY_GROUPS = {
           open={!!catalogActivityDraft}
           data={catalogActivityDraft}
           onClose={() => setCatalogActivityDraft(null)}
+          onOpenImagesModal={async () => {
+            const { svcFull } = catalogActivityDraft;
+            if (svcFull?.id) {
+              try {
+                const full = await api.getServiceById(svcFull.id);
+                setServiceImagesModal({
+                  serviceId: svcFull.id,
+                  serviceName: svcFull.name || `Service #${svcFull.id}`,
+                  images: full.images || [],
+                  onImageSelected: async (selectedImage) => {
+                    // Reload service data after image selection or addition
+                    const updated = await api.getServiceById(svcFull.id);
+                    console.log('[QuoteEditor] Reloaded service images:', updated.images?.length, 'images');
+                    // Update catalogActivityDraft with new images
+                    setCatalogActivityDraft(prev => ({
+                      ...prev,
+                      svcFull: { ...prev.svcFull, images: updated.images || [] }
+                    }));
+                  },
+                  onClose: async () => {
+                    // Reload images when modal closes to ensure we have the latest
+                    try {
+                      const updated = await api.getServiceById(svcFull.id);
+                      setCatalogActivityDraft(prev => ({
+                        ...prev,
+                        svcFull: { ...prev.svcFull, images: updated.images || [] }
+                      }));
+                    } catch (err) {
+                      console.error('[QuoteEditor] Failed to reload images on close:', err);
+                    }
+                    setServiceImagesModal(null);
+                  }
+                });
+              } catch (err) {
+                console.error("[QuoteEditor] Failed to load service for images:", err);
+                alert("Failed to load service images. Please try again.");
+              }
+            }
+          }}
           onSubmit={(payload) => {
             // payload: { description, start_time, end_time, duration, internal_note }
             const { mode, svcFull, dayIdx, lineId } = catalogActivityDraft;
@@ -6215,7 +6291,8 @@ const CATEGORY_GROUPS = {
               duration: payload.duration || "",
               internal_note: payload.internal_note || "",
               snapshot: svcFull || {},
-              images: svcFull?.images || [], // Store images in raw_json
+              images: svcFull?.images || [], // Store all images in raw_json
+              selected_images: payload.selected_images || [], // Store selected images (max 2)
               hydrated: true
             };
             const newLine = {
@@ -6359,6 +6436,18 @@ const CATEGORY_GROUPS = {
           }
         }}
       />
+
+      {/* Service Images Modal */}
+      {serviceImagesModal && (
+        <ServiceImagesModal
+          open={!!serviceImagesModal}
+          serviceId={serviceImagesModal.serviceId}
+          serviceName={serviceImagesModal.serviceName}
+          images={serviceImagesModal.images}
+          onClose={serviceImagesModal.onClose || (() => setServiceImagesModal(null))}
+          onImageSelected={serviceImagesModal.onImageSelected}
+        />
+      )}
 
       {/* Drag Ghost Preview - Catalog items */}
       {catalogDragging && (

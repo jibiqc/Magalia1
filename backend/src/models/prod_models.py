@@ -55,8 +55,9 @@ class ServiceImage(Base):
     __tablename__ = "service_images"
     id = Column(Integer, primary_key=True)
     service_id = Column(Integer, ForeignKey("service_catalog.id"), nullable=True, index=True)
-    url = Column(String, nullable=False, unique=True, index=True)
+    url = Column(String, nullable=False, index=True)  # Removed unique=True to allow same URL on multiple services
     caption = Column(String, nullable=True)
+    source = Column(String, nullable=False, default="import")  # "import" or "manual"
 
 class ItineraryEvent(Base):
     __tablename__ = "itinerary_events"

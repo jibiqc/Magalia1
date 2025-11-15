@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException, Response
 from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import or_, desc, func
 from sqlalchemy import inspect
 
 from ..db import get_db
 from ..models.prod_models import ServiceCatalog, ServicePopularity, Supplier, ServiceImage
-from .schemas_services import ServiceOut
+from .schemas_services import ServiceOut, ManualImageCreate, ImageResponse
 from typing import List, Optional
 
 
@@ -261,7 +261,12 @@ def get_service_by_id(service_id: int, db: Session = Depends(get_db)):
             .all()
         )
         out["images"] = [
-            {"id": getattr(img, "id", None), "url": img.url, "caption": getattr(img, "caption", None)}
+            {
+                "id": getattr(img, "id", None),
+                "url": img.url,
+                "caption": getattr(img, "caption", None),
+                "source": getattr(img, "source", "import")  # Include source field
+            }
             for img in imgs or []
         ]
     except Exception:
@@ -269,6 +274,90 @@ def get_service_by_id(service_id: int, db: Session = Depends(get_db)):
         out["images"] = []
 
     return out
+
+
+@router.post("/{service_id}/images/manual", response_model=ImageResponse, status_code=201)
+def create_manual_image(
+    service_id: int,
+    payload: ManualImageCreate,
+    db: Session = Depends(get_db)
+):
+    """
+    Create a manual image for a service.
+    Allows the same URL to be used on multiple services.
+    If the same URL already exists for this service, returns the existing image (idempotent).
+    """
+    # Verify that the service exists
+    service = db.query(ServiceCatalog).filter(ServiceCatalog.id == service_id).first()
+    if not service:
+        raise HTTPException(status_code=404, detail="Service not found")
+    
+    # Check if this URL already exists for THIS service (idempotent)
+    existing = db.query(ServiceImage).filter(
+        ServiceImage.service_id == service_id,
+        ServiceImage.url == payload.url
+    ).first()
+    
+    if existing:
+        # Return existing image (idempotent behavior)
+        return ImageResponse(
+            id=existing.id,
+            url=existing.url,
+            caption=existing.caption,
+            source=existing.source
+        )
+    
+    # Create new manual image
+    new_img = ServiceImage(
+        service_id=service_id,
+        url=payload.url,
+        caption=payload.caption,
+        source="manual"
+    )
+    db.add(new_img)
+    db.commit()  # Commit the transaction to ensure the image is saved
+    db.refresh(new_img)
+    
+    return ImageResponse(
+        id=new_img.id,
+        url=new_img.url,
+        caption=new_img.caption,
+        source=new_img.source
+    )
+
+
+@router.delete("/{service_id}/images/{image_id}", status_code=204)
+def delete_manual_image(
+    service_id: int,
+    image_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Delete a manual image for a service.
+    Only allows deletion of manual images (source="manual").
+    Only deletes the specific image row, even if the same URL exists for other services.
+    """
+    # Verify that the image exists and belongs to the service
+    img = db.query(ServiceImage).filter(
+        ServiceImage.id == image_id,
+        ServiceImage.service_id == service_id
+    ).first()
+    
+    if not img:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    # Verify that it's a manual image
+    if img.source != "manual":
+        raise HTTPException(
+            status_code=403,
+            detail="Cannot delete imported images. Only manual images can be deleted."
+        )
+    
+    # Delete only this specific row
+    db.delete(img)
+    db.commit()
+    
+    return Response(status_code=204)
 
 
 

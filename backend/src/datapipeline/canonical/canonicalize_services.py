@@ -109,9 +109,13 @@ def canonicalize_services(cat_map_path: str):
                 img = stg.image_url_primary or stg.image_url_fallback
 
                 if img:
-                    existing_img = s.query(ServiceImage).filter(ServiceImage.url == img).first()
+                    # Check if this URL already exists for THIS specific service (not globally)
+                    existing_img = s.query(ServiceImage).filter(
+                        ServiceImage.service_id == obj.id,
+                        ServiceImage.url == img
+                    ).first()
                     if not existing_img:
-                        s.add(ServiceImage(service_id=obj.id, url=img))
+                        s.add(ServiceImage(service_id=obj.id, url=img, source="import"))
                         s.flush()
                         images_added += 1
 
@@ -145,14 +149,19 @@ def canonicalize_services(cat_map_path: str):
 
 
 
-                # Image upsert (only if new URL)
+                # Image upsert (only if new URL for this service)
+                # Never modify or delete manual images (source="manual")
 
                 img = stg.image_url_primary or stg.image_url_fallback
 
                 if img:
-                    existing_img = s.query(ServiceImage).filter(ServiceImage.url == img).first()
+                    # Check if this URL already exists for THIS specific service (not globally)
+                    existing_img = s.query(ServiceImage).filter(
+                        ServiceImage.service_id == existing.id,
+                        ServiceImage.url == img
+                    ).first()
                     if not existing_img:
-                        s.add(ServiceImage(service_id=existing.id, url=img))
+                        s.add(ServiceImage(service_id=existing.id, url=img, source="import"))
                         s.flush()
                         images_added += 1
                         changed = True

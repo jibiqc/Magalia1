@@ -17,6 +17,23 @@ class ServiceOut(BaseModel):
         from_attributes = True
 
 
+class ManualImageCreate(BaseModel):
+    """Schema for creating a manual image for a service."""
+    url: str
+    caption: Optional[str] = None
+
+
+class ImageResponse(BaseModel):
+    """Schema for image response."""
+    id: int
+    url: str
+    caption: Optional[str] = None
+    source: str
+
+    class Config:
+        from_attributes = True
+
+
 
 
 

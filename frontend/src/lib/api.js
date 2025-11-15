@@ -169,6 +169,8 @@ export const api = {
   searchServices,
   getPopularServices,
   getServiceById,
+  addServiceImage,
+  deleteServiceImage,
 
   // --- Auth API ---
   async requestLink(email) {
@@ -207,6 +209,18 @@ export async function getPopularServices({ dest, category = "Activity", limit = 
 export async function getServiceById(id) {
   if (!id) throw new Error("id is required");
   return apiCall("GET", `/services/${id}`);
+}
+
+export async function addServiceImage(serviceId, { url, caption }) {
+  if (!serviceId) throw new Error("serviceId is required");
+  if (!url) throw new Error("url is required");
+  return apiCall("POST", `/services/${serviceId}/images/manual`, { url, caption: caption || null });
+}
+
+export async function deleteServiceImage(serviceId, imageId) {
+  if (!serviceId) throw new Error("serviceId is required");
+  if (!imageId) throw new Error("imageId is required");
+  return apiCall("DELETE", `/services/${serviceId}/images/${imageId}`);
 }
 
 // Helper function for downloading files
