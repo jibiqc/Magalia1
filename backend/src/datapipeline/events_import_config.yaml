@@ -1,0 +1,72 @@
+# === Source column headers (exact names from your sheet) ===
+
+departure_code_column: "Departure Code (Departure) (Departure)"   # we will take text before ":" if present
+
+name_column: "Name"
+
+category_column: "Category"
+
+start_destination_column: "Start Destination"                      # used to try linking with ServiceCatalog
+
+company_column: "Company"
+
+start_date_column: "Start Date"                                    # local service date (YYYY-MM-DD or Excel serial)
+
+end_date_column: "End Date"                                        # optional
+
+start_time_column: "Start Time"                                    # optional
+
+end_time_column: "End Time"                                        # optional
+
+
+
+# === Behavior ===
+
+# Required fields: if any missing → drop row (log counters)
+
+required_fields:
+
+  - "Departure Code (Departure) (Departure)"
+
+  - "Start Date"
+
+  - "Name"
+
+
+
+# Strict mapping (no fuzzy); unknown category → "to_review"
+
+strict:
+
+  category: true
+
+  company: true
+
+  destination: true
+
+
+
+# BK strategy (canonical): primary = (Departure, Date, Name, Start Time?) if time present, else (Departure, Date, Name)
+
+bk_fields:
+
+  - "Departure Code (Departure) (Departure)"
+
+  - "Start Date"
+
+  - "Name"
+
+  - "Start Time?"
+
+
+
+# Keep all columns in staging.raw_json
+
+keep_all_columns: true
+
+
+
+# Chunking (perf)
+
+chunksize: 0   # 0 = load all; set e.g. 5000 for very large files
+

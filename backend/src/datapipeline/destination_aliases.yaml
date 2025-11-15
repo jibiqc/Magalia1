@@ -1,0 +1,6 @@
+# Map raw start destination/trip -> canonical start destination (strict)
+# Example:
+# "Roma"     : "Rome"
+# "Firenze"  : "Florence"
+aliases: {}
+

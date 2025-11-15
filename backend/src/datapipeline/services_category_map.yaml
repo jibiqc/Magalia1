@@ -1,0 +1,14 @@
+﻿# Canonical categories (strict)
+categories:
+  hotel: "Hotel"
+  private transfer: "Private Transfer"
+  private driver: "Private Driver"
+  private: "Private"
+  small group: "Small Group"
+  tickets: "Tickets"
+  trip info: "Trip info"
+  train: "Train"
+  flight: "Flight"
+  ferry: "Ferry"
+  apartment: "Apartment"
+  villa: "Villa"
