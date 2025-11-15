@@ -1,0 +1,13 @@
+# Required: absolute HTTP(S) image URL
+url_column: "URL"
+
+# Optional mappings from your sheet:
+name_column: "Name"
+company_column: "Company"
+start_destination_column: "Trip"   # (mapped to Start Destination)
+ef_code_column: ""                 # (none in your sheet)
+caption_column: ""                 # (none in your sheet)
+
+# Behavior
+reject_if_url_invalid: true
+keep_all_columns: true

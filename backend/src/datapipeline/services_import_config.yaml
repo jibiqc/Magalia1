@@ -1,0 +1,23 @@
+﻿required_fields:
+  - "Name"
+  - "Company"
+  - "Cost Category"
+  - "Start Destination"
+
+strict:
+  category: true
+  destination: true
+  company: true
+
+bk:
+  - "Name"
+  - "Company"
+  - "Start Destination"
+
+images:
+  primary: "URL (Image) (File)"
+  fallback: "Image"
+
+reject_rules:
+  reject_if_start_destination_empty: true
+  invalid_image_url_skip_only: true
