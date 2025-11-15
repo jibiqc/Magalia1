@@ -1,10 +1,13 @@
 import React, { useState, useEffect } from "react";
 import { createPortal } from "react-dom";
 
-export default function TripInfoModal({ open=true, onClose, onSubmit, initialData=null }) {
+export default function TripInfoModal({ open=true, onClose, onSubmit, initialData=null, defaultDate=null }) {
   // Initialiser avec des valeurs par défaut, pas avec initialData (pour éviter les duplications)
   const [title, setTitle] = useState("");
   const [body, setBody]   = useState("");
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  const [dateError, setDateError] = useState("");
 
   // Mettre à jour l'état quand initialData change ou quand le modal s'ouvre (pour l'édition)
   useEffect(() => {
@@ -12,16 +15,41 @@ export default function TripInfoModal({ open=true, onClose, onSubmit, initialDat
       if (initialData) {
         setTitle(initialData.title || "");
         setBody(initialData.body || "");
+        // Use existing dates from data, or fallback to defaultDate
+        setStartDate(initialData.start_date || initialData.startDate || defaultDate || "");
+        setEndDate(initialData.end_date || initialData.endDate || defaultDate || "");
       } else {
         setTitle("");
         setBody("");
+        // Prefill both dates with defaultDate (the day's date)
+        const dateValue = defaultDate || "";
+        setStartDate(dateValue);
+        setEndDate(dateValue);
       }
+      setDateError("");
     }
-  }, [initialData, open]);
+  }, [initialData, open, defaultDate]);
+
+  // Validate dates when they change
+  useEffect(() => {
+    if (startDate && endDate && startDate > endDate) {
+      setDateError("End date must not be earlier than start date");
+    } else {
+      setDateError("");
+    }
+  }, [startDate, endDate]);
 
   if (!open) return null;
 
-  const handleSubmit = () => onSubmit({ title, body });
+  const handleSubmit = () => {
+    if (dateError) return; // Prevent submission if validation fails
+    onSubmit({ 
+      title, 
+      body,
+      start_date: startDate,
+      end_date: endDate
+    });
+  };
 
   return createPortal(
     <div 
@@ -86,9 +114,44 @@ export default function TripInfoModal({ open=true, onClose, onSubmit, initialDat
           />
         </div>
 
+        <div className="field">
+          <label>Start date</label>
+          <input 
+            className="input" 
+            type="date"
+            value={startDate} 
+            onChange={e=>setStartDate(e.target.value)} 
+            style={{
+              position: "relative",
+              zIndex: 1,
+              pointerEvents: "auto"
+            }}
+          />
+        </div>
+
+        <div className="field">
+          <label>End date</label>
+          <input 
+            className="input" 
+            type="date"
+            value={endDate} 
+            onChange={e=>setEndDate(e.target.value)} 
+            style={{
+              position: "relative",
+              zIndex: 1,
+              pointerEvents: "auto"
+            }}
+          />
+          {dateError && (
+            <div style={{ color: "#ef4444", fontSize: "0.875rem", marginTop: "4px" }}>
+              {dateError}
+            </div>
+          )}
+        </div>
+
         <div className="modal-actions">
           <button className="btn ghost" onClick={onClose}>Cancel</button>
-          <button className="btn primary" disabled={!title.trim()} onClick={handleSubmit}>Continue</button>
+          <button className="btn primary" disabled={!title.trim() || !!dateError} onClick={handleSubmit}>Continue</button>
         </div>
       </div>
     </div>,

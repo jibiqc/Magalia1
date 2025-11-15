@@ -991,15 +991,72 @@ def _insert_day_block(doc: Document, qout, day, day_idx, usable_width_cm: float)
             # Garder un espace entre la photo et la date, mais s'assurer qu'ils ne sont pas séparés
             photo_para, blank_para = _insert_two_heroes(doc, imgs[0], imgs[1], add_blank_after=True)
 
-    # Ligne de date
-    date_iso = _get_attr(day, "date")
-    base = fmt_ui_date(date_iso) if date_iso else ""
-    if _is_first_of_dest_block(qout.days, day_idx):
-        n = _count_nights_from_index(qout.days, day_idx)
-        dest = (_get_attr(day, "destination") or "").strip()
-        if dest and n > 0:
-            base = f"{base} {dest} for {n} night{'s' if n > 1 else ''}"
-    date_para = _add_date_line(doc, base)
+    # Check if this day has a multi-day trip info that starts here
+    lines = _get_attr(day, "lines", []) or []
+    multi_day_trip_info = None
+    
+    for line in lines:
+        cat = (_get_attr(line, "category") or "").strip()
+        if cat == "Trip info":
+            rj = _get_attr(line, "raw_json", {}) or {}
+            start_date = rj.get("start_date") or ""
+            end_date = rj.get("end_date") or ""
+            is_date_range = start_date and end_date and start_date != end_date
+            day_date = _get_attr(day, "date") or ""
+            
+            if is_date_range and day_date == start_date:
+                multi_day_trip_info = line
+                break
+    
+    if multi_day_trip_info:
+        # Replace date line with trip info title
+        rj = _get_attr(multi_day_trip_info, "raw_json", {}) or {}
+        start_date = rj.get("start_date") or ""
+        end_date = rj.get("end_date") or ""
+        trip_title = rj.get("title") or _get_attr(multi_day_trip_info, "title") or "Trip info"
+        
+        def fmt_date_long(iso_str):
+            if not iso_str:
+                return ""
+            try:
+                dt = datetime.fromisoformat(iso_str)
+                month = calendar.month_name[dt.month]
+                day_ord = _ordinal(dt.day)
+                return f"{month} {day_ord} {dt.year}"
+            except Exception:
+                return iso_str
+        
+        start_fmt = fmt_date_long(start_date)
+        end_fmt = fmt_date_long(end_date)
+        trip_info_title = f"From {start_fmt} to {end_fmt}: {trip_title}"
+        date_para = _add_date_line(doc, trip_info_title)
+        
+        # Add description in the same paragraph (no line break)
+        desc = rj.get("description") or rj.get("body") or ""
+        if desc:
+            # Add a line break first
+            date_para.add_run("\n")
+            # Use append_sanitized_html_to_docx to handle HTML, then apply italic style to all runs
+            append_sanitized_html_to_docx(date_para, desc, allow_italic=True)
+            # Apply italic style to all runs added by append_sanitized_html_to_docx
+            for run in date_para.runs:
+                if run.text.strip() and not run.text.startswith("From"):  # Don't modify the title run
+                    run.font.italic = True
+                    run.font.name = "Arial"
+                    run.font.size = Pt(NORMAL_PT)
+                    run.font.bold = False
+                    run.font.color.rgb = TEXT_COLOR
+                    run.underline = False
+    else:
+        # Default: show date as before
+        date_iso = _get_attr(day, "date")
+        base = fmt_ui_date(date_iso) if date_iso else ""
+        if _is_first_of_dest_block(qout.days, day_idx):
+            n = _count_nights_from_index(qout.days, day_idx)
+            dest = (_get_attr(day, "destination") or "").strip()
+            if dest and n > 0:
+                base = f"{base} {dest} for {n} night{'s' if n > 1 else ''}"
+        date_para = _add_date_line(doc, base)
     
     # S'assurer que la photo, la ligne vide et la date restent ensemble (pas de séparation)
     if photo_para is not None:
@@ -1010,7 +1067,24 @@ def _insert_day_block(doc: Document, qout, day, day_idx, usable_width_cm: float)
         date_para.paragraph_format.keep_with_next = True
 
     # Utiliser _render_day_services pour rendre tous les services (inclut Flight, Train, etc.)
-    _render_day_services(doc, day, usable_width_cm)
+    # But skip the trip info if it already replaced the date line
+    if multi_day_trip_info:
+        # Filter out the trip info from services since it's already in the title
+        all_day_lines = _get_attr(day, "lines", []) or []
+        lines_to_render = [l for l in all_day_lines if l != multi_day_trip_info]
+        # Create a temporary day object without the trip info
+        # Use _get_attr to safely access day attributes and create a dict
+        temp_day = {
+            "id": _get_attr(day, "id"),
+            "position": _get_attr(day, "position"),
+            "date": _get_attr(day, "date"),
+            "destination": _get_attr(day, "destination"),
+            "decorative_images": _get_attr(day, "decorative_images", []),
+            "lines": lines_to_render
+        }
+        _render_day_services(doc, temp_day, usable_width_cm)
+    else:
+        _render_day_services(doc, day, usable_width_cm)
 
 def _apply_terms_conditions_style(para: Paragraph):
     """
@@ -1093,8 +1167,41 @@ def build_docx_for_quote(db: Session, quote_id: int) -> BytesIO:
             _insert_two_heroes(doc, global_heroes[0], global_heroes[1])  # Ignore returned tuple for global photos
         # Days - trier par position pour respecter l'ordre visuel
         days = sorted(qout.days or [], key=lambda d: _get_attr(d, "position") or 0)
+        
+        # Filter out days that are covered by multi-day trip info (except the first day)
+        visible_days = []
         for i, day in enumerate(days):
-            _insert_day_block(doc, qout, day, i, usable_width_cm)
+            day_date = _get_attr(day, "date") or ""
+            should_show = True
+            
+            # Check if this day is covered by a multi-day trip info from a previous day
+            for j in range(i):
+                prev_day = days[j]
+                prev_lines = _get_attr(prev_day, "lines", []) or []
+                
+                for line in prev_lines:
+                    cat = (_get_attr(line, "category") or "").strip()
+                    if cat == "Trip info":
+                        rj = _get_attr(line, "raw_json", {}) or {}
+                        start_date = rj.get("start_date") or ""
+                        end_date = rj.get("end_date") or ""
+                        is_date_range = start_date and end_date and start_date != end_date
+                        
+                        if is_date_range:
+                            # If this day is within the range (but not the start date), hide it
+                            if day_date > start_date and day_date <= end_date:
+                                should_show = False
+                                break
+                
+                if not should_show:
+                    break
+            
+            if should_show:
+                visible_days.append((i, day))
+        
+        # Render visible days
+        for orig_idx, day in visible_days:
+            _insert_day_block(doc, qout, day, orig_idx, usable_width_cm)
     else:
         # Start a fresh doc with same section settings
         doc = Document()
@@ -1118,8 +1225,41 @@ def build_docx_for_quote(db: Session, quote_id: int) -> BytesIO:
             _insert_two_heroes(doc, global_heroes[0], global_heroes[1])  # Ignore returned tuple for global photos
         # Days - trier par position pour respecter l'ordre visuel
         days = sorted(qout.days or [], key=lambda d: _get_attr(d, "position") or 0)
+        
+        # Filter out days that are covered by multi-day trip info (except the first day)
+        visible_days = []
         for i, day in enumerate(days):
-            _insert_day_block(doc, qout, day, i, usable_width_cm)
+            day_date = _get_attr(day, "date") or ""
+            should_show = True
+            
+            # Check if this day is covered by a multi-day trip info from a previous day
+            for j in range(i):
+                prev_day = days[j]
+                prev_lines = _get_attr(prev_day, "lines", []) or []
+                
+                for line in prev_lines:
+                    cat = (_get_attr(line, "category") or "").strip()
+                    if cat == "Trip info":
+                        rj = _get_attr(line, "raw_json", {}) or {}
+                        start_date = rj.get("start_date") or ""
+                        end_date = rj.get("end_date") or ""
+                        is_date_range = start_date and end_date and start_date != end_date
+                        
+                        if is_date_range:
+                            # If this day is within the range (but not the start date), hide it
+                            if day_date > start_date and day_date <= end_date:
+                                should_show = False
+                                break
+                
+                if not should_show:
+                    break
+            
+            if should_show:
+                visible_days.append((i, day))
+        
+        # Render visible days
+        for orig_idx, day in visible_days:
+            _insert_day_block(doc, qout, day, orig_idx, usable_width_cm)
         # Page break then re-add T&C with specific style
         doc.add_page_break()
         # Recharger le template pour récupérer le texte des termes et conditions

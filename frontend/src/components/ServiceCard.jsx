@@ -262,7 +262,30 @@ export default function ServiceCard({ line, onEdit, onDelete, onDuplicate, onCha
   switch(category){
     case "Trip info": {
       const s = data;
-      title = s?.title || "Trip info";
+      const startDate = s?.start_date || line?.raw_json?.start_date || "";
+      const endDate = s?.end_date || line?.raw_json?.end_date || "";
+      const isDateRange = startDate && endDate && startDate !== endDate;
+      
+      if (isDateRange) {
+        // Multi-day trip info: format as "From [start] to [end]: [title]"
+        const fmtDate = (iso) => {
+          if (!iso) return "";
+          const d = new Date(iso + "T00:00:00");
+          const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+          const ord = (n) => {
+            const s = ["th","st","nd","rd"];
+            const v = n % 100;
+            return s[(v-20)%10] || s[v] || s[0];
+          };
+          return `${months[d.getMonth()]} ${d.getDate()}${ord(d.getDate())} ${d.getFullYear()}`;
+        };
+        const startFmt = fmtDate(startDate);
+        const endFmt = fmtDate(endDate);
+        title = `From ${startFmt} to ${endFmt}: ${s?.title || "Trip info"}`;
+      } else {
+        // Single-day trip info: keep existing behavior
+        title = s?.title || "Trip info";
+      }
       subtitle = "";
       note = s?.body || "";
       break;

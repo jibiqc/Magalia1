@@ -1033,6 +1033,9 @@ export default function QuoteEditor(){
     // Récupérer la durée depuis fields ou info
     const duration = fields?.duration || fields?.activity_duration || (info?.duration_minutes != null ? fmtHm(info.duration_minutes) : '') || '';
     
+    // Récupérer le start time depuis fields ou info
+    const startTime = fields?.start_time || fields?.Start_time || fields?.['Start time'] || info?.start_time || '';
+    
     // Récupérer l'image depuis info ou fields
     const imageUrl = info?.images?.[0]?.url || fields?.image_url || '';
 
@@ -1099,6 +1102,11 @@ export default function QuoteEditor(){
                 <div style={{fontWeight:600, marginBottom:6}}>
                   {(typeof title==='string') ? title : (s.supplier_name || s.company || s.name)}
                 </div>
+                {startTime && (
+                  <div style={{marginBottom:6, opacity:0.9, fontSize:'0.95em'}}>
+                    Start time: {startTime}
+                  </div>
+                )}
                 {duration && (
                   <div style={{marginBottom:6, opacity:0.9, fontSize:'0.95em'}}>
                     Duration: {duration}
@@ -1937,6 +1945,13 @@ const CATEGORY_GROUPS = {
         // Ensure description field is set (for export compatibility)
         if (rawJson.description === null || rawJson.description === undefined) {
           rawJson.description = d.body || null;
+        }
+        // Store date range in raw_json
+        if (d.start_date) {
+          rawJson.start_date = d.start_date;
+        }
+        if (d.end_date) {
+          rawJson.end_date = d.end_date;
         }
         break;
       }
@@ -4835,8 +4850,39 @@ const CATEGORY_GROUPS = {
 
             <HeaderHero quote={q} setQuote={setQ} activeDest={activeDest} showActionIcons={showActionIcons} showImages={showImages} />
 
-            {q.days.map((d, dayIdx)=>(
-
+            {(() => {
+              // Filter out days that are covered by multi-day trip info (except the first day)
+              const visibleDays = q.days.filter((d, dayIdx) => {
+                const dayDate = d.date || "";
+                
+                // Check if this day is covered by a multi-day trip info from a previous day
+                for (let i = 0; i < dayIdx; i++) {
+                  const prevDay = q.days[i];
+                  const prevDayLocal = localLines.filter(l => l.dayId === prevDay.id && !l.deleted);
+                  const prevAllLines = [...(prevDay.lines||[]), ...prevDayLocal];
+                  
+                  for (const line of prevAllLines) {
+                    if (line.category === "Trip info") {
+                      const startDate = line.data?.start_date || line.raw_json?.start_date || "";
+                      const endDate = line.data?.end_date || line.raw_json?.end_date || "";
+                      const isDateRange = startDate && endDate && startDate !== endDate;
+                      
+                      if (isDateRange) {
+                        // If this day is within the range (but not the start date), hide it
+                        if (dayDate > startDate && dayDate <= endDate) {
+                          return false; // Hide this day
+                        }
+                      }
+                    }
+                  }
+                }
+                return true; // Show this day
+              });
+              
+              return visibleDays.map((d, visibleDayIdx) => {
+                // Find the original day index
+                const dayIdx = q.days.findIndex(origDay => origDay.id === d.id);
+                return (
               <div 
                 key={d.id} 
                 id={`day-${d.id}`} 
@@ -4860,8 +4906,111 @@ const CATEGORY_GROUPS = {
                   showImages={showImages}
                 />
 
-                <div className="day-title">
+                <div className="day-title" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px" }}>
                   {(() => {
+                    // Check if this day has a multi-day trip info that starts here
+                    const dayLocal = localLines.filter(l => l.dayId === d.id && !l.deleted);
+                    const allLines = [...(d.lines||[]), ...dayLocal];
+                    let multiDayTripInfo = null;
+                    
+                    for (const line of allLines) {
+                      if (line.category === "Trip info") {
+                        const startDate = line.data?.start_date || line.raw_json?.start_date || "";
+                        const endDate = line.data?.end_date || line.raw_json?.end_date || "";
+                        const isDateRange = startDate && endDate && startDate !== endDate;
+                        
+                        if (isDateRange && d.date === startDate) {
+                          multiDayTripInfo = line;
+                          break;
+                        }
+                      }
+                    }
+                    
+                    if (multiDayTripInfo) {
+                      // Display trip info title instead of date
+                      const startDate = multiDayTripInfo.data?.start_date || multiDayTripInfo.raw_json?.start_date || "";
+                      const endDate = multiDayTripInfo.data?.end_date || multiDayTripInfo.raw_json?.end_date || "";
+                      const tripTitle = multiDayTripInfo.data?.title || multiDayTripInfo.title || "Trip info";
+                      
+                      const fmtDate = (iso) => {
+                        if (!iso) return "";
+                        const dateObj = new Date(iso + "T00:00:00");
+                        const months = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+                        const ord = (n) => {
+                          const s = ["th","st","nd","rd"];
+                          const v = n % 100;
+                          return s[(v-20)%10] || s[v] || s[0];
+                        };
+                        return `${months[dateObj.getMonth()]} ${dateObj.getDate()}${ord(dateObj.getDate())} ${dateObj.getFullYear()}`;
+                      };
+                      
+                      const startFmt = fmtDate(startDate);
+                      const endFmt = fmtDate(endDate);
+                      const title = `From ${startFmt} to ${endFmt}: ${tripTitle}`;
+                      
+                      // Prepare edit data for the trip info
+                      const isLocal = multiDayTripInfo.id && String(multiDayTripInfo.id).startsWith('temp-');
+                      const handleEdit = () => {
+                        if (isLocal) {
+                          openEditModal(multiDayTripInfo);
+                        } else {
+                          const editData = {
+                            id: multiDayTripInfo.id,
+                            category: multiDayTripInfo.category,
+                            title: multiDayTripInfo.title,
+                            supplier_name: multiDayTripInfo.supplier_name,
+                            service_id: multiDayTripInfo.service_id,
+                            raw_json: multiDayTripInfo.raw_json,
+                            data: {
+                              title: multiDayTripInfo.title || "",
+                              body: multiDayTripInfo.raw_json?.body || "",
+                              start_date: multiDayTripInfo.data?.start_date || multiDayTripInfo.raw_json?.start_date || "",
+                              end_date: multiDayTripInfo.data?.end_date || multiDayTripInfo.raw_json?.end_date || "",
+                              ...(multiDayTripInfo.raw_json || {})
+                            }
+                          };
+                          openEditModal(editData);
+                        }
+                      };
+                      
+                      return (
+                        <>
+                          <span style={{ flex: 1 }}>{title}</span>
+                          <div 
+                            className="svc-actions-inline" 
+                            style={{ display: "flex", gap: "4px" }}
+                            aria-label="Card actions"
+                            onMouseDown={(e) => e.stopPropagation()}
+                            onDragStart={(e) => e.stopPropagation()}
+                          >
+                            <button 
+                              className="icon-vert" 
+                              aria-label="Edit" 
+                              onClick={handleEdit}
+                              onMouseDown={(e) => e.stopPropagation()}
+                              onDragStart={(e) => e.stopPropagation()}
+                              style={{ 
+                                background: "none", 
+                                border: "none", 
+                                cursor: "pointer",
+                                padding: "4px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center"
+                              }}
+                            >
+                              <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" role="img" aria-label="Edit">
+                                <path d="M4 20l4.6-1.2 8.9-8.9a2.2 2.2 0 0 0 0-3.1l-.2-.2a2.2 2.2 0 0 0-3.1 0L5.3 15.5 4 20z"/>
+                                <path d="M13.5 6.5l4 4"/>
+                                <path d="M4 20h6"/>
+                              </svg>
+                            </button>
+                          </div>
+                        </>
+                      );
+                    }
+                    
+                    // Default: show date as before
                     const longDate = fmtDateLongISO(d.date);
                     let title = longDate;
                     if (isFirstOfDestBlock(q.days, dayIdx)) {
@@ -4873,6 +5022,38 @@ const CATEGORY_GROUPS = {
                     return (<span>{title}</span>);
                   })()}
                 </div>
+                
+                {/* Show trip info description if it replaced the day title */}
+                {(() => {
+                  const dayLocal = localLines.filter(l => l.dayId === d.id && !l.deleted);
+                  const allLines = [...(d.lines||[]), ...dayLocal];
+                  let multiDayTripInfo = null;
+                  
+                  for (const line of allLines) {
+                    if (line.category === "Trip info") {
+                      const startDate = line.data?.start_date || line.raw_json?.start_date || "";
+                      const endDate = line.data?.end_date || line.raw_json?.end_date || "";
+                      const isDateRange = startDate && endDate && startDate !== endDate;
+                      
+                      if (isDateRange && d.date === startDate) {
+                        multiDayTripInfo = line;
+                        break;
+                      }
+                    }
+                  }
+                  
+                  if (multiDayTripInfo) {
+                    const body = multiDayTripInfo.data?.body || multiDayTripInfo.raw_json?.description || "";
+                    if (body) {
+                      return (
+                        <div className="service-note" style={{ fontStyle: "italic", marginTop: "8px", marginBottom: "8px" }}>
+                          {body}
+                        </div>
+                      );
+                    }
+                  }
+                  return null;
+                })()}
                 
                 {/* head-of-day slot */}
                 <div
@@ -4907,8 +5088,44 @@ const CATEGORY_GROUPS = {
                     const allLines = [...(d.lines||[]), ...dayLocal];
                     const localCount = dayLocal.length;
                     // Filter out legacy placeholders before mapping
-                    const visibleLines = allLines.filter(l => {
+                    let visibleLines = allLines.filter(l => {
                       return !((l.category === "Trip info" || l.category === "Internal info") && (l.title || "").includes("edit me"));
+                    });
+                    
+                    // Filter multi-day trip info: hide it from services list if it replaces the day title
+                    // Check if this day has a multi-day trip info that replaces the title
+                    const hasMultiDayTripInfoInTitle = (() => {
+                      for (const line of allLines) {
+                        if (line.category === "Trip info") {
+                          const startDate = line.data?.start_date || line.raw_json?.start_date || "";
+                          const endDate = line.data?.end_date || line.raw_json?.end_date || "";
+                          const isDateRange = startDate && endDate && startDate !== endDate;
+                          
+                          if (isDateRange && d.date === startDate) {
+                            return true;
+                          }
+                        }
+                      }
+                      return false;
+                    })();
+                    
+                    visibleLines = visibleLines.filter(l => {
+                      if (l.category === "Trip info") {
+                        const startDate = l.data?.start_date || l.raw_json?.start_date || "";
+                        const endDate = l.data?.end_date || l.raw_json?.end_date || "";
+                        const isDateRange = startDate && endDate && startDate !== endDate;
+                        
+                        if (isDateRange) {
+                          // If this trip info replaces the day title, hide it from services list
+                          if (hasMultiDayTripInfoInTitle && d.date === startDate) {
+                            return false; // Hide from services, it's already in the title
+                          }
+                          // Only show on the day that matches start_date
+                          const dayDate = d.date || "";
+                          return dayDate === startDate;
+                        }
+                      }
+                      return true; // Keep all other lines
                     });
                     return visibleLines.length > 0 ? visibleLines.map((l, dispIdx) => {
                       // Find original index in allLines for correct positioning
@@ -5234,8 +5451,9 @@ const CATEGORY_GROUPS = {
                 </div>
 
               </div>
-
-            ))}
+                );
+              });
+            })()}
 
 
 
@@ -5527,25 +5745,35 @@ const CATEGORY_GROUPS = {
       )}
 
       {/* Trip Info Modal */}
-      {tripInfoOpen && (
-        <TripInfoModal
-          open={tripInfoOpen}
-          onClose={() => { setTripInfoOpen(false); setEditingLine(null); }}
-          onSubmit={(payload) => {
-            const dayId = editingLine?.dayId || (q.days.find(d => d.id === activeDayId) || q.days[0])?.id;
-            if (dayId) {
-              if (editingLine && editingLine.id && !String(editingLine.id).startsWith('temp-')) {
-                setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
-              } else {
-                addLocalLine(dayId, "Trip info", payload, editingLine?.insertIndex);
+      {tripInfoOpen && (() => {
+        // Get the day's date for defaultDate
+        const activeDay = q.days.find(d => d.id === activeDayId) || q.days[0];
+        const defaultDate = activeDay?.date || "";
+        // If editing, get date from editingLine's day
+        const editingDay = editingLine?.dayId ? q.days.find(d => d.id === editingLine.dayId) : null;
+        const dayDate = editingDay?.date || defaultDate;
+        
+        return (
+          <TripInfoModal
+            open={tripInfoOpen}
+            onClose={() => { setTripInfoOpen(false); setEditingLine(null); }}
+            onSubmit={(payload) => {
+              const dayId = editingLine?.dayId || (q.days.find(d => d.id === activeDayId) || q.days[0])?.id;
+              if (dayId) {
+                if (editingLine && editingLine.id && !String(editingLine.id).startsWith('temp-')) {
+                  setLocalLines(prev => prev.map(l => l.id === editingLine.id ? { ...l, data: payload } : l));
+                } else {
+                  addLocalLine(dayId, "Trip info", payload, editingLine?.insertIndex);
+                }
               }
-            }
-            setTripInfoOpen(false);
-            setEditingLine(null);
-          }}
-          initialData={editingLine?.data || null}
-        />
-      )}
+              setTripInfoOpen(false);
+              setEditingLine(null);
+            }}
+            initialData={editingLine?.data || null}
+            defaultDate={dayDate}
+          />
+        );
+      })()}
 
       {/* Internal Info Modal */}
       {internalInfoOpen && (
